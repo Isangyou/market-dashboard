@@ -1,0 +1,56 @@
+name: update-data
+
+# GitHub cron은 UTC. KST = UTC+9
+# 장중(평일 KST 08:30~16:00) 15분 간격, 그 외 1시간 간격
+on:
+  schedule:
+    - cron: "30,45 23 * * 0-4"   # KST 월~금 08:30, 08:45
+    - cron: "*/15 0-6 * * 1-5"   # KST 월~금 09:00~15:45
+    - cron: "0 7 * * 1-5"        # KST 월~금 16:00
+    - cron: "0 8-23 * * *"       # KST 매일 17:00~08:00 매시
+    - cron: "0 0-7 * * 0,6"      # KST 토·일 09:00~16:00 매시
+  workflow_dispatch:
+    inputs:
+      backfill:
+        description: "시계열 1년 재수집"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Fetch
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: python -m fetch.run ${{ inputs.backfill && '--backfill' || '' }}
+
+      - name: Commit data/ if changed
+        run: |
+          git add data/
+          if git diff --cached --quiet; then
+            echo "변경 없음 → 커밋 생략"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "data: $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M KST')"
+          git pull --rebase
+          git push

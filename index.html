@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>시장 모니터</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0d0e10; --panel: #15171a; --line: #25282d; --grid: #1e2125;
+    --text: #d5d7db; --muted: #8b9098; --faint: #5d626a;
+    --accent: #7b93c4;   /* 슬레이트 블루 — 유일한 포인트 색 */
+    --gray1: #b9bdc4; --gray2: #6f747c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", "Segoe UI", sans-serif; }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 20px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .meta, .src { color: var(--faint); font-size: 11px; }
+  .meta b { color: var(--muted); font-weight: 500; }
+
+  /* 카드 */
+  .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+  .card .lbl { color: var(--muted); font-size: 12px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .tag { border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 10.5px; color: var(--muted); }
+  .card .val { font-size: 24px; font-weight: 600; margin: 4px 0 2px; letter-spacing: -0.01em; }
+  .card .chg { font-size: 12.5px; color: var(--gray1); font-variant-numeric: tabular-nums; }
+  .card .src { margin-top: 6px; overflow-wrap: anywhere; }
+  .stale .val, .stale .chg { opacity: .5; }
+  .stale-note { color: var(--muted); font-size: 11px; border: 1px dashed var(--faint); border-radius: 4px; padding: 0 5px; }
+
+  /* 패널 */
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 14px 8px; min-width: 0; }
+  .panel h2 { font-size: 13.5px; font-weight: 600; margin: 0 0 2px; }
+  .panel .sub { color: var(--faint); font-size: 11px; margin-bottom: 4px; }
+  .panel .note { color: var(--faint); font-size: 11px; margin: 4px 0 6px; }
+  .main { margin-bottom: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
+  .span2 { grid-column: 1 / -1; }
+  .chart { width: 100%; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--muted); border: 0; padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--line); color: var(--text); }
+  .row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+
+  /* 환율 스파크라인 2×2 */
+  .sparks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding-bottom: 6px; }
+  .spark { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px 2px; min-width: 0; }
+  .spark .top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+  .spark .name { color: var(--muted); font-size: 12px; }
+  .spark .v { font-size: 16px; font-weight: 600; }
+  .spark .c { font-size: 11.5px; color: var(--gray1); }
+
+  /* 테이블 */
+  .tables { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .tpair { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .tscroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  caption { text-align: left; color: var(--muted); font-size: 12px; padding: 4px 0 6px; }
+  th, td { padding: 5px 6px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  th { color: var(--faint); font-weight: 500; text-align: right; font-size: 11px; }
+  td { text-align: right; }
+  th:nth-child(-n+2), td:nth-child(-n+2) { text-align: left; }
+  td:first-child { color: var(--faint); width: 1.6em; }
+  td.name { max-width: 9em; overflow: hidden; text-overflow: ellipsis; }
+  .empty { color: var(--faint); font-size: 12px; padding: 24px 0; text-align: center; }
+
+  footer { color: var(--faint); font-size: 11px; margin-top: 18px; line-height: 1.7; }
+
+  @media (max-width: 900px) {
+    .grid, .tables { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 720px) {
+    .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .card .val { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>시장 모니터</h1>
+    <div class="meta" id="meta">불러오는 중…</div>
+  </header>
+
+  <section class="cards" id="cards"></section>
+
+  <section class="panel main">
+    <div class="row">
+      <div>
+        <h2>외국인 일별 순매수 · 20일 누적 · USD/KRW</h2>
+        <div class="sub" id="main-sub"></div>
+      </div>
+      <div class="seg" role="group" aria-label="시장 선택">
+        <button data-mkt="KOSPI" aria-pressed="true">코스피</button>
+        <button data-mkt="KOSDAQ" aria-pressed="false">코스닥</button>
+      </div>
+    </div>
+    <div id="main-chart" class="chart" style="height:540px"></div>
+  </section>
+
+  <section class="grid">
+    <div class="panel">
+      <h2>미국채 수익률 곡선</h2>
+      <div class="sub" id="curve-sub"></div>
+      <div id="curve-chart" class="chart" style="height:300px"></div>
+    </div>
+    <div class="panel">
+      <h2>미국채 10Y · 2Y 와 2s10s 스프레드</h2>
+      <div class="sub" id="ust-sub"></div>
+      <div id="ust-chart" class="chart" style="height:300px"></div>
+    </div>
+    <div class="panel">
+      <h2>국고채 3Y · 10Y</h2>
+      <div class="sub" id="ktb-sub"></div>
+      <div id="ktb-chart" class="chart" style="height:300px"></div>
+    </div>
+    <div class="panel">
+      <h2>환율</h2>
+      <div class="sub">최근 3개월 · 일별 종가</div>
+      <div class="sparks" id="sparks"></div>
+    </div>
+    <div class="panel span2">
+      <h2>유가 · VIX</h2>
+      <div class="sub" id="oil-sub"></div>
+      <div id="oil-chart" class="chart" style="height:320px"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>외국인 순매수 · 순매도 상위 10</h2>
+    <div class="sub" id="top-sub"></div>
+    <div class="tables" id="tables"></div>
+  </section>
+
+  <footer>
+    점선 = 1차 소스(네이버) 대신 폴백 소스(yfinance 등) 값이 들어간 구간. 소스마다 값이 다를 수 있음.<br>
+    USD/KRW는 하나은행 고시 매매기준율(시장 실시간가 아님). 투자자별 순매수는 네이버 단일 소스(pykrx 폴백 비활성).<br>
+    ▲/▼ 는 전일 대비 부호. 금리 변화는 bp. 기준시각은 KST.
+  </footer>
+</div>
+
+<script>
+const CSS = getComputedStyle(document.documentElement);
+const C = Object.fromEntries(['bg','panel','line','grid','text','muted','faint','accent','gray1','gray2']
+  .map(k => [k, CSS.getPropertyValue('--' + k).trim()]));
+
+const SERIES_KEYS = ['investor_kospi','investor_kosdaq','usdkrw','usdjpy','usdcnh','eurusd','dxy',
+  'ust_1m','ust_2m','ust_3m','ust_6m','ust_1y','ust_2y','ust_3y','ust_5y','ust_7y','ust_10y','ust_20y','ust_30y',
+  'ktb_3y','ktb_10y','wti','brent','vix'];
+const TENORS = ['1M','2M','3M','6M','1Y','2Y','3Y','5Y','7Y','10Y','20Y','30Y'];
+// 항목별 1차 소스. 이 접두어가 아닌 레코드 = 폴백 → 점선
+const PRIMARY = { usdcnh: 'yfinance' };
+const primaryOf = k => PRIMARY[k] || 'naver';
+
+let L = null, S = {}, market = 'KOSPI';
+
+// ── 포맷 ──
+const nf = (v, d = 2) => v == null || isNaN(v) ? '–' :
+  Number(v).toLocaleString('ko-KR', { minimumFractionDigits: d, maximumFractionDigits: d });
+const arrow = v => v == null || isNaN(v) ? '' : v > 0 ? '▲' : v < 0 ? '▼' : '–';
+const signed = (v, d = 2) => v == null || isNaN(v) ? '–' : (v > 0 ? '+' : '') + nf(v, d);
+function fmtAsof(s) {
+  if (!s) return '';
+  if (s.length <= 10) return s.slice(5);
+  const m = s.match(/^\d{4}-(\d\d-\d\d)T(\d\d:\d\d)/);
+  return m ? `${m[1]} ${m[2]}` : s;
+}
+const money = v => v == null || isNaN(v) ? '–' : Math.abs(v) >= 1e4 ? `${signed(v / 1e4, 2)}조` : `${signed(v, 0)}억`;
+const srcLine = (src, asof) => `${src} · ${fmtAsof(asof)}`;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// ── Plotly 공통 ──
+const CONFIG = { displayModeBar: false, responsive: true };
+function baseLayout(extra = {}) {
+  const ax = { gridcolor: C.grid, linecolor: C.line, zerolinecolor: C.line, tickfont: { size: 10.5, color: C.muted },
+               showspikes: true, spikemode: 'across', spikethickness: 1, spikecolor: C.faint, spikedash: 'solid' };
+  return Object.assign({
+    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { color: C.muted, size: 11, family: getComputedStyle(document.body).fontFamily },
+    margin: { l: 48, r: 16, t: 28, b: 32 }, hovermode: 'x unified',
+    hoverlabel: { bgcolor: C.panel, bordercolor: C.line, font: { color: C.text, size: 11.5 } },
+    legend: { orientation: 'h', x: 0, y: 1.12, font: { size: 11, color: C.muted }, bgcolor: 'rgba(0,0,0,0)' },
+    xaxis: { ...ax, type: 'date', hoverformat: '%Y-%m-%d' }, yaxis: { ...ax, showspikes: false },
+    _ax: ax,
+  }, extra);
+}
+function plot(id, traces, layout) { delete layout._ax; Plotly.react(id, traces, layout, CONFIG); }
+
+/** 레코드 → [실선, 점선(폴백 구간), 호버 전용] 트레이스. 폴백 점선은 앞뒤 1차 점까지 이어 그림. */
+function lineTraces(recs, key, { name, color, width = 2, yaxis = 'y', xaxis = 'x', val = r => r.value, fmt = '.2f', unit = '', legend = true }) {
+  const x = recs.map(r => r.date), y = recs.map(val);
+  const pri = primaryOf(key);
+  const fb = recs.map(r => !String(r.source).startsWith(pri));
+  const anyFb = fb.some(Boolean);
+  const out = [{
+    x, y: y.map((v, i) => fb[i] ? null : v), name, type: 'scatter', mode: 'lines', xaxis, yaxis,
+    line: { color, width }, connectgaps: false, hoverinfo: 'skip', showlegend: legend, legendgroup: key,
+  }];
+  if (anyFb) out.push({
+    x, y: y.map((v, i) => (fb[i] || fb[i - 1] || fb[i + 1]) ? v : null), name: name + ' · 폴백 구간', type: 'scatter',
+    mode: 'lines', xaxis, yaxis, line: { color, width, dash: 'dot' }, connectgaps: false, hoverinfo: 'skip',
+    showlegend: legend, legendgroup: key,
+  });
+  out.push({
+    x, y, name, type: 'scatter', mode: 'markers', xaxis, yaxis, marker: { size: 8, opacity: 0 }, showlegend: false,
+    customdata: recs.map((r, i) => r.source + (fb[i] ? ' · 폴백' : '')),
+    hovertemplate: `%{y:${fmt}}${unit} <span style="color:${C.faint}">%{customdata}</span><extra>${name}</extra>`,
+  });
+  return out;
+}
+
+const recs = k => (S[k] && S[k].records) || [];
+function lastN(arr, days) {
+  if (!arr.length) return arr;
+  const end = new Date(arr[arr.length - 1].date); end.setDate(end.getDate() - days);
+  const cut = end.toISOString().slice(0, 10);
+  return arr.filter(r => r.date >= cut);
+}
+function valueAt(arr, date) { // date 이하 마지막 레코드
+  let hit = null;
+  for (const r of arr) { if (r.date <= date) hit = r; else break; }
+  return hit;
+}
+const shiftDate = (d, days) => { const t = new Date(d); t.setDate(t.getDate() - days); return t.toISOString().slice(0, 10); };
+const empty = id => { document.getElementById(id).innerHTML = '<div class="empty">데이터 없음</div>'; };
+
+// ── 카드 ──
+function card({ label, tag, value, chg, src, stale }) {
+  return `<div class="card${stale ? ' stale' : ''}">
+    <div class="lbl">${label}${tag ? `<span class="tag">${tag}</span>` : ''}${stale ? '<span class="stale-note">stale · 이전 값</span>' : ''}</div>
+    <div class="val">${value}</div><div class="chg">${chg}</div><div class="src">${src}</div></div>`;
+}
+function itemCard(key, { label, tag, digits = 2, bp = false } = {}) {
+  const it = L.items[key];
+  if (!it) return card({ label: label || key, value: '–', chg: '', src: '데이터 없음' });
+  const chg = bp
+    ? `${arrow(it.change)} ${signed(it.change * 100, 1)}bp`
+    : `${arrow(it.change)} ${signed(it.change, digits)}${it.change_pct != null ? ` (${signed(it.change_pct)}%)` : ''}`;
+  return card({ label: label || it.label, tag, value: nf(it.value, digits) + (bp ? '%' : ''), chg: it.change == null ? '전일대비 없음' : chg,
+                src: srcLine(it.source, it.asof), stale: it.stale });
+}
+function investorCard(m) {
+  const v = L.investor && L.investor[m];
+  const label = `${m === 'KOSPI' ? '코스피' : '코스닥'} 외국인 순매수`;
+  const srcs = (L.meta && L.meta.investor_sources) || ['naver'];
+  const tag = srcs.length === 1 ? `${srcs[0]} 단일` : srcs.join('/');
+  if (!v) return card({ label, tag, value: '–', chg: '', src: '데이터 없음' });
+  const r = recs('investor_' + m.toLowerCase()).slice(-20);
+  const cum = r.reduce((a, x) => a + x.foreign, 0);
+  return card({ label, tag, value: money(v.foreign),
+    chg: `${arrow(cum)} 20일 누적 ${money(cum)}`,
+    src: `${srcLine(v.source, v.asof)} · pykrx 폴백 ${L.meta && L.meta.pykrx_enabled ? '활성' : '비활성'}`, stale: v.stale });
+}
+function renderCards() {
+  document.getElementById('cards').innerHTML = [
+    investorCard('KOSPI'), investorCard('KOSDAQ'),
+    itemCard('usdkrw', { tag: L.items.usdkrw && !String(L.items.usdkrw.source).startsWith('naver:hana') ? '폴백 · 시장가 (하나은행 고시 아님)' : '하나은행 고시' }),
+    itemCard('dxy'),
+    itemCard('ust_10y', { label: '미국채 10Y', digits: 3, bp: true }),
+    itemCard('ktb_10y', { label: '국고 10Y', digits: 3, bp: true }),
+    itemCard('wti', { label: 'WTI' }),
+    itemCard('vix', { label: 'VIX' }),
+  ].join('');
+}
+
+// ── 메인 차트 ──
+function renderMain() {
+  const inv = recs('investor_' + market.toLowerCase());
+  if (!inv.length) return empty('main-chart');
+  const x = inv.map(r => r.date);
+  const jo = inv.map(r => r.foreign / 1e4);   // 억 → 조
+  const cum = jo.map((_, i) => jo.slice(Math.max(0, i - 19), i + 1).reduce((a, v) => a + v, 0));
+  const fx = recs('usdkrw');
+  const last = inv[inv.length - 1].date;
+  // 상하 2패널, x축 공유: 위 = 일별 막대 + 우축 USD/KRW, 아래 = 20일 누적
+  const lay = baseLayout({ margin: { l: 56, r: 64, t: 34, b: 24 }, bargap: 0.25 });
+  lay.xaxis = { ...lay.xaxis, anchor: 'y3', range: [shiftDate(last, 91), shiftDate(last, -2)],
+    rangeslider: { visible: true, thickness: 0.06, bgcolor: C.bg, bordercolor: C.line, borderwidth: 1 },
+    rangeselector: { x: 1, xanchor: 'right', y: 1.12, bgcolor: C.panel, activecolor: C.line, bordercolor: C.line, borderwidth: 1,
+      font: { size: 11, color: C.muted },
+      buttons: [{ count: 1, label: '1M', step: 'month', stepmode: 'backward' }, { count: 3, label: '3M', step: 'month', stepmode: 'backward' },
+                { count: 6, label: '6M', step: 'month', stepmode: 'backward' }, { count: 1, label: '1Y', step: 'year', stepmode: 'backward' },
+                { step: 'all', label: '전체' }] } };
+  lay.yaxis = { ...lay.yaxis, domain: [0.42, 1], zerolinecolor: C.faint, tickformat: ',.1f', ticksuffix: '조',
+                title: { text: '일별', font: { size: 10.5 } } };
+  lay.yaxis2 = { ...lay._ax, showspikes: false, overlaying: 'y', side: 'right', showgrid: false, tickformat: ',.0f',
+                 title: { text: 'USD/KRW 하나은행 고시 (우축)', font: { size: 10.5 } } };
+  lay.yaxis3 = { ...lay._ax, showspikes: false, domain: [0, 0.32], zerolinecolor: C.faint, tickformat: ',.0f', ticksuffix: '조',
+                 title: { text: '20일 누적', font: { size: 10.5 } } };
+  lay.legend.y = 1.2;
+  const traces = [
+    { x, y: jo, type: 'bar', name: '외국인 순매수 (일별)', yaxis: 'y',
+      marker: { color: C.accent, line: { width: 0 } }, customdata: inv.map(r => [r.foreign, r.source]),
+      hovertemplate: `%{y:+,.2f}조 (%{customdata[0]:+,.0f}억) <span style="color:${C.faint}">%{customdata[1]}</span><extra>외국인</extra>` },
+    ...lineTraces(fx, 'usdkrw', { name: 'USD/KRW 하나은행 고시 (우축)', color: C.gray2, width: 1.6, yaxis: 'y2', fmt: ',.1f' }),
+    { x, y: cum, type: 'scatter', mode: 'lines', name: '외국인 20일 누적', yaxis: 'y3',
+      line: { color: C.gray1, width: 2 }, fill: 'tozeroy', fillcolor: 'rgba(185,189,196,0.08)',
+      hovertemplate: '%{y:+,.2f}조<extra>20일 누적</extra>' },
+  ];
+  plot('main-chart', traces, lay);
+  const fxLast = fx[fx.length - 1];
+  document.getElementById('main-sub').textContent =
+    `${market} ${inv[0].date} ~ ${last} · ${inv[inv.length - 1].source}` + (fxLast ? ` | USD/KRW 하나은행 고시 ~ ${fxLast.date} · ${fxLast.source}` : '');
+}
+
+// ── 커브 ──
+function renderCurve() {
+  const ser = TENORS.map(t => recs('ust_' + t.toLowerCase()));
+  if (!ser.some(a => a.length)) return empty('curve-chart');
+  const today = ser.map(a => a.length ? a[a.length - 1].date : '').sort().pop();
+  const snaps = [['오늘', today, C.accent, 2.5], ['1주 전', shiftDate(today, 7), C.gray1, 1.6], ['1개월 전', shiftDate(today, 30), C.gray2, 1.6]];
+  const traces = snaps.map(([name, d, color, w]) => {
+    const pts = ser.map(a => valueAt(a, d));
+    return { x: TENORS, y: pts.map(p => p && p.value), name: `${name} (${pts.find(Boolean)?.date || d})`, type: 'scatter', mode: 'lines+markers',
+             line: { color, width: w }, marker: { size: 6, color, line: { color: C.panel, width: 2 } },
+             customdata: pts.map(p => p ? `${p.date} · ${p.source}` : ''),
+             hovertemplate: `%{y:.3f}% <span style="color:${C.faint}">%{customdata}</span><extra>${name}</extra>` };
+  });
+  const lay = baseLayout({ margin: { l: 44, r: 12, t: 30, b: 30 } });
+  lay.xaxis = { ...lay._ax, type: 'category', showspikes: false };
+  lay.yaxis = { ...lay.yaxis, ticksuffix: '%', tickformat: '.2f' };
+  lay.hovermode = 'x unified';
+  plot('curve-chart', traces, lay);
+  const src = [...new Set(ser.flatMap(a => a.slice(-1).map(r => r.source)))].join(', ');
+  document.getElementById('curve-sub').textContent = `기준일 ${today} · ${src} (일별 종가)`;
+}
+
+// ── 10Y·2Y + 2s10s (x축 공유 상하 패널, 이중축 없음) ──
+function renderUst() {
+  const a = recs('ust_10y'), b = recs('ust_2y');
+  if (!a.length || !b.length) return empty('ust-chart');
+  const m2 = new Map(b.map(r => [r.date, r]));
+  const sp = a.filter(r => m2.has(r.date)).map(r => ({ date: r.date, value: (r.value - m2.get(r.date).value) * 100,
+    source: r.source === m2.get(r.date).source ? r.source : `${r.source} / ${m2.get(r.date).source}` }));
+  const lay = baseLayout({ margin: { l: 48, r: 12, t: 30, b: 28 } });
+  lay.xaxis = { ...lay.xaxis, anchor: 'y2' };
+  lay.yaxis = { ...lay.yaxis, domain: [0.38, 1], ticksuffix: '%', tickformat: '.2f' };
+  lay.yaxis2 = { ...lay._ax, showspikes: false, domain: [0, 0.28], ticksuffix: 'bp', tickformat: '.0f', zerolinecolor: C.faint };
+  lay.annotations = [{ text: '2s10s (bp)', xref: 'paper', yref: 'paper', x: 0, y: 0.3, xanchor: 'left', yanchor: 'bottom',
+                       showarrow: false, font: { size: 10.5, color: C.muted } }];
+  const traces = [
+    ...lineTraces(a, 'ust_10y', { name: '10Y', color: C.accent, fmt: '.3f', unit: '%' }),
+    ...lineTraces(b, 'ust_2y', { name: '2Y', color: C.gray1, fmt: '.3f', unit: '%' }),
+    ...lineTraces(sp, 'ust_2s10s', { name: '2s10s', color: C.gray2, width: 1.6, yaxis: 'y2', fmt: '+.1f', unit: 'bp', legend: false }),
+  ];
+  plot('ust-chart', traces, lay);
+  const l = sp[sp.length - 1];
+  document.getElementById('ust-sub').textContent =
+    `${a[0].date} ~ ${a[a.length - 1].date} · ${a[a.length - 1].source} · 최근 2s10s ${signed(l.value, 1)}bp (${l.date})`;
+}
+
+function renderKtb() {
+  const a = recs('ktb_3y'), b = recs('ktb_10y');
+  if (!a.length && !b.length) return empty('ktb-chart');
+  const lay = baseLayout({ margin: { l: 48, r: 12, t: 30, b: 28 } });
+  lay.yaxis = { ...lay.yaxis, ticksuffix: '%', tickformat: '.2f' };
+  plot('ktb-chart', [
+    ...lineTraces(b, 'ktb_10y', { name: '국고 10Y', color: C.accent, fmt: '.3f', unit: '%' }),
+    ...lineTraces(a, 'ktb_3y', { name: '국고 3Y', color: C.gray1, fmt: '.3f', unit: '%' }),
+  ], lay);
+  const last = (b.length ? b : a).slice(-1)[0];
+  document.getElementById('ktb-sub').textContent = `${(b.length ? b : a)[0].date} ~ ${last.date} · ${last.source}`;
+}
+
+// ── 환율 스파크라인 ──
+function renderSparks() {
+  const fx = [['usdjpy', 'USD/JPY', 2], ['usdcnh', 'USD/CNH', 4], ['eurusd', 'EUR/USD', 4], ['dxy', 'DXY', 2]];
+  const box = document.getElementById('sparks');
+  box.innerHTML = fx.map(([k, name]) => `<div class="spark"><div class="top"><span class="name">${name}</span>
+      <span><span class="v" id="sv-${k}"></span> <span class="c" id="sc-${k}"></span></span></div>
+      <div id="sp-${k}" style="height:76px"></div><div class="src" id="ss-${k}"></div></div>`).join('');
+  for (const [k, name, d] of fx) {
+    const it = L.items[k], r = lastN(recs(k), 92);
+    document.getElementById('sv-' + k).textContent = it ? nf(it.value, d) : '–';
+    document.getElementById('sc-' + k).textContent = it && it.change != null ? `${arrow(it.change)} ${signed(it.change, d)}` : '';
+    document.getElementById('ss-' + k).innerHTML = it
+      ? esc(srcLine(it.source, it.asof)) + (it.stale ? ' · stale' : '') + (r.length < 5 ? ` · 이력 ${r.length}건 (누적 중)` : '')
+      : '데이터 없음';
+    if (!r.length) continue;
+    const lay = baseLayout({ margin: { l: 2, r: 2, t: 4, b: 4 }, showlegend: false });
+    lay.xaxis = { visible: false, type: 'date', showspikes: true, spikemode: 'across', spikethickness: 1, spikecolor: C.faint, spikedash: 'solid' };
+    lay.yaxis = { visible: false };
+    const tr = lineTraces(r, k, { name, color: C.accent, width: 1.6, fmt: `.${d}f`, legend: false });
+    if (r.length === 1) tr[0].mode = 'markers', tr[0].marker = { size: 6, color: C.accent };
+    plot('sp-' + k, tr, lay);
+  }
+}
+
+// ── 유가·VIX (x축 공유 상하 패널) ──
+function renderOil() {
+  const w = recs('wti'), b = recs('brent'), v = recs('vix');
+  if (!w.length && !v.length) return empty('oil-chart');
+  const lay = baseLayout({ margin: { l: 48, r: 12, t: 30, b: 28 } });
+  const last = [w, b, v].map(a => a.length ? a[a.length - 1].date : '').sort().pop();
+  lay.xaxis = { ...lay.xaxis, anchor: 'y2', range: [shiftDate(last, 183), shiftDate(last, -2)] };
+  lay.yaxis = { ...lay.yaxis, domain: [0.42, 1], title: { text: 'USD/bbl', font: { size: 10.5 } } };
+  lay.yaxis2 = { ...lay._ax, showspikes: false, domain: [0, 0.32], title: { text: 'VIX', font: { size: 10.5 } } };
+  plot('oil-chart', [
+    ...lineTraces(w, 'wti', { name: 'WTI', color: C.accent }),
+    ...lineTraces(b, 'brent', { name: 'Brent', color: C.gray1 }),
+    ...lineTraces(v, 'vix', { name: 'VIX', color: C.gray2, width: 1.6, yaxis: 'y2' }),
+  ], lay);
+  const s = [['WTI', 'wti'], ['Brent', 'brent'], ['VIX', 'vix']].map(([n, k]) => L.items[k] ? `${n} ${srcLine(L.items[k].source, L.items[k].asof)}` : '').filter(Boolean);
+  document.getElementById('oil-sub').textContent = `최근 6개월 기본 (휠/드래그로 확대) · ${s.join(' | ')}`;
+}
+
+// ── 상위 종목 테이블 ──
+function table(rows, caption) {
+  if (!rows || !rows.length) return `<div class="empty">${caption}: 데이터 없음</div>`;
+  return `<div class="tscroll"><table><caption>${caption}</caption>
+    <thead><tr><th>#</th><th>종목</th><th>순매수</th><th>현재가</th><th>등락</th></tr></thead><tbody>` +
+    rows.map(r => `<tr><td>${r.rank}</td><td class="name" title="${esc(r.name)} ${r.code}">${esc(r.name)}</td>
+      <td>${money(r.net_amount)}</td><td>${nf(r.price, 0)}</td>
+      <td>${r.change_pct == null ? '–' : `${arrow(r.change_pct)} ${signed(r.change_pct)}%`}</td></tr>`).join('') +
+    `</tbody></table></div>`;
+}
+function renderTables() {
+  const T = L.foreign_top || {};
+  document.getElementById('tables').innerHTML = ['KOSPI', 'KOSDAQ'].map(m => {
+    const t = T[m];
+    const head = `<div class="row"><h2>${m === 'KOSPI' ? '코스피' : '코스닥'}</h2>
+      <span class="src">${t ? esc(srcLine(t.source, t.asof)) + ` · ${t.date_from === t.date_to ? t.date_to : t.date_from + '~' + t.date_to}` +
+        (t.stale ? ' · <span class="stale-note">stale · 이전 값</span>' : '') : ''}</span></div>`;
+    return `<div>${head}<div class="tpair">${table(t && t.buy, '순매수 상위')}${table(t && t.sell, '순매도 상위')}</div></div>`;
+  }).join('');
+  const any = T.KOSPI || T.KOSDAQ;
+  document.getElementById('top-sub').textContent = any ? `기간 ${any.period === 'DAY' ? '1일' : any.period} · 1조 이상은 조, 미만은 억 · 부호가 방향` : '';
+}
+
+// ── 로드 ──
+async function getJSON(path) {
+  const r = await fetch(path, { cache: 'no-store' });
+  if (!r.ok) throw new Error(`${path} ${r.status}`);
+  return r.json();
+}
+async function main() {
+  try { L = await getJSON('data/latest.json'); }
+  catch (e) { document.getElementById('meta').textContent = 'data/latest.json을 읽지 못함 — http 서버로 열어야 함'; return; }
+  const res = await Promise.allSettled(SERIES_KEYS.map(k => getJSON(`data/series/${k}.json`)));
+  res.forEach((r, i) => { if (r.status === 'fulfilled') S[SERIES_KEYS[i]] = r.value; });
+  const staleN = Object.values(L.items).filter(x => x.stale).length
+    + Object.values(L.investor || {}).filter(x => x.stale).length + Object.values(L.foreign_top || {}).filter(x => x.stale).length;
+  const miss = res.filter(r => r.status !== 'fulfilled').length;
+  document.getElementById('meta').innerHTML =
+    `갱신 <b>${fmtAsof(L.generated_at)}</b> KST · stale ${staleN}건` + (miss ? ` · 시계열 누락 ${miss}건` : '');
+
+  const safe = (name, fn) => { try { fn(); } catch (e) { console.error(name, e); } };
+  safe('cards', renderCards); safe('main', renderMain); safe('curve', renderCurve); safe('ust', renderUst);
+  safe('ktb', renderKtb); safe('sparks', renderSparks); safe('oil', renderOil); safe('tables', renderTables);
+
+  document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+    market = b.dataset.mkt;
+    document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    renderMain();
+  }));
+}
+main();
+</script>
+</body>
+</html>
