@@ -40,15 +40,21 @@ def view_cta_equity(snap):
     pos = es["position_pct"]
     down = next(s for s in es["scenarios"] if s["k"] == -2)["chg_pp"]
     up = next(s for s in es["scenarios"] if s["k"] == 2)["chg_pp"]
+    pct = es["position_pctile_3y"]
     out = []
-    if pos >= T["cta_long_hi"]:
-        out.append("주식 추세추종 자금은 이미 롱 비중이 높은 상태 → 추가로 살 여력보다 팔 여력이 큼")
+    # '포화'는 절대 수준과 3년 백분위가 둘 다 극단일 때만
+    if pos >= T["cta_long_hi"] and pct >= T["pct_hi"]:
+        out.append(f"주식 CTA 롱이 3년 상위권까지 찬 포화 상태(ES {pos:+.0f}%, {pct:.0f}백분위) → 추가 매수 여력이 거의 없음")
+    elif pos >= T["cta_long_hi"]:
+        out.append(f"주식 CTA는 롱 우위(ES {pos:+.0f}%)지만 3년 범위로 보면 중간({pct:.0f}백분위) → 포화 단계는 아님")
+    elif pos <= T["cta_short_hi"] and pct <= T["pct_lo"]:
+        out.append(f"주식 CTA 숏이 3년 하위권까지 찬 포화 상태(ES {pos:+.0f}%, {pct:.0f}백분위) → 반등 시 숏커버 여력이 큼")
     elif pos <= T["cta_short_hi"]:
-        out.append("주식 추세추종 자금은 숏 비중이 높은 상태 → 반등 시 숏커버(매수) 여력이 큼")
+        out.append(f"주식 CTA는 숏 우위(ES {pos:+.0f}%)지만 3년 범위로는 중간({pct:.0f}백분위)")
     else:
-        out.append("주식 추세추종 포지션은 중간 수준 → 방향이 정해지면 양쪽 모두 추가 매매 여력 있음")
+        out.append(f"주식 CTA 포지션은 중립권(ES {pos:+.0f}%) → 방향이 정해지면 양쪽 모두 추가 매매 여력 있음")
     if abs(down) > abs(up) * T["asym"]:
-        out.append(f"하락 시 매도(−2σ {down:+.0f}%p)가 상승 시 매수(+2σ {up:+.0f}%p)보다 커서, 하락이 나오면 CTA 매도가 낙폭을 키우는 구조")
+        out.append(f"다만 지금 위치에선 팔 여력이 살 여력보다 큼: 1주 −2σ 하락 시 {down:+.0f}%p 매도 vs +2σ 상승 시 {up:+.0f}%p 매수 → 하락이 나오면 CTA 매도가 낙폭을 키울 수 있는 비대칭")
     elif abs(up) > abs(down) * T["asym"]:
         out.append(f"상승 시 매수(+2σ {up:+.0f}%p)가 하락 시 매도보다 커서, 상승이 나오면 CTA 추격 매수가 붙는 구조")
     # 신호가 실제로 뒤집히는 방향만: 현재 +신호 & 전환가가 아래 → 매도 전환 / −신호 & 위 → 매수 전환
@@ -69,19 +75,37 @@ def view_cta_others(snap):
     A = snap.get("cta", {}).get("assets", {})
     out = []
     bonds = [a for a in A.values() if a["class"] == "금리"]
-    if bonds and all(a["position_pct"] <= T["cta_short_hi"] for a in bonds):
+    if bonds and all(a["position_pct"] <= T["cta_short_hi"] and a["position_pctile_3y"] <= T["pct_lo"] for a in bonds):
         pct = max(a["position_pctile_3y"] for a in bonds)
-        out.append(f"미국채 선물 전 구간 숏이 3년 최대권(백분위 ≤{pct:.0f}) → 금리 상승 추세에 베팅한 포지션이 꽉 찬 상태. 금리가 꺾이면(채권 반등) 숏커버 매수가 한꺼번에 나올 수 있음")
+        out.append(f"미국채 CTA 숏은 전 구간 3년 최대권(백분위 ≤{pct:.0f})으로 포화 → 금리 상승 추세에 건 포지션이 꽉 찬 상태. 금리가 꺾이면(채권 반등) 숏커버 매수가 한꺼번에 나올 수 있음")
+    elif bonds and all(a["position_pct"] <= T["cta_short_hi"] for a in bonds):
+        out.append("미국채 CTA는 숏 우위지만 3년 극단은 아님")
     elif bonds and all(a["position_pct"] >= T["cta_long_hi"] for a in bonds):
         out.append("미국채 선물 롱이 높은 상태 → 금리 반등(채권 하락) 시 매도 물량 출회 가능")
     usd = A.get("DX")
     fx_short = [a["name"] for a in A.values() if a["class"] == "FX" and a["key"] != "DX" and a["position_pct"] < -30]
     if usd and usd["position_pct"] > 30 and fx_short:
         out.append(f"달러 롱 / {', '.join(fx_short)} 숏 → 달러 강세 추세 추종 중. 달러가 약해지면 이 통화들에서 숏커버가 나옴")
+    j = view_joint(snap)
+    if j:
+        out.append(j)
     ext_long = [a["name"] for a in A.values() if a["class"] == "원자재" and a["position_pctile_3y"] >= T["pct_hi"] and a["position_pct"] > 0]
     if ext_long:
         out.append(f"원자재 중 {', '.join(ext_long)}는 롱이 3년 상위권 → 추세가 꺾이면 차익실현 매도가 집중되기 쉬움")
     return out
+
+
+def view_joint(snap):
+    """주식 롱 + 채권 숏이 동시에 있을 때: 공통 청산 시나리오."""
+    A = snap.get("cta", {}).get("assets", {})
+    es = A.get("ES")
+    bonds = [a for a in A.values() if a["class"] == "금리"]
+    if es and bonds and es["position_pct"] >= 30 and all(a["position_pct"] <= T["cta_short_hi"] for a in bonds):
+        return ("주식 롱 + 채권 숏은 둘 다 '성장 견조·금리 상승'에 거는 같은 방향의 베팅 → "
+                "성장 쇼크·리스크오프(주가↓·금리↓)가 오면 두 포지션이 동시에 청산될 수 있음(주식 매도 + 채권 숏커버 매수)")
+    if es and bonds and es["position_pct"] <= -30 and all(a["position_pct"] >= T["cta_long_hi"] for a in bonds):
+        return "주식 숏 + 채권 롱은 둘 다 경기 둔화에 거는 베팅 → 리스크온 반전 시 동시 청산 위험"
+    return None
 
 
 def view_gamma(snap):
@@ -180,13 +204,22 @@ def summary(snap) -> list[str]:
     # 2) 주식 포지셔닝 상태
     v = view_cta_equity(snap) or []
     if v:
-        out.append(v[0] + (" · " + v[1] if len(v) > 1 and "구조" in v[1] else ""))
-    # 3) 옵션 심리
-    vo = view_options(snap) or []
-    if vo:
-        out.append(vo[0].split(" 충격이")[0].rstrip("."))
-    # 4) 채권·크로스에셋 쏠림
+        line = v[0]
+        if es:
+            down = next(x for x in es["scenarios"] if x["k"] == -2)["chg_pp"]
+            up = next(x for x in es["scenarios"] if x["k"] == 2)["chg_pp"]
+            if abs(down) > abs(up) * T["asym"]:
+                line += f" · 다만 하락 시 매도({down:+.0f}%p)가 상승 시 매수({up:+.0f}%p)보다 커 하방 비대칭"
+        out.append(line)
+    # 3) 채권·크로스에셋: 주식·채권 결합 위험이 있으면 그것, 없으면 채권 상태
     vc = view_cta_others(snap) or []
     if vc:
         out.append(vc[0].split(". ")[0])
-    return out[:4]
+    j = view_joint(snap)
+    if j:
+        out.append(j)
+    # 4) 옵션 심리
+    vo = view_options(snap) or []
+    if vo:
+        out.append(vo[0].split(" 충격이")[0].rstrip("."))
+    return out[:5]
