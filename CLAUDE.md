@@ -19,22 +19,33 @@
     run.py          # 전체 수집 → data/*.json 갱신 (진입점)
     intraday.py     # 장중 수집 → data/intraday/YYYY-MM-DD.json (평일 08:50~15:40만)
     market_day.py   # 거래일(휴장일) 판정 — update.yml·intraday.yml 공용
+  positioning/      # 주간 포지셔닝 리포트 (CTA 모델·CBOE 옵션·CFTC COT) — docs/positioning.md
+    cta.py · options.py · cot.py · report.py · run.py(진입점)
   data/
     latest.json     # 현재값 카드용 (값·전일대비·소스·기준시각)
     series/*.json   # 항목별 시계열 (날짜, 값, 소스)
     intraday/       # 장중 파일(날짜별) + index.json(날짜 목록)
+    positioning/    # weeks/YYYY-MM-DD.json(주간, 금요일 키) + options_daily.json + index.json
   docs/
     endpoints.md    # 네이버 API 엔드포인트·파라미터·응답 필드 기록 (장중 E24~E28 포함)
     status.md       # 현재 상태·미검증 항목 (세션 인계용)
+    positioning.md  # 주간 포지셔닝: 실행법·모델 가정·확정 규칙·미검증 항목
   scripts/
     intraday_loop.sh  # Actions 장중 루프 (5분 경계마다 intraday.py → 변경 시 커밋·푸시)
   index.html        # 대시보드 화면 (Plotly CDN, 단일 파일)
   intraday.html     # 장중 화면 (index.html과 상호 링크)
+  weekly.html       # 주간 포지셔닝 리포트 (라이트, 주차 드롭다운, Notion용 결론 복사)
   .github/workflows/update.yml    # 매시 + 거래일 장중 15분
   .github/workflows/intraday.yml  # 평일 08:35 시작→08:50 대기, 오전(~12:10)·오후(~15:40) 두 잡 루프
   .github/workflows/pages.yml     # Pages Actions 배포 (봇 푸시 후 호출됨)
+  .github/workflows/positioning.yml  # 주간 포지셔닝: KST 화~토 07:10
   requirements.txt
 ```
+
+## 주간 포지셔닝 (weekly.html)
+- 범위: 미국 지수·VIX·금리·원자재·FX. CTA는 자체 추세추종 모델(실제 포지션 아님을 화면에 명시)
+- 결론 섹션은 수치 기반 규칙 문장만 (report.py THRESH). 전망·해석 문구 추가 금지
+- 차트는 이중축 금지 → 위아래 분리. 상세 규칙·가정은 docs/positioning.md
 
 ## 수집 항목
 1. 투자자별 순매수 (KOSPI/KOSDAQ): 개인·외국인·기관계·세부기관. 일별 시계열 누적 저장

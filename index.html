@@ -22,7 +22,7 @@
   .meta, .src { color: var(--faint); font-size: 11px; }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
-  nav { display: flex; gap: 14px; font-size: 13px; }
+  nav { display: flex; gap: 14px; font-size: 13px; flex-wrap: wrap; }
   nav .here { color: var(--text); font-weight: 600; }
   nav .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
   .sw-light { background: #ffffff; border: 1px solid #a2a7ae; }
@@ -91,7 +91,7 @@
 <div class="wrap">
   <header>
     <h1>시장 모니터</h1>
-    <nav><span class="here"><i class="sw sw-light"></i>일별 · 라이트</span><a href="intraday.html"><i class="sw sw-dark"></i>장중 · 다크</a></nav>
+    <nav><span class="here"><i class="sw sw-light"></i>일별 · 라이트</span><a href="intraday.html"><i class="sw sw-dark"></i>장중 · 다크</a><a href="weekly.html"><i class="sw sw-light"></i>주간 포지셔닝 · 라이트</a></nav>
   </header>
   <div class="meta" id="meta" style="margin-bottom:10px">불러오는 중…</div>
 

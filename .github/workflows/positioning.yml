@@ -1,0 +1,62 @@
+name: positioning-weekly
+
+# 주간 포지셔닝 리포트 (CTA 모델 · CBOE 옵션 체인 · CFTC COT)
+# GitHub cron은 UTC. 미국 장 마감(16:00 ET) 후 KST 화~토 07:10에 실행
+#   - 월~목 실행: 이번 주 파일을 '진행 중'으로 갱신 + 옵션 일별 스냅샷 누적
+#   - 금요일 실행(KST 토 07:10): 금요일 종가 + COT(금 15:30 ET 공표) 반영 → '확정'
+#   - 휴일로 COT가 월요일 공표되면 월요일 실행이 전주 파일을 확정 처리
+on:
+  schedule:
+    - cron: "10 22 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "일부 섹션만 (cta,options,cot 중 쉼표 구분). 비우면 전체"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+  actions: write   # 푸시 후 pages.yml 호출
+
+concurrency:
+  group: positioning
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Build weekly positioning
+        run: python -m positioning.run ${{ inputs.only && format('--only {0}', inputs.only) || '' }}
+
+      - name: Commit data/positioning if changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git add data/positioning/
+          if git diff --cached --quiet; then
+            echo "변경 없음 → 커밋 생략"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "positioning: $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M KST')"
+          for i in 1 2 3; do
+            if git pull --rebase --autostash && git push; then
+              gh workflow run pages.yml --ref main && exit 0
+              echo "::warning::pages 배포 호출 실패"; exit 0
+            fi
+            echo "push 실패 (시도 $i/3), 5초 후 재시도"; sleep 5
+          done
+          exit 1

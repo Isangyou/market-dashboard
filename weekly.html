@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>주간 포지셔닝</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root {
+    color-scheme: light;   /* 주간 = 라이트 (일별과 동일 테마) */
+    --bg: #f6f7f8; --panel: #ffffff; --line: #dcdfe3; --grid: #eceef1;
+    --text: #2a2d32; --muted: #5c6168; --faint: #868b93;
+    --accent: #7b93c4;   /* 슬레이트 블루 — 유일한 포인트 색 */
+    --accent-soft: #c9d3e8;
+    --gray1: #4b5058; --gray2: #a2a7ae;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", "Segoe UI", sans-serif; }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 20px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  nav { display: flex; gap: 14px; font-size: 13px; flex-wrap: wrap; }
+  nav .here { color: var(--text); font-weight: 600; }
+  nav .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
+  .sw-light { background: #ffffff; border: 1px solid #a2a7ae; }
+  .sw-dark { background: #15171a; border: 1px solid #5d626a; }
+
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+  select, button.btn { font: inherit; font-size: 13px; color: var(--text); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; }
+  button.btn { cursor: pointer; }
+  button.btn:hover { border-color: var(--gray2); }
+  .tag { border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .tag.final { border-color: var(--accent); color: var(--text); }
+  .meta { color: var(--faint); font-size: 11.5px; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px 10px; margin-bottom: 14px; min-width: 0; }
+  .panel h2 { font-size: 14.5px; font-weight: 600; margin: 0 0 2px; }
+  .panel h3 { font-size: 13px; font-weight: 600; margin: 14px 0 2px; color: var(--text); }
+  .sub { color: var(--faint); font-size: 11.5px; margin-bottom: 6px; }
+  .secno { color: var(--faint); font-weight: 500; margin-right: 6px; }
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .grid2 > .panel { margin-bottom: 0; }
+  .stack { margin-bottom: 14px; }
+  .row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+  .chart { width: 100%; }
+
+  /* 결론 */
+  .concl { margin: 6px 0 0; padding-left: 18px; }
+  .concl > li { margin: 6px 0; font-weight: 600; }
+  .concl ul { font-weight: 400; color: var(--gray1); padding-left: 18px; margin: 2px 0 0; }
+  .concl ul li { margin: 1px 0; font-size: 13px; }
+
+  /* 카드 */
+  .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 8px 0 6px; }
+  .card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+  .card .lbl { color: var(--muted); font-size: 11.5px; }
+  .card .val { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .card .chg { color: var(--gray1); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+  /* 테이블 */
+  .tscroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 5px 7px; border-bottom: 1px solid var(--grid); white-space: nowrap; text-align: right; }
+  th { color: var(--faint); font-weight: 500; font-size: 11px; vertical-align: bottom; }
+  th.l, td.l { text-align: left; }
+  tr.cls td { color: var(--muted); font-size: 11.5px; font-weight: 600; background: var(--bg); text-align: left; }
+  td.dim { color: var(--faint); }
+  tr.sel td { background: #f0f3f9; }
+  tbody tr.click { cursor: pointer; }
+  tbody tr.click:hover td { background: #f3f4f6; }
+  /* 포지션 막대 (셀 안 미니 바) */
+  .bar { position: relative; width: 90px; height: 10px; background: var(--grid); border-radius: 2px; display: inline-block; vertical-align: middle; margin-left: 6px; }
+  .bar i { position: absolute; top: 0; height: 10px; background: var(--accent); border-radius: 2px; }
+  .bar b { position: absolute; left: 50%; top: -2px; width: 1px; height: 14px; background: var(--gray2); }
+  .pct { display: inline-block; width: 64px; height: 8px; background: var(--grid); border-radius: 4px; position: relative; vertical-align: middle; margin-left: 6px; }
+  .pct i { position: absolute; top: -2px; width: 4px; height: 12px; margin-left: -2px; background: var(--gray1); border-radius: 2px; }
+  .flag { font-size: 11px; border: 1px solid var(--accent); border-radius: 4px; padding: 0 5px; color: var(--text); }
+  .flag.off { border-color: var(--line); color: var(--faint); }
+
+  pre.md { white-space: pre-wrap; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--bg);
+           border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin: 8px 0 4px; display: none; }
+  .empty { color: var(--faint); font-size: 12.5px; padding: 18px 0; text-align: center; }
+  details.method { font-size: 12.5px; color: var(--gray1); }
+  details.method summary { cursor: pointer; color: var(--text); font-weight: 600; font-size: 13px; }
+  details.method li { margin: 3px 0; }
+  code { font-size: 11.5px; background: var(--bg); padding: 0 4px; border-radius: 3px; }
+  footer { color: var(--faint); font-size: 11px; margin-top: 10px; line-height: 1.7; }
+
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } .grid2 > .panel { margin-bottom: 0; } }
+  @media (max-width: 720px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .card .val { font-size: 17px; } }
+  @media print { .toolbar, nav, button { display: none !important; } body { background: #fff; } .panel { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>주간 포지셔닝 리포트</h1>
+    <nav>
+      <a href="index.html"><i class="sw sw-light"></i>일별 · 라이트</a>
+      <a href="intraday.html"><i class="sw sw-dark"></i>장중 · 다크</a>
+      <span class="here"><i class="sw sw-light"></i>주간 포지셔닝 · 라이트</span>
+    </nav>
+  </header>
+
+  <div class="toolbar">
+    <select id="week" aria-label="주차 선택"></select>
+    <span id="status" class="tag"></span>
+    <button class="btn" id="copy">Notion용 결론 복사</button>
+    <button class="btn" id="showmd">마크다운 보기</button>
+    <span class="meta" id="meta">불러오는 중…</span>
+  </div>
+
+  <section class="panel">
+    <h2><span class="secno">0</span>결론</h2>
+    <div class="sub" id="concl-sub">수치 기반 자동 생성 문장 · 해석은 본문 표·차트로 확인</div>
+    <ul class="concl" id="concl"></ul>
+    <pre class="md" id="md"></pre>
+  </section>
+
+  <!-- 1. CTA -->
+  <section class="panel">
+    <div class="row">
+      <div>
+        <h2><span class="secno">1</span>CTA 포지셔닝 (자체 추세추종 모델)</h2>
+        <div class="sub" id="cta-sub"></div>
+      </div>
+    </div>
+    <div class="cards" id="cta-cards"></div>
+    <div class="tscroll"><table id="cta-table"></table></div>
+    <div class="sub" style="margin-top:6px">포지션 = 종합 신호 × 변동성 레버리지, 정상 변동성 기준 풀 포지션 = ±100% (저변동성 시 최대 ±150%).
+      전환가 = 다음 주말 기준 해당 룩백 신호가 0이 되는 가격. 시나리오 = 1주 뒤 가격이 kσ(주간) 움직일 때 포지션 변화(%p). 행 클릭 → 아래 차트 자산 변경.</div>
+  </section>
+  <section class="grid2 stack">
+    <div class="panel">
+      <h2 id="cta-scen-title">1주 시나리오별 포지션 변화</h2>
+      <div class="sub" id="cta-scen-sub"></div>
+      <div id="cta-scen" class="chart" style="height:260px"></div>
+    </div>
+    <div class="panel">
+      <h2 id="cta-flip-title">룩백별 신호 · 전환가</h2>
+      <div class="sub" id="cta-flip-sub"></div>
+      <div id="cta-flip" class="chart" style="height:260px"></div>
+    </div>
+  </section>
+  <section class="panel">
+    <h2 id="cta-hist-title">포지션 추이 (3년, 주간)</h2>
+    <div class="sub">위: 모델 포지션(%) · 아래: 가격 — 축을 분리해 표시</div>
+    <div id="cta-hist" class="chart" style="height:340px"></div>
+  </section>
+
+  <!-- 2. 옵션 -->
+  <section class="panel">
+    <div class="row">
+      <div>
+        <h2><span class="secno">2</span>콜/풋옵션 포지셔닝 · 딜러 감마</h2>
+        <div class="sub" id="opt-sub"></div>
+      </div>
+      <select id="opt-sel" aria-label="기초자산 선택"></select>
+    </div>
+    <div class="cards" id="opt-cards"></div>
+  </section>
+  <section class="grid2 stack">
+    <div class="panel">
+      <h2>행사가별 딜러 GEX</h2>
+      <div class="sub" id="gexk-sub">$mn / 지수 1% 변동, 콜 + · 풋 − (naive 가정)</div>
+      <div id="gexk" class="chart" style="height:300px"></div>
+    </div>
+    <div class="panel">
+      <h2>가격대별 총 GEX 프로파일</h2>
+      <div class="sub">기초자산 가격이 x일 때 총 GEX($bn/1%) — 0을 지나는 가격 = zero-gamma</div>
+      <div id="gexp" class="chart" style="height:300px"></div>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>기초자산별 요약</h2>
+    <div class="sub">괄호 = 전주 스냅샷 대비 변화. P/C(거래량 주평균) = 이번 주 수집된 일별 스냅샷 평균</div>
+    <div class="tscroll"><table id="opt-table"></table></div>
+  </section>
+  <section class="panel">
+    <h2>SPX 옵션 지표 일별 추이</h2>
+    <div class="sub" id="opth-sub">매 실행 누적 — 수집 시작 이후 기간만 표시</div>
+    <div id="opth" class="chart" style="height:380px"></div>
+  </section>
+
+  <!-- 3. 선물 COT -->
+  <section class="panel">
+    <div class="row">
+      <div>
+        <h2><span class="secno">3</span>선물 포지션 (CFTC COT)</h2>
+        <div class="sub" id="cot-sub"></div>
+      </div>
+    </div>
+    <div class="tscroll"><table id="cot-table"></table></div>
+    <div class="sub" style="margin-top:6px">금융선물 = TFF(Leveraged Funds / Asset Manager), 원자재 = Disaggregated(Managed Money). 백분위·z = 최근 3년(156주) 기준.
+      주간 σ = 주간 변화를 3년 주간 변화 표준편차로 나눈 값. 행 클릭 → 아래 차트 시장 변경.</div>
+  </section>
+  <section class="grid2 stack">
+    <div class="panel">
+      <h2>투기 순포지션 3년 백분위</h2>
+      <div class="sub">점 = 이번 주, 가는 선 = 4주 전 → 이번 주 이동</div>
+      <div id="cot-pct" class="chart" style="height:460px"></div>
+    </div>
+    <div class="panel">
+      <h2 id="cot-hist-title">순포지션 추이</h2>
+      <div class="sub">계약 수, 주간(화요일 기준)</div>
+      <div id="cot-hist" class="chart" style="height:460px"></div>
+    </div>
+  </section>
+
+  <!-- 4. 교차 -->
+  <section class="panel">
+    <h2><span class="secno">4</span>교차 확인 — CTA 모델 × COT 투기 포지션</h2>
+    <div class="sub">롱 크라우딩: CTA 포지션 3년 ≥80백분위 & COT ≥80백분위 · 숏 크라우딩: 둘 다 ≤20 · 방향 괴리: CTA 부호 ≠ COT z 부호(|z|≥1)</div>
+    <div class="tscroll"><table id="cross"></table></div>
+  </section>
+
+  <section class="panel">
+    <details class="method">
+      <summary>방법론 · 데이터 소스 · 한계</summary>
+      <ul>
+        <li><b>CTA</b>: 실제 CTA 포지션은 공개되지 않음 → 추세추종 복제 모델 추정치. yfinance 연속 선물(근월 롤 갭 포함) 일별 종가.
+          룩백 20·60·125·250일 위험조정 모멘텀 z = ln(P<sub>t</sub>/P<sub>t−L</sub>)/(σ<sub>60d</sub>√L), 신호 tanh(z) 평균.
+          변동성 타기팅 레버리지 = min(3년 중앙 변동성 / 현재 60일 변동성, 1.5). 코드: <code>positioning/cta.py</code></li>
+        <li><b>옵션</b>: CBOE 지연 시세(15분) 전체 체인. GEX는 딜러 콜 롱·풋 숏 가정의 naive 추정 — 고객 콜 매수·커버드콜 비중에 따라 실제 부호가 다를 수 있음.
+          감마는 BS(r=q=0) 재계산. VIX 옵션은 VIX 선물 기준이라 GEX 미계산. SPX와 SPY는 따로 계산(합산 시 SPY×10 환산 필요). 코드: <code>positioning/options.py</code></li>
+        <li><b>COT</b>: CFTC Public Reporting API, futures-only. 화요일 포지션 → 금요일 15:30 ET 공표(휴일 주 지연). Leveraged Funds에는 CTA·헤지펀드·베이시스 트레이드가 섞임
+          (국채 선물 Lev Funds 숏은 현·선 베이시스 트레이드 영향이 큼). 코드: <code>positioning/cot.py</code></li>
+        <li><b>주차</b>: 미국 기준 해당 주 금요일을 키로 저장. 주중엔 ‘진행 중’으로 매일 갱신, 금요일 종가와 그 주 화요일 COT가 반영되면 ‘확정’.</li>
+      </ul>
+    </details>
+  </section>
+  <footer id="foot"></footer>
+</div>
+
+<script>
+const CSS = getComputedStyle(document.documentElement);
+const C = Object.fromEntries(['bg','panel','line','grid','text','muted','faint','accent','accent-soft','gray1','gray2']
+  .map(k => [k.replace('-', '_'), CSS.getPropertyValue('--' + k).trim()]));
+const DATA = 'data/positioning/';
+const CONFIG = { displayModeBar: false, responsive: true };
+
+let IDX = null, W = null, PREV = null, selCta = 'ES', selOpt = 'SPX', selCot = 'ES';
+
+// ── 포맷 ──
+const isNum = v => v != null && !isNaN(v);
+const nf = (v, d = 0) => !isNum(v) ? '–' : Number(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+const sg = (v, d = 0) => { if (!isNum(v)) return '–'; const r = Number(Number(v).toFixed(d)); return (r > 0 ? '+' : r < 0 ? '−' : '') + nf(Math.abs(r), d); };
+const kc = v => !isNum(v) ? '–' : sg(v / 1000, 1) + 'k';
+const px = v => !isNum(v) ? '–' : Math.abs(v) >= 1000 ? nf(v, 0) : Math.abs(v) >= 10 ? nf(v, 2) : nf(v, 4);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const par = (v, d = 0, suf = '') => isNum(v) ? ` <span class="dim">(${sg(v, d)}${suf})</span>` : '';
+const bar = v => { // −150~+150 → 셀 미니 바
+  if (!isNum(v)) return '';
+  const c = Math.max(-150, Math.min(150, v)) / 150 * 50;
+  const l = c >= 0 ? 50 : 50 + c, w = Math.abs(c);
+  return `<span class="bar"><b></b><i style="left:${l}%;width:${w}%"></i></span>`;
+};
+const pctDot = v => isNum(v) ? `<span class="pct"><i style="left:${v}%"></i></span>` : '';
+
+function baseLayout(extra = {}) {
+  const ax = { gridcolor: C.grid, linecolor: C.line, zerolinecolor: C.gray2, tickfont: { size: 10.5, color: C.muted }, automargin: true };
+  return Object.assign({
+    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { color: C.muted, size: 11, family: getComputedStyle(document.body).fontFamily },
+    margin: { l: 52, r: 14, t: 16, b: 32 }, hovermode: 'closest',
+    hoverlabel: { bgcolor: C.panel, bordercolor: C.line, font: { color: C.text, size: 11.5 } },
+    legend: { orientation: 'h', x: 0, y: 1.1, font: { size: 11, color: C.muted }, bgcolor: 'rgba(0,0,0,0)' },
+    xaxis: { ...ax }, yaxis: { ...ax }, showlegend: false,
+  }, extra);
+}
+const axis = (o = {}) => ({ gridcolor: C.grid, linecolor: C.line, zerolinecolor: C.gray2, tickfont: { size: 10.5, color: C.muted }, automargin: true, ...o });
+const plot = (id, t, l) => { const el = document.getElementById(id); if (el.dataset.h) { el.style.height = el.dataset.h; delete el.dataset.h; el.innerHTML = ''; } Plotly.react(id, t, l, CONFIG); };
+const empty = (id, msg = '데이터 없음') => { const el = document.getElementById(id); Plotly.purge(id); if (!el.dataset.h) el.dataset.h = el.style.height; el.style.height = 'auto'; el.innerHTML = `<div class="empty">${msg}</div>`; };
+// 세로 기준선 + 라벨. side: 'r'이면 선 오른쪽, 'l'이면 왼쪽에 라벨 (두 선 라벨 겹침 방지)
+const vline = (x, label, dash = 'dot', color = C.gray1, side = 'r', y = 1) => ({
+  shape: { type: 'line', xref: 'x', yref: 'paper', x0: x, x1: x, y0: 0, y1: 1, line: { color, width: 1, dash } },
+  ann: { xref: 'x', yref: 'paper', x, y, yanchor: 'bottom', xanchor: side === 'r' ? 'left' : 'right', xshift: side === 'r' ? 3 : -3,
+         text: label, showarrow: false, font: { size: 10.5, color: C.muted } },
+});
+// 현재가·zero-gamma 두 선: zero-gamma가 현재가보다 낮으면 왼쪽, 높으면 오른쪽에 라벨
+const spotZg = (u, spotLbl, zgLbl) => {
+  const zgSide = isNum(u.zero_gamma) && u.zero_gamma > u.spot ? 'r' : 'l';
+  const out = [vline(u.spot, spotLbl, 'solid', C.text, zgSide === 'r' ? 'l' : 'r')];
+  if (isNum(u.zero_gamma)) out.push(vline(u.zero_gamma, zgLbl, 'dot', C.gray1, zgSide, 0.93));
+  return out;
+};
+
+async function getJSON(p) { const r = await fetch(p + '?t=' + Date.now()); if (!r.ok) throw new Error(p + ' ' + r.status); return r.json(); }
+
+// ── 로드 ──
+async function init() {
+  try { IDX = await getJSON(DATA + 'index.json'); }
+  catch (e) { document.getElementById('meta').textContent = '아직 생성된 주간 리포트가 없음 (data/positioning/index.json 없음)'; return; }
+  const sel = document.getElementById('week');
+  sel.innerHTML = IDX.weeks.map(w => `<option value="${w.week}">${esc(w.label)} · ${esc(w.status)}</option>`).join('');
+  const q = new URLSearchParams(location.search).get('week');
+  if (q && IDX.weeks.some(w => w.week === q)) sel.value = q;
+  sel.onchange = () => { history.replaceState(null, '', '?week=' + sel.value); load(sel.value); };
+  await load(sel.value);
+}
+
+async function load(week) {
+  W = await getJSON(`${DATA}weeks/${week}.json`);
+  const i = IDX.weeks.findIndex(w => w.week === week);
+  PREV = i >= 0 && IDX.weeks[i + 1] ? await getJSON(`${DATA}weeks/${IDX.weeks[i + 1].week}.json`).catch(() => null) : null;
+  render();
+}
+
+function render() {
+  const st = document.getElementById('status');
+  st.textContent = W.status; st.className = 'tag' + (W.status === '확정' ? ' final' : '');
+  const a = W.asof || {};
+  document.getElementById('meta').innerHTML =
+    `생성 ${esc((W.generated || '').replace('T', ' ').slice(0, 16))} KST · CTA ${esc(a.cta || '–')} 종가 · 옵션 ${esc(a.options || '–')} · COT ${esc(a.cot || '–')}(화)` +
+    (W.stale && W.stale.length ? ` · <b>이전 값 유지: ${esc(W.stale.join(', '))}</b>` : '') +
+    (PREV ? ` · 비교 대상: ${esc(PREV.week)} 주` : ' · 전주 스냅샷 없음(비교 생략)');
+  renderConclusion(); renderCTA(); renderOptions(); renderCOT(); renderCross();
+  document.getElementById('foot').innerHTML = [W.cta?.source, W.options?.source, W.cot?.source].filter(Boolean).map(esc).join('<br>');
+}
+
+// ── 0. 결론 ──
+function renderConclusion() {
+  const ul = document.getElementById('concl');
+  const cb = W.conclusion || [];
+  ul.innerHTML = cb.length ? cb.map(b => `<li>${esc(b.head)}${b.subs?.length ? '<ul>' + b.subs.map(s => `<li>${esc(s)}</li>`).join('') + '</ul>' : ''}</li>`).join('')
+    : '<li class="empty">결론 없음</li>';
+  document.getElementById('md').textContent = W.markdown || '';
+}
+document.getElementById('copy').onclick = async e => {
+  try { await navigator.clipboard.writeText(W?.markdown || ''); e.target.textContent = '복사됨 ✓'; }
+  catch { document.getElementById('md').style.display = 'block'; e.target.textContent = '복사 실패 — 아래에서 직접 선택'; }
+  setTimeout(() => (e.target.textContent = 'Notion용 결론 복사'), 1800);
+};
+document.getElementById('showmd').onclick = () => { const m = document.getElementById('md'); m.style.display = m.style.display === 'block' ? 'none' : 'block'; };
+
+// ── 1. CTA ──
+const CLASSES = ['주식', '금리', 'FX', '원자재', '변동성'];
+function renderCTA() {
+  const A = W.cta?.assets || {}, K = W.cta?.classes || {};
+  const PA = PREV?.cta?.assets || {};
+  document.getElementById('cta-sub').textContent = `기준 ${W.asof?.cta || '–'} 종가 · 자산 ${Object.keys(A).length}개` + (W.cta?.failed?.length ? ` · 실패: ${W.cta.failed.join(', ')}` : '');
+  document.getElementById('cta-cards').innerHTML = CLASSES.filter(c => K[c]).map(c =>
+    `<div class="card"><div class="lbl">${c} 평균 (${K[c].n}개)</div><div class="val">${sg(K[c].position_pct, 0)}%</div><div class="chg">전주 대비 ${sg(K[c].chg_1w_pp, 0)}%p</div></div>`).join('');
+  if (!Object.keys(A).length) { document.getElementById('cta-table').innerHTML = '<tr><td class="empty">CTA 데이터 없음</td></tr>'; ['cta-scen', 'cta-flip', 'cta-hist'].forEach(id => empty(id)); return; }
+  if (!A[selCta]) selCta = Object.keys(A)[0];
+  const L = W.cta.model?.lookbacks || [20, 60, 125, 250];
+  let h = `<thead><tr><th class="l">자산</th><th>가격</th><th class="l">포지션(%)</th><th>Δ1주 %p</th><th>3년 백분위</th><th>실현σ / 기준σ</th>
+    <th>종합 전환가 (거리)</th>${L.map(l => `<th>${l}일 전환 거리</th>`).join('')}<th>−2σ</th><th>−1σ</th><th>+1σ</th><th>+2σ</th></tr></thead><tbody>`;
+  for (const c of CLASSES) {
+    const rows = Object.values(A).filter(a => a.class === c);
+    if (!rows.length) continue;
+    h += `<tr class="cls"><td colspan="${11 + L.length}">${c}</td></tr>`;
+    for (const a of rows) {
+      const sc = Object.fromEntries(a.scenarios.map(s => [s.k, s.chg_pp]));
+      h += `<tr class="click${a.key === selCta ? ' sel' : ''}" data-k="${a.key}"><td class="l">${esc(a.name)} <span class="dim">${esc(a.key)}</span></td><td>${px(a.price)}</td>
+        <td class="l">${sg(a.position_pct, 0)}${bar(a.position_pct)}</td><td>${sg(a.position_chg_1w_pp, 0)}</td>
+        <td>${nf(a.position_pctile_3y)}${pctDot(a.position_pctile_3y)}</td><td>${nf(a.vol_ann_pct, 1)} / ${nf(a.vol_ref_pct, 1)}</td>
+        <td>${a.composite_flip ? px(a.composite_flip) + ` <span class="dim">(${sg(a.composite_flip_dist_pct, 1)}%)</span>` : '<span class="dim">±4σ 밖</span>'}</td>
+        ${a.flips.map(f => `<td${Math.abs(f.dist_sigma) <= 1 ? '' : ' class="dim"'}>${sg(f.dist_pct, 1)}%</td>`).join('')}
+        <td>${sg(sc[-2], 0)}</td><td>${sg(sc[-1], 0)}</td><td>${sg(sc[1], 0)}</td><td>${sg(sc[2], 0)}</td></tr>`;
+    }
+  }
+  const t = document.getElementById('cta-table');
+  t.innerHTML = h + '</tbody>';
+  t.querySelectorAll('tr.click').forEach(r => r.onclick = () => { selCta = r.dataset.k; renderCTA(); });
+  renderCtaDetail(A[selCta], PA[selCta]);
+}
+
+function renderCtaDetail(a) {
+  document.getElementById('cta-scen-title').textContent = `${a.name} — 1주 시나리오별 포지션 변화`;
+  document.getElementById('cta-scen-sub').textContent = `주간 1σ = ${nf(a.week_sigma_pct, 2)}% · 현재 포지션 ${sg(a.position_pct, 0)}%`;
+  const s = a.scenarios;
+  plot('cta-scen', [{
+    type: 'bar', x: s.map(v => `${v.k > 0 ? '+' : ''}${v.k}σ<br>${px(v.price)}`), y: s.map(v => v.chg_pp),
+    marker: { color: s.map(v => v.k === 0 ? C.gray2 : C.accent) }, width: 0.55,
+    text: s.map(v => sg(v.chg_pp, 0) + '%p'), textposition: 'outside', textfont: { size: 11, color: C.text }, cliponaxis: false,
+    hovertemplate: '%{x}<br>포지션 변화 %{y:+.1f}%p<extra></extra>',
+  }], baseLayout({ yaxis: axis({ title: { text: '%p', font: { size: 10.5 } }, zeroline: true }), xaxis: axis({ tickfont: { size: 10.5, color: C.muted } }), margin: { l: 44, r: 10, t: 22, b: 44 } }));
+
+  document.getElementById('cta-flip-title').textContent = `${a.name} — 룩백별 신호 · 전환가`;
+  document.getElementById('cta-flip-sub').textContent = `막대 = 룩백 신호(−1~+1), 라벨 = 다음 주말 전환가(현재가 대비 거리)`;
+  const f = a.flips;
+  plot('cta-flip', [{
+    type: 'bar', orientation: 'h', y: f.map(v => `${v.lookback}일`), x: f.map(v => v.signal),
+    marker: { color: C.accent }, width: 0.5,
+    text: f.map(v => `${px(v.flip_level)} (${sg(v.dist_pct, 1)}%)`), textposition: 'outside', textfont: { size: 10.5, color: C.muted }, cliponaxis: false,
+    hovertemplate: '%{y}: 신호 %{x:.2f}<br>전환가 %{text}<extra></extra>',
+  }], baseLayout({ xaxis: axis({ range: [-1.6, 1.6], zeroline: true, dtick: 0.5 }), yaxis: axis({ autorange: 'reversed' }), margin: { l: 52, r: 16, t: 10, b: 30 } }));
+
+  document.getElementById('cta-hist-title').textContent = `${a.name} — 모델 포지션 추이 (3년, 주간)`;
+  const hx = a.history.date;
+  plot('cta-hist', [
+    { type: 'scatter', mode: 'lines', x: hx, y: a.history.pos, line: { color: C.accent, width: 2 }, name: '포지션', hovertemplate: '%{x}<br>포지션 %{y:+.0f}%<extra></extra>' },
+    { type: 'scatter', mode: 'lines', x: hx, y: a.history.px, line: { color: C.gray1, width: 1.5 }, name: '가격', xaxis: 'x2', yaxis: 'y2', hovertemplate: '%{x}<br>가격 %{y:,.2f}<extra></extra>' },
+  ], baseLayout({
+    grid: { rows: 2, columns: 1, roworder: 'top to bottom' },
+    xaxis: axis({ type: 'date', matches: 'x2', showticklabels: false }), yaxis: axis({ domain: [0.42, 1], title: { text: '포지션 %', font: { size: 10.5 } }, zeroline: true }),
+    xaxis2: axis({ type: 'date', anchor: 'y2' }), yaxis2: axis({ domain: [0, 0.34], title: { text: '가격', font: { size: 10.5 } } }),
+    hovermode: 'x', margin: { l: 56, r: 14, t: 10, b: 30 },
+  }));
+}
+
+// ── 2. 옵션 ──
+function renderOptions() {
+  const U = W.options?.underlyings || {}, PU = PREV?.options?.underlyings || {}, WK = W.options_week?.pc_vol_avg || {};
+  const ss = document.getElementById('opt-sel');
+  const keys = Object.keys(U);
+  document.getElementById('opt-sub').textContent = `CBOE 지연 체인 ${W.asof?.options || '–'} · 이번 주 일별 스냅샷 ${W.options_week?.days?.length || 0}일` + (W.options?.failed?.length ? ` · 실패: ${W.options.failed.join(', ')}` : '');
+  if (!keys.length) { document.getElementById('opt-cards').innerHTML = '<div class="empty">옵션 데이터 없음</div>'; ['gexk', 'gexp', 'opth'].forEach(id => empty(id)); document.getElementById('opt-table').innerHTML = ''; return; }
+  if (!U[selOpt]) selOpt = keys[0];
+  ss.innerHTML = keys.filter(k => U[k].gex_usd_bn != null).map(k => `<option value="${k}"${k === selOpt ? ' selected' : ''}>${esc(U[k].name)}</option>`).join('');
+  ss.onchange = () => { selOpt = ss.value; renderOptions(); };
+
+  const u = U[selOpt], p = PU[selOpt] || {};
+  const d = (a, b, dd) => isNum(a) && isNum(b) ? `전주 대비 ${sg(a - b, dd)}` : '전주 없음';
+  const card = (lbl, val, chg) => `<div class="card"><div class="lbl">${lbl}</div><div class="val">${val}</div><div class="chg">${chg}</div></div>`;
+  document.getElementById('opt-cards').innerHTML = [
+    card(`${esc(u.name)} 가격`, px(u.spot), d(u.spot, p.spot, 2)),
+    card('딜러 GEX ($bn/1%, 전 만기)', sg(u.gex_usd_bn, 2), `35일 이내 ${sg(u.gex_near_usd_bn, 2)} · ${d(u.gex_usd_bn, p.gex_usd_bn, 2)}`),
+    card('Zero-gamma', px(u.zero_gamma), isNum(u.zero_gamma) ? `현재가 대비 ${sg((u.zero_gamma / u.spot - 1) * 100, 1)}%` : '범위(±12%) 내 없음'),
+    card('콜 벽 / 풋 벽 (순GEX)', `${px(u.call_gamma_wall)} / ${px(u.put_gamma_wall)}`, `OI 기준 ${px(u.call_oi_wall)} / ${px(u.put_oi_wall)}`),
+    card('P/C (OI)', nf(u.pc_oi, 2), d(u.pc_oi, p.pc_oi, 2)),
+    card('P/C (거래량, 주평균)', nf(WK[selOpt], 2), `당일 ${nf(u.pc_vol, 2)}`),
+    card('25Δ 스큐 (30일, vp)', sg(u.skew_25d_30d, 1), d(u.skew_25d_30d, p.skew_25d_30d, 1)),
+    card('ATM IV 30일 (%)', nf(u.atm_iv_30d, 1), `${u.next_opex || ''} 만기까지 |감마| ${nf(u.gamma_expiring_by_opex_pct, 0)}% 소멸`),
+  ].join('');
+
+  // 행사가별 GEX
+  const gk = u.gex_by_strike;
+  if (gk) {
+    const sh = spotZg(u, '현재 ' + px(u.spot), 'zero-γ ' + px(u.zero_gamma));
+    plot('gexk', [{
+      type: 'bar', x: gk.strike, y: gk.gex_usd_mn, marker: { color: gk.gex_usd_mn.map(v => v >= 0 ? C.accent : C.gray2) },
+      hovertemplate: '행사가 %{x:,}<br>GEX %{y:+,.0f} $mn<extra></extra>',
+    }], baseLayout({ shapes: sh.map(s => s.shape), annotations: sh.map(s => s.ann), bargap: 0.15,
+      yaxis: axis({ title: { text: '$mn / 1%', font: { size: 10.5 } }, zeroline: true }), xaxis: axis({ title: { text: '행사가', font: { size: 10.5 } } }), margin: { l: 56, r: 14, t: 22, b: 40 } }));
+  } else empty('gexk', 'GEX 미계산');
+  const gp = u.gex_profile;
+  if (gp) {
+    const sh = spotZg(u, '현재 ' + px(u.spot), 'zero-γ ' + px(u.zero_gamma));
+    plot('gexp', [{ type: 'scatter', mode: 'lines', x: gp.spot, y: gp.gex_usd_bn, line: { color: C.accent, width: 2 },
+      hovertemplate: '가격 %{x:,.2f}<br>총 GEX %{y:+.2f} $bn<extra></extra>' }],
+      baseLayout({ shapes: sh.map(s => s.shape), annotations: sh.map(s => s.ann), hovermode: 'x',
+        yaxis: axis({ title: { text: '$bn / 1%', font: { size: 10.5 } }, zeroline: true }), xaxis: axis({ title: { text: '기초자산 가격', font: { size: 10.5 } } }), margin: { l: 56, r: 14, t: 22, b: 40 } }));
+  } else empty('gexp', 'GEX 미계산');
+
+  // 요약 표
+  let h = `<thead><tr><th class="l">기초자산</th><th>가격</th><th>P/C OI</th><th>P/C 거래량(주평균)</th><th>콜 OI</th><th>풋 OI</th><th>콜 벽(OI)</th><th>풋 벽(OI)</th>
+    <th>25Δ 스큐 vp</th><th>ATM IV30</th><th>GEX $bn/1%</th><th>35일 이내</th><th>zero-γ (거리)</th></tr></thead><tbody>`;
+  for (const c of CLASSES) {
+    const rows = Object.values(U).filter(x => x.class === c);
+    if (!rows.length) continue;
+    h += `<tr class="cls"><td colspan="13">${c}</td></tr>`;
+    for (const x of rows) {
+      const q = PU[x.key] || {};
+      const dd = (a, b, n) => isNum(a) && isNum(b) ? par(a - b, n) : '';
+      h += `<tr><td class="l">${esc(x.name)}</td><td>${px(x.spot)}</td><td>${nf(x.pc_oi, 2)}${dd(x.pc_oi, q.pc_oi, 2)}</td><td>${nf(WK[x.key], 2)}</td>
+        <td>${nf(x.call_oi)}</td><td>${nf(x.put_oi)}</td><td>${px(x.call_oi_wall)}</td><td>${px(x.put_oi_wall)}</td>
+        <td>${sg(x.skew_25d_30d, 1)}${dd(x.skew_25d_30d, q.skew_25d_30d, 1)}</td><td>${nf(x.atm_iv_30d, 1)}${dd(x.atm_iv_30d, q.atm_iv_30d, 1)}</td>
+        <td>${isNum(x.gex_usd_bn) ? sg(x.gex_usd_bn, 2) + dd(x.gex_usd_bn, q.gex_usd_bn, 2) : '<span class="dim">—</span>'}</td>
+        <td>${isNum(x.gex_near_usd_bn) ? sg(x.gex_near_usd_bn, 2) : '<span class="dim">—</span>'}</td>
+        <td>${isNum(x.zero_gamma) ? px(x.zero_gamma) + ` <span class="dim">(${sg((x.zero_gamma / x.spot - 1) * 100, 1)}%)</span>` : '<span class="dim">—</span>'}</td></tr>`;
+    }
+  }
+  document.getElementById('opt-table').innerHTML = h + '</tbody>';
+
+  // SPX 일별 추이 (small multiples: GEX / P/C / 스큐)
+  const H = W.options_hist || {};
+  const x = H.date || [];
+  if (x.length < 2) { empty('opth', `누적 ${x.length}일 — 2일 이상 쌓이면 표시`); return; }
+  const ln = (y, ax, name, color = C.accent, fmt = '.2f') => ({ type: 'scatter', mode: 'lines+markers', x, y, xaxis: 'x' + ax, yaxis: 'y' + ax, name,
+    line: { color, width: 2 }, marker: { size: 5, color }, connectgaps: false, hovertemplate: `%{x}<br>${name} %{y:${fmt}}<extra></extra>` });
+  plot('opth', [
+    ln(H.SPX_gex_usd_bn, '', 'GEX $bn/1%'),
+    ln(H.SPX_pc_oi, '2', 'P/C OI'), ln(H.SPX_pc_vol, '2', 'P/C 거래량', C.gray2),
+    ln(H.SPX_skew_25d_30d, '3', '25Δ 스큐 vp', C.gray1, '.1f'),
+  ], baseLayout({
+    showlegend: true, legend: { orientation: 'h', x: 0, y: 1.08, font: { size: 11, color: C.muted } },
+    xaxis: axis({ type: 'date', showticklabels: false }), yaxis: axis({ domain: [0.7, 1], title: { text: 'GEX', font: { size: 10.5 } }, zeroline: true }),
+    xaxis2: axis({ type: 'date', anchor: 'y2', matches: 'x', showticklabels: false }), yaxis2: axis({ domain: [0.36, 0.64], title: { text: 'P/C', font: { size: 10.5 } } }),
+    xaxis3: axis({ type: 'date', anchor: 'y3', matches: 'x' }), yaxis3: axis({ domain: [0, 0.3], title: { text: '스큐', font: { size: 10.5 } } }),
+    hovermode: 'x', margin: { l: 56, r: 14, t: 24, b: 30 },
+  }));
+  document.getElementById('opth-sub').textContent = `매 실행 누적 · ${x[0]} ~ ${x[x.length - 1]} (${x.length}일)`;
+}
+
+// ── 3. COT ──
+function renderCOT() {
+  const M = W.cot?.markets || {};
+  document.getElementById('cot-sub').textContent = `기준일 ${W.cot?.report_date || '–'}(화) · 시장 ${Object.keys(M).length}개` + (W.cot?.failed?.length ? ` · 실패: ${W.cot.failed.join(', ')}` : '');
+  if (!Object.keys(M).length) { document.getElementById('cot-table').innerHTML = '<tr><td class="empty">COT 데이터 없음</td></tr>'; empty('cot-pct'); empty('cot-hist'); return; }
+  if (!M[selCot]) selCot = Object.keys(M)[0];
+  let h = `<thead><tr><th class="l">시장</th><th class="l">그룹</th><th>롱</th><th>숏</th><th>순포지션</th><th>Δ1주</th><th>Δ4주</th><th>주간 σ</th><th>순/OI %</th><th class="l">3년 백분위</th><th>z(3년)</th><th>OI (Δ1주)</th></tr></thead><tbody>`;
+  for (const c of CLASSES) {
+    const ms = Object.values(M).filter(m => m.class === c);
+    if (!ms.length) continue;
+    h += `<tr class="cls"><td colspan="12">${c}</td></tr>`;
+    for (const m of ms) {
+      const gs = m.dataset === 'TFF' ? ['lev', 'am'] : ['mm'];
+      gs.forEach((g, i) => {
+        const x = m.groups[g];
+        h += `<tr class="click${m.key === selCot ? ' sel' : ''}" data-k="${m.key}"><td class="l">${i ? '' : esc(m.name)}</td><td class="l dim">${esc(x.name)}</td>
+          <td>${kc(x.long).replace(/^\+/, '')}</td><td>${kc(x.short).replace(/^\+/, '')}</td><td><b>${kc(x.net)}</b></td><td>${kc(x.chg_1w)}</td><td>${kc(x.chg_4w)}</td>
+          <td${Math.abs(x.chg_1w_z || 0) >= 2 ? '' : ' class="dim"'}>${sg(x.chg_1w_z, 1)}</td><td>${sg(x.net_pct_oi, 1)}</td>
+          <td class="l">${nf(x.pctile_3y)}${pctDot(x.pctile_3y)}</td><td>${sg(x.z_3y, 1)}</td>
+          <td>${i ? '' : kc(m.oi).replace(/^\+/, '') + ` <span class="dim">(${kc(m.oi_chg_1w)})</span>`}</td></tr>`;
+      });
+    }
+  }
+  const t = document.getElementById('cot-table');
+  t.innerHTML = h + '</tbody>';
+  t.querySelectorAll('tr.click').forEach(r => r.onclick = () => { selCot = r.dataset.k; renderCOT(); });
+
+  // 백분위 도트 차트 (헤드라인 그룹)
+  const ms = CLASSES.flatMap(c => Object.values(M).filter(m => m.class === c));
+  const names = ms.map(m => `${m.name}`);
+  const cur = ms.map(m => m.groups[m.headline].pctile_3y);
+  const ago = ms.map(m => { // 4주 전 백분위: 히스토리에서 계산
+    const s = m.history[m.headline + '_net']; if (!s || s.length < 5) return null;
+    const v = s[s.length - 5], win = s.slice(0, s.length - 4);
+    return Math.round(win.filter(z => z <= v).length / win.length * 100);
+  });
+  const segX = [], segY = [];
+  ms.forEach((m, i) => { if (isNum(ago[i])) { segX.push(ago[i], cur[i], null); segY.push(names[i], names[i], null); } });
+  plot('cot-pct', [
+    { type: 'scatter', mode: 'lines', x: segX, y: segY, line: { color: C.gray2, width: 1.5 }, hoverinfo: 'skip' },
+    { type: 'scatter', mode: 'markers', x: cur, y: names, marker: { size: 10, color: C.accent, line: { color: C.panel, width: 2 } },
+      customdata: ms.map(m => [kc(m.groups[m.headline].net), m.groups[m.headline].name]),
+      hovertemplate: '%{y}<br>%{customdata[1]} 순 %{customdata[0]}<br>3년 %{x:.0f}백분위<extra></extra>' },
+  ], baseLayout({
+    xaxis: axis({ range: [-3, 103], dtick: 20, title: { text: '백분위', font: { size: 10.5 } } }), yaxis: axis({ autorange: 'reversed', type: 'category' }),
+    shapes: [10, 90].map(v => ({ type: 'rect', xref: 'x', yref: 'paper', x0: v === 10 ? -3 : 90, x1: v === 10 ? 10 : 103, y0: 0, y1: 1, fillcolor: C.grid, opacity: 0.6, line: { width: 0 }, layer: 'below' })),
+    margin: { l: 110, r: 14, t: 8, b: 40 },
+  }));
+
+  // 선택 시장 순포지션 추이
+  const m = M[selCot];
+  document.getElementById('cot-hist-title').textContent = `${m.name} — 순포지션 추이 (3년)`;
+  const gs = m.dataset === 'TFF' ? [['lev', C.accent], ['am', C.gray1], ['dealer', C.gray2]] : [['mm', C.accent], ['pm', C.gray1], ['swap', C.gray2]];
+  plot('cot-hist', gs.map(([g, col]) => ({
+    type: 'scatter', mode: 'lines', x: m.history.date, y: m.history[g + '_net'], name: m.groups[g].name,
+    line: { color: col, width: g === m.headline ? 2.2 : 1.5 }, hovertemplate: `%{x}<br>${m.groups[g].name} %{y:+,}<extra></extra>`,
+  })), baseLayout({ showlegend: true, hovermode: 'x', xaxis: axis({ type: 'date' }), yaxis: axis({ title: { text: '계약', font: { size: 10.5 } }, zeroline: true }), margin: { l: 64, r: 14, t: 30, b: 30 } }));
+}
+
+// ── 4. 교차 ──
+function renderCross() {
+  const R = W.crowding || [];
+  const t = document.getElementById('cross');
+  if (!R.length) { t.innerHTML = '<tr><td class="empty">교차 데이터 없음 (CTA·COT 둘 다 필요)</td></tr>'; return; }
+  let h = `<thead><tr><th class="l">자산</th><th>CTA 포지션</th><th class="l">CTA 3년 백분위</th><th class="l">COT 그룹</th><th class="l">COT 3년 백분위</th><th>COT z</th><th class="l">판정</th></tr></thead><tbody>`;
+  const ord = r => (r.flag ? 0 : 1);
+  for (const r of [...R].sort((a, b) => ord(a) - ord(b))) {
+    h += `<tr><td class="l">${esc(r.name)}</td><td>${sg(r.cta_pos, 0)}%</td><td class="l">${nf(r.cta_pctile)}${pctDot(r.cta_pctile)}</td>
+      <td class="l dim">${esc(r.cot_group)}</td><td class="l">${nf(r.cot_pctile)}${pctDot(r.cot_pctile)}</td><td>${sg(r.cot_z, 1)}</td>
+      <td class="l">${r.flag ? `<span class="flag">${esc(r.flag)}</span>` : r.note ? `<span class="dim">${esc(r.note)}</span>` : '<span class="flag off">특이 없음</span>'}</td></tr>`;
+  }
+  t.innerHTML = h + '</tbody>';
+}
+
+init();
+</script>
+</body>
+</html>
