@@ -1,0 +1,44 @@
+name: pages
+
+# GitHub Pages 배포 (Actions 배포 방식 → 브랜치 빌드의 시간당 10회 한도 없음)
+# - 사람의 main 푸시: push 이벤트로 자동 배포
+# - 봇(GITHUB_TOKEN) 데이터 푸시: push 이벤트가 새 워크플로를 만들지 않으므로
+#   update.yml / intraday 루프가 푸시 직후 `gh workflow run pages.yml`로 호출
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 배포는 한 번에 하나. 대기 중인 건 최신 1건만 남음(중간 건은 GitHub이 자동 취소)
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main   # dispatch 시점의 최신 main
+      - name: 사이트 파일만 모으기
+        run: |
+          mkdir -p _site
+          cp index.html intraday.html .nojekyll _site/
+          cp -r data _site/
+          du -sh _site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

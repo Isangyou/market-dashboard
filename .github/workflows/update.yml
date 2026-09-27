@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: write
+  actions: write   # 푸시 후 pages.yml 호출
 
 concurrency:
   group: update-data
@@ -60,6 +61,8 @@ jobs:
 
       - name: Commit data/ if changed
         if: steps.gate.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git add data/latest.json data/series/
           if git diff --cached --quiet; then
@@ -71,7 +74,11 @@ jobs:
           git commit -m "data: $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M KST')"
           # 장중엔 intraday 루프도 같은 브랜치에 푸시 → rebase 후 재시도
           for i in 1 2 3; do
-            git pull --rebase --autostash && git push && exit 0
+            if git pull --rebase --autostash && git push; then
+              # 봇 푸시는 push 이벤트를 만들지 않으므로 배포를 직접 호출
+              gh workflow run pages.yml --ref main && exit 0
+              echo "::warning::pages 배포 호출 실패"; exit 0
+            fi
             echo "push 실패 (시도 $i/3), 5초 후 재시도"; sleep 5
           done
           exit 1

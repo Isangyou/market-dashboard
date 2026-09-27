@@ -1,10 +1,10 @@
 name: intraday
 
-# 평일 08:50 KST 시작 → 5분 간격 fetch.intraday 루프.
+# 평일 08:35 KST 시작(러너 준비·cron 지연 여유) → 08:50까지 대기 → 5분 간격 fetch.intraday 루프.
 # 잡 6시간 제한 때문에 오전(~12:10)·오후(12:10~15:40) 두 잡으로 나눔. cron은 UTC (KST-9)
 on:
   schedule:
-    - cron: "50 23 * * 0-4"   # KST 월~금 08:50
+    - cron: "35 23 * * 0-4"   # KST 월~금 08:35
   workflow_dispatch:
     inputs:
       mode:
@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: write
+  actions: write   # 푸시 후 pages.yml 호출
 
 concurrency:
   group: intraday
@@ -49,7 +50,10 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install -r requirements.txt
-      - name: 오전 루프 (~12:10 KST) / 수동 1회
+      - name: 오전 루프 (08:50~12:10 KST) / 수동 1회
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WAIT_UNTIL: ${{ (inputs.mode == '' || inputs.mode == 'loop') && '08:50' || '' }}
         run: |
           case "${{ inputs.mode }}" in
             once)       ONCE=1 scripts/intraday_loop.sh 12:10 ;;
@@ -72,4 +76,6 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - name: 오후 루프 (12:10~15:40 KST)
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: scripts/intraday_loop.sh 15:40 inclusive

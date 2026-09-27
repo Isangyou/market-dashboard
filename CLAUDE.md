@@ -25,12 +25,14 @@
     intraday/       # 장중 파일(날짜별) + index.json(날짜 목록)
   docs/
     endpoints.md    # 네이버 API 엔드포인트·파라미터·응답 필드 기록 (장중 E24~E28 포함)
+    status.md       # 현재 상태·미검증 항목 (세션 인계용)
   scripts/
     intraday_loop.sh  # Actions 장중 루프 (5분 경계마다 intraday.py → 변경 시 커밋·푸시)
   index.html        # 대시보드 화면 (Plotly CDN, 단일 파일)
   intraday.html     # 장중 화면 (index.html과 상호 링크)
   .github/workflows/update.yml    # 매시 + 거래일 장중 15분
-  .github/workflows/intraday.yml  # 평일 08:50 시작, 오전(~12:10)·오후(~15:40) 두 잡 루프
+  .github/workflows/intraday.yml  # 평일 08:35 시작→08:50 대기, 오전(~12:10)·오후(~15:40) 두 잡 루프
+  .github/workflows/pages.yml     # Pages Actions 배포 (봇 푸시 후 호출됨)
   requirements.txt
 ```
 

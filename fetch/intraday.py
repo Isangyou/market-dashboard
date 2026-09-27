@@ -23,7 +23,10 @@ from .common import log, now_kst, ymd_to_iso  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 WINDOW = ("08:50", "15:40")
-KEEP_UNTIL = "16:10"  # 이력은 정규장+단일가·확정치까지만 (NXT 애프터마켓 제외)
+# 이력 저장 기준 = 수집 종료 시각. 실시간 수집과 --force 백필이 같은 기준이 되도록 통일.
+# 15:40이면 정규장 + 장 마감 동시호가(15:30 종가 단일가) 반영, 시간외(15:40~18:00)·NXT 미포함.
+# 선물 정규장은 15:45 마감이라 마지막 5분은 빠짐.
+KEEP_UNTIL = "15:40"
 MARKETS = ["KOSPI", "KOSDAQ"]
 SKIPPED = 3
 
@@ -80,10 +83,11 @@ def _time_rows(market: str, date: str, have_until: str = ""):
 def investor_time(market: str, date: str, prev: dict = None):
     """E25. 현물 투자자별 장중 누적 (억원)."""
     prev_rows = (prev or {}).get("rows", [])
+    prev_rows = [r for r in prev_rows if r["t"] <= KEEP_UNTIL]
     raw = _time_rows(market, date, prev_rows[-1]["t"] if prev_rows else "")
     if raw is None:
         return None
-    by_t = {r["t"]: r for r in prev_rows}
+    by_t = {r["t"]: r for r in prev_rows if r["t"] <= KEEP_UNTIL}
     for it in raw:
         t = hm(it["time"])
         if t > KEEP_UNTIL:
@@ -94,16 +98,18 @@ def investor_time(market: str, date: str, prev: dict = None):
     rows = [by_t[t] for t in sorted(by_t)]
     if not rows:
         return None
-    return {"source": "naver:trend_time", "unit": "억원", "asof": iso(date, rows[-1]["t"]), "rows": rows}
+    return {"source": "naver:trend_time", "unit": "억원", "asof": iso(date, rows[-1]["t"]),
+            "basis": f"KRX 장중 누적 잠정치 (~{KEEP_UNTIL}, 시간외·NXT 제외)", "rows": rows}
 
 
 def futures_time(date: str, prev: dict = None):
     """E26. 선물 투자자별 장중 누적. 계약 수 + 외국인 금액(억)."""
     prev_rows = (prev or {}).get("rows", [])
+    prev_rows = [r for r in prev_rows if r["t"] <= KEEP_UNTIL]
     raw = _time_rows("FUT", date, prev_rows[-1]["t"] if prev_rows else "")
     if raw is None:
         return None
-    by_t = {r["t"]: r for r in prev_rows}
+    by_t = {r["t"]: r for r in prev_rows if r["t"] <= KEEP_UNTIL}
     for it in raw:
         t = hm(it["time"])
         if t > KEEP_UNTIL:

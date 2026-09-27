@@ -145,6 +145,7 @@
   <footer>
     점선 = 1차 소스(네이버) 대신 폴백 소스(yfinance 등) 값이 들어간 구간. 소스마다 값이 다를 수 있음.<br>
     USD/KRW는 하나은행 고시 매매기준율(시장 실시간가 아님). 투자자별 순매수는 네이버 단일 소스(pykrx 폴백 비활성).<br>
+    투자자 일별값 = KRX 일별 최종치: 정규장 + 장 마감 동시호가 + 시간외(종가·단일가) 포함, NXT 제외. 장중 페이지의 잠정치(15:40까지, 시간외 제외)와 다를 수 있음.<br>
     ▲/▼ 는 전일 대비 부호. 금리 변화는 bp. 기준시각은 KST.
   </footer>
 </div>
@@ -177,6 +178,13 @@ function fmtAsof(s) {
 }
 const money = v => v == null || isNaN(v) ? '–' : Math.abs(v) >= 1e4 ? `${signed(v / 1e4, 2)}조` : `${signed(v, 0)}억`;
 const srcLine = (src, asof) => `${src} · ${fmtAsof(asof)}`;
+// 투자자 순매수 집계 기준 (docs/endpoints.md, docs/status.md 참고)
+const INV_BASIS = {
+  'naver:trend_daily': 'KRX 일별 최종치 (정규장+시간외, NXT 제외)',
+  'naver:trend_time': 'KRX 당일 잠정치 (장중 누적, 확정 전)',
+  'pykrx': 'KRX 일별 (pykrx)',
+};
+const invBasis = src => INV_BASIS[src] || src;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // ── Plotly 공통 ──
@@ -259,7 +267,7 @@ function investorCard(m) {
   const cum = r.reduce((a, x) => a + x.foreign, 0);
   return card({ label, tag, value: money(v.foreign),
     chg: `${arrow(cum)} 20일 누적 ${money(cum)}`,
-    src: `${srcLine(v.source, v.asof)} · pykrx 폴백 ${L.meta && L.meta.pykrx_enabled ? '활성' : '비활성'}`, stale: v.stale });
+    src: `${invBasis(v.source)} · ${srcLine(v.source, v.asof)} · pykrx 폴백 ${L.meta && L.meta.pykrx_enabled ? '활성' : '비활성'}`, stale: v.stale });
 }
 function renderCards() {
   document.getElementById('cards').innerHTML = [
@@ -310,7 +318,7 @@ function renderMain() {
   plot('main-chart', traces, lay);
   const fxLast = fx[fx.length - 1];
   document.getElementById('main-sub').textContent =
-    `${market} ${inv[0].date} ~ ${last} · ${inv[inv.length - 1].source}` + (fxLast ? ` | USD/KRW 하나은행 고시 ~ ${fxLast.date} · ${fxLast.source}` : '');
+    `${market} ${inv[0].date} ~ ${last} · ${invBasis(inv[inv.length - 1].source)} · ${inv[inv.length - 1].source}` + (fxLast ? ` | USD/KRW 하나은행 고시 ~ ${fxLast.date} · ${fxLast.source}` : '');
 }
 
 // ── 커브 ──
