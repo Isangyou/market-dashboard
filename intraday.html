@@ -183,10 +183,17 @@ function renderCards() {
     card({ label: '외국인 순매수 60일 위치', tag: '코스피', value: pct ? `${pct.rank}위 / ${pct.n + 1}` : '–',
            chg: pct ? `백분위 ${nf(pct.pctile, 0)} · ${pct.pctile >= 50 ? '상위' : '하위'} ${nf(pct.pctile >= 50 ? 100 - pct.pctile : pct.pctile, 0)}%` : '',
            src: pct ? `장중 ${pct.t} 누적 vs 확정 일별 ${pct.from}~${pct.to}` : '데이터 없음' }),
-    card({ label: '기준시각', value: snap ? snap.t : (D ? fmtAsof(D.updated_at).slice(6) : '–'),
+    card({ label: '기준시각', value: snap ? snap.t : (dataAsof() ? dataAsof().slice(11, 16) : '–'),
            chg: D ? `${D.date}${k && k.status ? ` · 장 상태 ${k.status}` : ''}` : '',
            src: D ? `수집 ${fmtAsof(D.updated_at)} KST · 스냅샷 ${(D.snapshots || []).length}건` : '장중 데이터 없음' }),
   ].join('');
+}
+
+// 스냅샷이 없을 때(지난 거래일 백필 등) 기준시각 = 섹션 asof 중 가장 늦은 값
+function dataAsof() {
+  if (!D) return null;
+  const secs = [D.index && D.index.KOSPI, D.investor && D.investor.KOSPI, D.futures, D.program && D.program.KOSPI, D.usdkrw];
+  return secs.filter(Boolean).map(x => x.asof).filter(Boolean).sort().pop() || null;
 }
 
 // ── 60일 분위 ──
