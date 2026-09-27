@@ -1,14 +1,13 @@
 name: update-data
 
 # GitHub cron은 UTC. KST = UTC+9
-# 장중(평일 KST 08:30~16:00) 15분 간격, 그 외 1시간 간격
+# 매시 정각은 항상 실행, 장중(평일 KST 08:30~15:45)의 :15/:30/:45는 거래일에만 실행
+# → 휴장일엔 1시간 간격, 거래일 장중엔 15분 간격
 on:
   schedule:
-    - cron: "30,45 23 * * 0-4"   # KST 월~금 08:30, 08:45
-    - cron: "*/15 0-6 * * 1-5"   # KST 월~금 09:00~15:45
-    - cron: "0 7 * * 1-5"        # KST 월~금 16:00
-    - cron: "0 8-23 * * *"       # KST 매일 17:00~08:00 매시
-    - cron: "0 0-7 * * 0,6"      # KST 토·일 09:00~16:00 매시
+    - cron: "0 * * * *"             # 매시 정각 (KST 전 시간대)
+    - cron: "30,45 23 * * 0-4"      # KST 월~금 08:30, 08:45  (장중 전용)
+    - cron: "15,30,45 0-6 * * 1-5"  # KST 월~금 09:15~15:45   (장중 전용)
   workflow_dispatch:
     inputs:
       backfill:
@@ -37,14 +36,32 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      - id: day
+        name: 휴장일 판정 (intraday.yml과 공용)
+        run: python -m fetch.market_day --github-output
+
+      - id: gate
+        name: 휴장일이면 장중 전용 스케줄 건너뜀
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ] \
+             && [ "${{ github.event.schedule }}" != "0 * * * *" ] \
+             && [ "${{ steps.day.outputs.trading }}" != "true" ]; then
+            echo "휴장일 + 장중 전용 스케줄(${{ github.event.schedule }}) → 수집 생략"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Fetch
+        if: steps.gate.outputs.run == 'true'
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: python -m fetch.run ${{ inputs.backfill && '--backfill' || '' }}
 
       - name: Commit data/ if changed
+        if: steps.gate.outputs.run == 'true'
         run: |
-          git add data/
+          git add data/latest.json data/series/
           if git diff --cached --quiet; then
             echo "변경 없음 → 커밋 생략"
             exit 0
@@ -52,5 +69,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "data: $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M KST')"
-          git pull --rebase
-          git push
+          # 장중엔 intraday 루프도 같은 브랜치에 푸시 → rebase 후 재시도
+          for i in 1 2 3; do
+            git pull --rebase --autostash && git push && exit 0
+            echo "push 실패 (시도 $i/3), 5초 후 재시도"; sleep 5
+          done
+          exit 1

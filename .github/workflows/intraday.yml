@@ -1,0 +1,75 @@
+name: intraday
+
+# 평일 08:50 KST 시작 → 5분 간격 fetch.intraday 루프.
+# 잡 6시간 제한 때문에 오전(~12:10)·오후(12:10~15:40) 두 잡으로 나눔. cron은 UTC (KST-9)
+on:
+  schedule:
+    - cron: "50 23 * * 0-4"   # KST 월~금 08:50
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "loop=스케줄과 동일 / once=1회(조건 적용) / once-force=1회(조건 무시, 최근 거래일 기록)"
+        type: choice
+        options: [loop, once, once-force]
+        default: loop
+
+permissions:
+  contents: write
+
+concurrency:
+  group: intraday
+  cancel-in-progress: false
+
+jobs:
+  calendar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      trading: ${{ steps.day.outputs.trading }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install requests
+      - id: day
+        name: 휴장일 판정 (update.yml과 공용)
+        run: python -m fetch.market_day --github-output
+
+  am:
+    needs: calendar
+    # 스케줄·loop: 거래일에만 / once·once-force: 달력 무관 1회
+    if: (needs.calendar.outputs.trading == 'true' && (inputs.mode == '' || inputs.mode == 'loop')) || inputs.mode == 'once' || inputs.mode == 'once-force'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: 오전 루프 (~12:10 KST) / 수동 1회
+        run: |
+          case "${{ inputs.mode }}" in
+            once)       ONCE=1 scripts/intraday_loop.sh 12:10 ;;
+            once-force) ONCE=1 FORCE=1 scripts/intraday_loop.sh 12:10 ;;
+            *)          scripts/intraday_loop.sh 12:10 ;;
+          esac
+
+  pm:
+    needs: [calendar, am]
+    # 오전 잡이 실패해도 오후는 돈다
+    if: always() && needs.calendar.outputs.trading == 'true' && (inputs.mode == '' || inputs.mode == 'loop')
+    runs-on: ubuntu-latest
+    # 보통 12:10 시작 → 3.5h. 오전 잡이 일찍 실패하면 바로 시작해 오전분까지 이어받음 (6h 한도 내)
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4   # 오전 잡이 푸시한 최신 커밋부터
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: 오후 루프 (12:10~15:40 KST)
+        run: scripts/intraday_loop.sh 15:40 inclusive

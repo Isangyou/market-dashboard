@@ -239,3 +239,43 @@ E10 필드 + `openingPrice`, `highPriceOfDay`, `lowPriceOfDay`, `high/lowPriceOf
 | DXY | E16, 이력 E17 | |
 | WTI, Brent | E19, 이력 E20 | |
 | VIX | E21, 이력 E22 | |
+
+---
+
+## 6. 장중 (intraday.html용, 2026-09-27 추가 캡처)
+
+캡처 화면: 투자자별 매매동향 "선물" 탭, `/market/stock/kr/trend/program`, `/domestic/index/KOSPI/price`.
+휴장일(09-27)에 호출하면 직전 거래일(09-23) 데이터가 옴. 결론: **네 항목 모두 네이버가 장중 이력을 직접 제공**.
+
+### E24. 지수 분봉 (당일 1분)
+`GET /securityService/chart/domestic/index/{KOSPI|KOSDAQ}?periodType=day`
+```json
+{"code":"KOSPI","marketStatus":"CLOSE","openPrice":7153.99,"lastClosePrice":7017.91,
+ "tradeBaseAt":"20260923","openTime":"20260923090000","closeTime":"20260923153000",
+ "priceInfos":[{"localDateTime":"20260923090000","currentPrice":7144.02,"openPrice":7153.99,"highPrice":7153.99,"lowPrice":7144.02,"accumulatedTradingVolume":4038}, ...],
+ "lastPriceInfos":[...전일 분봉...]}
+```
+09-23: 393개 (09:00~15:32). `tradeBaseAt` ≠ 오늘이면 휴장/장 시작 전.
+
+### E25. 투자자별 장중 누적 (현물) — 기존 E4
+`GET /domestic/market/trend/time?tradeType=KRX&marketType={KOSPI|KOSDAQ}&bizdate=YYYYMMDD&startIdx={page}&pageSize=100`
+1~2분 간격 누적치, 최신순. 09-23 KOSPI 443행 (09:01~20:04, 15:30 이후는 NXT 시간외 포함). 코드·단위는 E3과 동일(원).
+
+### E26. 선물 투자자별 장중 누적
+E25와 같은 경로, `marketType=FUT`. 09-23 422행 (~16:06 확정치).
+- `diffValue` = **순매수 계약 수**, `buyPrice`/`sellPrice` = **백만원** (계약당 약 2.8억 = 선물가×25만)
+- 코드: 8000 개인, 9000 외국인, 1000 금융투자, 2000 보험, 3000 투신(사모), 4000 은행, 5000 기타금융, 6000 연기금, 7000 국가, 7100 기타법인, 9999 (미확인, 0). 9001 없음
+- 화면 대조 (09-23 16:06): 외국인 1,356계약 / 개인 37 / 기관계 -1,402 (=1000~7000 합) ✓
+- 당일 합계 1건: `/domestic/market/trend/chart/time?...&marketType=FUT` (E1과 동일 형식)
+
+### E27. 프로그램 매매
+- 차트(1회 호출): `GET /domestic/market/trendProgram/chart?tradeType=KRX&krxMarketType={KOSPI|KOSDAQ}&bizdate=YYYYMMDD&startDate=YYYYMMDD&endDate=YYYYMMDD&periodType=TIME` → 배열 65개
+- 목록(페이지): `GET /domestic/market/trendProgram?tradeType=KRX&krxMarketType=KOSPI&bizdate=...&startIdx=0&pageSize=30&periodType=TIME` → 669행(1분), `periodType=DATE`는 일자별
+- 필드(원 단위, 누적): `diffBuyAmt/diffSellAmt/diffPureBuyAmt`(차익), `biDiff*`(비차익), `totalDiff*`(전체)
+- 화면 대조 (09-23 20:05): 차익 순매수 800억 / 비차익 -7,535억 / 전체 -6,734억 ✓
+
+### E28. KOSPI200 선물 현재가
+`GET /securityService/integration/indicators?indicatorCodes=FUT` → `currentPrice` 1127.75, `fluctuationsRatio`, `localTradedAt`, 20분 지연
+
+### USD/KRW 장중
+E14 `/stockSecurity/exchange-rates/v2/USD/charts/round?bankType=hana` (하나은행 고시 회차별, 당일 6,255회, 650KB) → 1분 단위 마지막 값으로 축약해서 사용

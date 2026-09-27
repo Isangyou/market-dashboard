@@ -20,6 +20,10 @@
   header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
   h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
   .meta, .src { color: var(--faint); font-size: 11px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  nav { display: flex; gap: 14px; font-size: 13px; }
+  nav .here { color: var(--text); font-weight: 600; }
   .meta b { color: var(--muted); font-weight: 500; }
 
   /* 카드 */
@@ -84,8 +88,9 @@
 <div class="wrap">
   <header>
     <h1>시장 모니터</h1>
-    <div class="meta" id="meta">불러오는 중…</div>
+    <nav><span class="here">시장 모니터</span><a href="intraday.html">장중</a></nav>
   </header>
+  <div class="meta" id="meta" style="margin-bottom:10px">불러오는 중…</div>
 
   <section class="cards" id="cards"></section>
 
