@@ -31,7 +31,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install requests
+      - run: pip install requests pandas   # market_day → naver.py가 pandas를 import
       - id: day
         name: 휴장일 판정 (update.yml과 공용)
         run: python -m fetch.market_day --github-output
@@ -39,7 +39,7 @@ jobs:
   am:
     needs: calendar
     # 스케줄·loop: 거래일에만 / once·once-force: 달력 무관 1회
-    if: (needs.calendar.outputs.trading == 'true' && (inputs.mode == '' || inputs.mode == 'loop')) || inputs.mode == 'once' || inputs.mode == 'once-force'
+    if: always() && ((needs.calendar.outputs.trading == 'true' && (inputs.mode == '' || inputs.mode == 'loop')) || inputs.mode == 'once' || inputs.mode == 'once-force')
     runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:
