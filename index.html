@@ -7,11 +7,11 @@
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
   :root {
-    color-scheme: dark;
-    --bg: #0d0e10; --panel: #15171a; --line: #25282d; --grid: #1e2125;
-    --text: #d5d7db; --muted: #8b9098; --faint: #5d626a;
-    --accent: #7b93c4;   /* 슬레이트 블루 — 유일한 포인트 색 */
-    --gray1: #b9bdc4; --gray2: #6f747c;
+    color-scheme: light;   /* 일별 = 라이트, 장중(intraday.html) = 다크 */
+    --bg: #f6f7f8; --panel: #ffffff; --line: #dcdfe3; --grid: #eceef1;
+    --text: #2a2d32; --muted: #5c6168; --faint: #868b93;
+    --accent: #7b93c4;   /* 슬레이트 블루 — 유일한 포인트 색 (장중 페이지와 동일) */
+    --gray1: #4b5058; --gray2: #a2a7ae;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
@@ -24,6 +24,9 @@
   a:hover { text-decoration: underline; }
   nav { display: flex; gap: 14px; font-size: 13px; }
   nav .here { color: var(--text); font-weight: 600; }
+  nav .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
+  .sw-light { background: #ffffff; border: 1px solid #a2a7ae; }
+  .sw-dark { background: #15171a; border: 1px solid #5d626a; }
   .meta b { color: var(--muted); font-weight: 500; }
 
   /* 카드 */
@@ -88,7 +91,7 @@
 <div class="wrap">
   <header>
     <h1>시장 모니터</h1>
-    <nav><span class="here">시장 모니터</span><a href="intraday.html">장중</a></nav>
+    <nav><span class="here"><i class="sw sw-light"></i>일별 · 라이트</span><a href="intraday.html"><i class="sw sw-dark"></i>장중 · 다크</a></nav>
   </header>
   <div class="meta" id="meta" style="margin-bottom:10px">불러오는 중…</div>
 
@@ -312,7 +315,7 @@ function renderMain() {
       hovertemplate: `%{y:+,.2f}조 (%{customdata[0]:+,.0f}억) <span style="color:${C.faint}">%{customdata[1]}</span><extra>외국인</extra>` },
     ...lineTraces(fx, 'usdkrw', { name: 'USD/KRW 하나은행 고시 (우축)', color: C.gray2, width: 1.6, yaxis: 'y2', fmt: ',.1f' }),
     { x, y: cum, type: 'scatter', mode: 'lines', name: '외국인 20일 누적', yaxis: 'y3',
-      line: { color: C.gray1, width: 2 }, fill: 'tozeroy', fillcolor: 'rgba(185,189,196,0.08)',
+      line: { color: C.gray1, width: 2 }, fill: 'tozeroy', fillcolor: 'rgba(75,80,88,0.07)',
       hovertemplate: '%{y:+,.2f}조<extra>20일 누적</extra>' },
   ];
   plot('main-chart', traces, lay);

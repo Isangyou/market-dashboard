@@ -7,7 +7,7 @@
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
   :root {
-    color-scheme: dark;
+    color-scheme: dark;   /* 장중 = 다크, 일별(index.html) = 라이트 */
     --bg: #0d0e10; --panel: #15171a; --line: #25282d; --grid: #1e2125;
     --text: #d5d7db; --muted: #8b9098; --faint: #5d626a;
     --accent: #7b93c4;   /* 슬레이트 블루 — 유일한 포인트 색 */
@@ -23,6 +23,9 @@
   h1 { font-size: 18px; font-weight: 600; margin: 0; }
   nav { display: flex; gap: 14px; font-size: 13px; }
   nav .here { color: var(--text); font-weight: 600; }
+  nav .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
+  .sw-light { background: #ffffff; border: 1px solid #a2a7ae; }
+  .sw-dark { background: #15171a; border: 1px solid #8b9098; }
   .meta, .src { color: var(--faint); font-size: 11px; }
   .meta b { color: var(--muted); font-weight: 500; }
   .banner { border: 1px dashed var(--faint); color: var(--muted); border-radius: 8px; padding: 8px 12px; font-size: 12.5px; margin-bottom: 12px; }
@@ -61,7 +64,7 @@
 <div class="wrap">
   <header>
     <h1>장중 모니터</h1>
-    <nav><a href="index.html">시장 모니터</a><span class="here">장중</span></nav>
+    <nav><a href="index.html"><i class="sw sw-light"></i>일별 · 라이트</a><span class="here"><i class="sw sw-dark"></i>장중 · 다크</span></nav>
   </header>
   <div class="meta" id="meta" style="margin-bottom:10px">불러오는 중…</div>
   <div class="banner" id="banner" hidden></div>
