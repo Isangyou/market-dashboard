@@ -25,7 +25,7 @@ from fetch.common import log, now_kst
 from . import cot as cot_mod
 from . import cta as cta_mod
 from . import options as opt_mod
-from . import report
+from . import interpret, report
 
 ROOT = Path(__file__).resolve().parent.parent
 SECTIONS = ("cta", "options", "cot")
@@ -134,6 +134,7 @@ def main(argv=None):
 
     snap["crowding"] = report.crowding(snap["cta"], snap["cot"])
     snap["conclusion"] = report.build_conclusion(snap, prev)
+    snap["summary"] = interpret.summary(snap)
     snap["markdown"] = report.to_markdown(snap)
 
     _dump(wk_path, snap)
@@ -150,6 +151,7 @@ def main(argv=None):
             pprev = _load(ddir / "weeks" / f"{pp[-1]}.json") if pp else None
             prev["crowding"] = report.crowding(prev["cta"], prev["cot"])
             prev["conclusion"] = report.build_conclusion(prev, pprev)
+            prev["summary"] = interpret.summary(prev)
             prev["markdown"] = report.to_markdown(prev)
             prev["status"] = "확정" if prev["asof"].get("cta") == prev["week"] and not prev["stale"] else prev["status"]
             _dump(ddir / "weeks" / f"{prev['week']}.json", prev)

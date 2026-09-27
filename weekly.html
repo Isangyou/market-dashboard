@@ -53,6 +53,17 @@
   .concl > li { margin: 6px 0; font-weight: 600; }
   .concl ul { font-weight: 400; color: var(--gray1); padding-left: 18px; margin: 2px 0 0; }
   .concl ul li { margin: 1px 0; font-size: 13px; }
+  .concl ul.view { color: var(--text); }
+  .concl ul.view li { margin: 3px 0; font-size: 13.5px; line-height: 1.55; }
+  details.basis { margin: 2px 0 4px 18px; font-weight: 400; }
+  details.basis summary { cursor: pointer; color: var(--faint); font-size: 11.5px; }
+  details.basis ul { color: var(--muted); padding-left: 16px; }
+  details.basis ul li { font-size: 12px; }
+  .summary { border-left: 3px solid var(--accent); background: #f3f5fa; border-radius: 0 6px 6px 0; padding: 8px 14px 6px; margin: 8px 0 12px; }
+  .summary .lbl { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+  .summary ul { margin: 4px 0 2px; padding-left: 18px; }
+  .summary li { margin: 4px 0; font-size: 14px; line-height: 1.55; color: var(--text); }
+  @media print { details.basis[open] summary, details.basis { display: block; } }
 
   /* 카드 */
   .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 8px 0 6px; }
@@ -116,7 +127,8 @@
 
   <section class="panel">
     <h2><span class="secno">0</span>결론</h2>
-    <div class="sub" id="concl-sub">수치 기반 자동 생성 문장 · 해석은 본문 표·차트로 확인</div>
+    <div class="sub" id="concl-sub">수치 조건 → 해석 규칙으로 자동 생성 (positioning/interpret.py) · 전망·목표가 아님 · 근거 수치는 펼쳐서 확인</div>
+    <div class="summary" id="summary-box"><div class="lbl">한눈 요약</div><ul id="summary"></ul></div>
     <ul class="concl" id="concl"></ul>
     <pre class="md" id="md"></pre>
   </section>
@@ -326,7 +338,13 @@ function render() {
 function renderConclusion() {
   const ul = document.getElementById('concl');
   const cb = W.conclusion || [];
-  ul.innerHTML = cb.length ? cb.map(b => `<li>${esc(b.head)}${b.subs?.length ? '<ul>' + b.subs.map(s => `<li>${esc(s)}</li>`).join('') + '</ul>' : ''}</li>`).join('')
+  const sm = W.summary || [];
+  document.getElementById('summary').innerHTML = sm.length ? sm.map(s => `<li>${esc(s)}</li>`).join('') : '';
+  document.getElementById('summary-box').style.display = sm.length ? '' : 'none';
+  ul.innerHTML = cb.length ? cb.map(b => `<li>${esc(b.head)}` +
+      ((b.view || []).length ? '<ul class="view">' + b.view.map(v => `<li>${esc(v)}</li>`).join('') + '</ul>' : '') +
+      (b.subs?.length ? '<details class="basis"><summary>근거 수치</summary><ul>' + b.subs.map(s => `<li>${esc(s)}</li>`).join('') + '</ul></details>' : '') +
+      '</li>').join('')
     : '<li class="empty">결론 없음</li>';
   document.getElementById('md').textContent = W.markdown || '';
 }

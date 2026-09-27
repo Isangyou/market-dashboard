@@ -67,7 +67,7 @@ def cta_bullets(cta: dict) -> list[dict]:
             asym = "하방 비대칭(매도 여력 > 매수 여력)" if abs(down["chg_pp"]) > abs(up["chg_pp"]) * 1.5 else (
                 "상방 비대칭(매수 여력 > 매도 여력)" if abs(up["chg_pp"]) > abs(down["chg_pp"]) * 1.5 else "대칭")
             subs.append(f"1주 −2σ({_px(down['price'])}) {sg(down['chg_pp'], 0)}%p / +2σ({_px(up['price'])}) {sg(up['chg_pp'], 0)}%p → {asym}")
-        out.append({"head": head, "subs": subs})
+        out.append({"kind": "cta_equity", "head": head, "subs": subs})
     others = []
     for cls in ("금리", "FX", "원자재"):
         if cls in C:
@@ -80,7 +80,7 @@ def cta_bullets(cta: dict) -> list[dict]:
     if big:
         subs.append("주간 변화 상위: " + ", ".join(f"{a['name']} {sg(a['position_chg_1w_pp'], 0)}%p" for a in big))
     if others:
-        out.append({"head": "CTA 자산군: " + " · ".join(others), "subs": subs})
+        out.append({"kind": "cta_others", "head": "CTA 자산군: " + " · ".join(others), "subs": subs})
     return out
 
 
@@ -110,7 +110,7 @@ def options_bullets(opt: dict, prev: dict | None) -> list[dict]:
         p = P.get("SPX")
         if p and p.get("gex_usd_bn") is not None:
             subs.append(f"전주 GEX {sg(p['gex_usd_bn'], 1)}$bn → {sg(g, 1)}$bn")
-        out.append({"head": head, "subs": subs})
+        out.append({"kind": "gamma", "head": head, "subs": subs})
     rows = []
     for k in ("SPX", "NDX", "RUT", "VIX", "TLT", "GLD", "USO"):
         u = U.get(k)
@@ -129,7 +129,7 @@ def options_bullets(opt: dict, prev: dict | None) -> list[dict]:
             bits.append(f"ATM IV30 {u['atm_iv_30d']:.1f}%")
         rows.append(f"{k}: " + " · ".join(bits))
     if rows:
-        out.append({"head": "콜/풋 포지셔닝 (괄호: 전주 대비)", "subs": rows})
+        out.append({"kind": "options", "head": "콜/풋 포지셔닝 (괄호: 전주 대비)", "subs": rows})
     return out
 
 
@@ -140,6 +140,7 @@ def cot_bullets(cot: dict) -> list[dict]:
     if es:
         lev, am = es["groups"]["lev"], es["groups"]["am"]
         out.append({
+            "kind": "cot",
             "head": f"ES 레버리지펀드 순 {fmt_k(lev['net'])}(주간 {fmt_k(lev['chg_1w'])}) · 자산운용사 순 {fmt_k(am['net'])}(주간 {fmt_k(am['chg_1w'])})",
             "subs": [f"레버리지펀드 3년 {lev['pctile_3y']:.0f}백분위(z {fmt_num(lev['z_3y'], 1, True)}), 자산운용사 {am['pctile_3y']:.0f}백분위(z {fmt_num(am['z_3y'], 1, True)})",
                      f"기준일 {es['report_date']}(화) · OI {fmt_k(es['oi'], False)}({fmt_k(es['oi_chg_1w'])})"],
@@ -203,8 +204,12 @@ def build_conclusion(snap: dict, prev: dict | None) -> list[dict]:
     cb += cot_bullets(snap.get("cot", {}))
     flags = [r for r in snap.get("crowding", []) if r["flag"]]
     if flags:
-        cb.append({"head": "교차 확인(CTA 모델 × COT)",
+        cb.append({"kind": "cross", "head": "교차 확인(CTA 모델 × COT)",
                    "subs": [f"{r['name']}: {r['flag']} (CTA {sg(r['cta_pos'], 0)}%/{r['cta_pctile']:.0f}p · COT {r['cot_pctile']:.0f}p)" for r in flags]})
+    from .interpret import VIEWS
+    for b in cb:
+        fn = VIEWS.get(b.get("kind"))
+        b["view"] = (fn(snap) or []) if fn else []
     return cb
 
 
@@ -215,10 +220,18 @@ def _dir(v):
 def to_markdown(snap: dict) -> str:
     """Notion 위클리 노트 [매크로] 섹션에 붙여넣는 형식: 굵은 헤드 + 중첩 불릿."""
     lines = [f"**[포지셔닝] {snap['week_label']}**"]
+    if snap.get("summary"):
+        lines.append("- **요약**")
+        for s in snap["summary"]:
+            lines.append(f"    - {s}")
     for b in snap.get("conclusion", []):
         lines.append(f"- **{b['head']}**")
-        for s in b["subs"]:
-            lines.append(f"    - {s}")
+        for v in b.get("view", []):
+            lines.append(f"    - {v}")
+        if b["subs"]:
+            lines.append("    - 근거")
+            for s in b["subs"]:
+                lines.append(f"        - {s}")
     src = snap.get("asof", {})
     lines.append(f"- 기준: CTA 모델 {src.get('cta', '–')} 종가 · 옵션 CBOE {src.get('options', '–')} · COT {src.get('cot', '–')}(화)")
     return "\n".join(lines)

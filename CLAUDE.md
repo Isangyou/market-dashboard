@@ -20,7 +20,7 @@
     intraday.py     # 장중 수집 → data/intraday/YYYY-MM-DD.json (평일 08:50~15:40만)
     market_day.py   # 거래일(휴장일) 판정 — update.yml·intraday.yml 공용
   positioning/      # 주간 포지셔닝 리포트 (CTA 모델·CBOE 옵션·CFTC COT) — docs/positioning.md
-    cta.py · options.py · cot.py · report.py · run.py(진입점)
+    cta.py · options.py · cot.py · report.py · interpret.py(해석 규칙) · run.py(진입점)
   data/
     latest.json     # 현재값 카드용 (값·전일대비·소스·기준시각)
     series/*.json   # 항목별 시계열 (날짜, 값, 소스)
@@ -44,7 +44,7 @@
 
 ## 주간 포지셔닝 (weekly.html)
 - 범위: 미국 지수·VIX·금리·원자재·FX. CTA는 자체 추세추종 모델(실제 포지션 아님을 화면에 명시)
-- 결론 섹션은 수치 기반 규칙 문장만 (report.py THRESH). 전망·해석 문구 추가 금지
+- 결론 = 한눈 요약 + 블록별 해석(positioning/interpret.py, 조건→의미 규칙) + 근거 수치(report.py). 해석은 '현재 상태와 그 상태에서 기계적으로 나오는 수급'만 — 가격 전망·목표가 금지, 조건에 안 걸리면 문장 생성 안 함
 - 차트는 이중축 금지 → 위아래 분리. 상세 규칙·가정은 docs/positioning.md
 
 ## 수집 항목
