@@ -132,10 +132,15 @@
       <div class="sub">최근 3개월 · 일별 종가</div>
       <div class="sparks" id="sparks"></div>
     </div>
-    <div class="panel span2">
-      <h2>유가 · VIX</h2>
+    <div class="panel">
+      <h2>유가 WTI · Brent</h2>
       <div class="sub" id="oil-sub"></div>
       <div id="oil-chart" class="chart" style="height:320px"></div>
+    </div>
+    <div class="panel">
+      <h2>VIX · 20일 이동평균</h2>
+      <div class="sub" id="vix-sub"></div>
+      <div id="vix-chart" class="chart" style="height:320px"></div>
     </div>
   </section>
 
@@ -407,22 +412,60 @@ function renderSparks() {
   }
 }
 
-// ── 유가·VIX (x축 공유 상하 패널) ──
+// ── 유가 ──
 function renderOil() {
-  const w = recs('wti'), b = recs('brent'), v = recs('vix');
-  if (!w.length && !v.length) return empty('oil-chart');
+  const w = recs('wti'), b = recs('brent');
+  if (!w.length && !b.length) return empty('oil-chart');
   const lay = baseLayout({ margin: { l: 48, r: 12, t: 30, b: 28 } });
-  const last = [w, b, v].map(a => a.length ? a[a.length - 1].date : '').sort().pop();
-  lay.xaxis = { ...lay.xaxis, anchor: 'y2', range: [shiftDate(last, 183), shiftDate(last, -2)] };
-  lay.yaxis = { ...lay.yaxis, domain: [0.42, 1], title: { text: 'USD/bbl', font: { size: 10.5 } } };
-  lay.yaxis2 = { ...lay._ax, showspikes: false, domain: [0, 0.32], title: { text: 'VIX', font: { size: 10.5 } } };
+  const last = [w, b].map(a => a.length ? a[a.length - 1].date : '').sort().pop();
+  lay.xaxis = { ...lay.xaxis, range: [shiftDate(last, 183), shiftDate(last, -2)] };
+  lay.yaxis = { ...lay.yaxis, title: { text: 'USD/bbl', font: { size: 10.5 } } };
   plot('oil-chart', [
     ...lineTraces(w, 'wti', { name: 'WTI', color: C.accent }),
     ...lineTraces(b, 'brent', { name: 'Brent', color: C.gray1 }),
-    ...lineTraces(v, 'vix', { name: 'VIX', color: C.gray2, width: 1.6, yaxis: 'y2' }),
   ], lay);
-  const s = [['WTI', 'wti'], ['Brent', 'brent'], ['VIX', 'vix']].map(([n, k]) => L.items[k] ? `${n} ${srcLine(L.items[k].source, L.items[k].asof)}` : '').filter(Boolean);
+  const s = [['WTI', 'wti'], ['Brent', 'brent']].map(([n, k]) => L.items[k] ? `${n} ${srcLine(L.items[k].source, L.items[k].asof)}` : '').filter(Boolean);
   document.getElementById('oil-sub').textContent = `최근 6개월 기본 (휠/드래그로 확대) · ${s.join(' | ')}`;
+}
+
+// ── VIX + 20일 이동평균 (3개월 기본, range slider) ──
+function renderVix() {
+  const v = recs('vix');
+  if (!v.length) return empty('vix-chart');
+  const x = v.map(r => r.date);
+  // 20거래일 단순이동평균. 20개 미만 구간은 비움
+  const ma = v.map((_, i) => i < 19 ? null : v.slice(i - 19, i + 1).reduce((a, r) => a + r.value, 0) / 20);
+  const last = x[x.length - 1];
+  const lay = baseLayout({ margin: { l: 40, r: 12, t: 30, b: 24 } });
+  lay.xaxis = { ...lay.xaxis, range: [shiftDate(last, 91), shiftDate(last, -2)],
+    rangeslider: { visible: true, thickness: 0.1, bgcolor: C.bg, bordercolor: C.line, borderwidth: 1 } };
+  // range slider는 y축을 자동 조정하지 않음 → 보이는 기간의 VIX·이평 최소/최대로 y축 맞춤
+  const yFit = ([x0, x1]) => {
+    const ys = v.flatMap((r, i) => r.date >= x0.slice(0, 10) && r.date <= x1.slice(0, 10) ? [r.value, ma[i]] : []).filter(y => y != null);
+    if (!ys.length) return null;
+    const lo = Math.min(...ys), hi = Math.max(...ys), pad = Math.max((hi - lo) * 0.08, 0.5);
+    return [lo - pad, hi + pad];
+  };
+  lay.yaxis = { ...lay.yaxis, tickformat: '.0f', range: yFit(lay.xaxis.range) };
+  plot('vix-chart', [
+    ...lineTraces(v, 'vix', { name: 'VIX', color: C.accent }),
+    { x, y: ma, name: '20일 이동평균', type: 'scatter', mode: 'lines', line: { color: C.gray1, width: 1.4, dash: 'dash' },
+      connectgaps: false, hovertemplate: '%{y:.2f}<extra>20일 이평</extra>' },
+  ], lay);
+  const el = document.getElementById('vix-chart');
+  if (!el._yfit) {   // 리스너 1회만 등록
+    el._yfit = true;
+    el.on('plotly_relayout', e => {
+      const r = e['xaxis.range'] || (e['xaxis.range[0]'] && [e['xaxis.range[0]'], e['xaxis.range[1]']]);
+      const x = r || (e['xaxis.autorange'] ? [v[0].date, last] : null);
+      const y = x && yFit(x.map(String));
+      if (y) Plotly.relayout(el, { 'yaxis.range': y });
+    });
+  }
+  const it = L.items.vix, m = ma[ma.length - 1];
+  document.getElementById('vix-sub').textContent = `3개월 기본 · 일별 종가 · ${v[0].date} ~ ${last}` +
+    (m != null ? ` · 20일 이평 ${nf(m)} (VIX ${v[v.length - 1].value >= m ? '≥' : '<'} 이평)` : '') +
+    (it ? ` · ${srcLine(it.source, it.asof)}` : ` · ${v[v.length - 1].source}`);
 }
 
 // ── 상위 종목 테이블 ──
@@ -467,7 +510,7 @@ async function main() {
 
   const safe = (name, fn) => { try { fn(); } catch (e) { console.error(name, e); } };
   safe('cards', renderCards); safe('main', renderMain); safe('curve', renderCurve); safe('ust', renderUst);
-  safe('ktb', renderKtb); safe('sparks', renderSparks); safe('oil', renderOil); safe('tables', renderTables);
+  safe('ktb', renderKtb); safe('sparks', renderSparks); safe('oil', renderOil); safe('vix', renderVix); safe('tables', renderTables);
 
   document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
     market = b.dataset.mkt;

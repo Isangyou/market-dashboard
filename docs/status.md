@@ -16,7 +16,7 @@
 | 일별 배치 | `.github/workflows/update.yml` | 매시 정각 + 거래일 장중 :15/:30/:45. 푸시 후 pages.yml 호출 |
 | 장중 배치 | `.github/workflows/intraday.yml` + `scripts/intraday_loop.sh` | cron 08:35 KST → 08:50까지 대기 → 5분 루프. 오전(~12:10)·오후(~15:40) 두 잡. 수동 `mode=loop/once/once-force` |
 | 배포 | `.github/workflows/pages.yml` | Actions 배포(deploy-pages). 사람 푸시=push 이벤트, 봇 푸시=워크플로가 `gh workflow run pages.yml` 호출 |
-| 화면 | `index.html`, `intraday.html` | 상호 링크. 빈 데이터·부분 누락 상태에서 에러 없음(데스크톱 1440/모바일 390) |
+| 화면 | `index.html`(일별·라이트), `intraday.html`(장중·다크) | 상호 링크에 테마 표기. 일별에 VIX 독립 차트(3개월 기본·20일 이평·range slider, 보이는 구간에 y축 맞춤), 유가는 WTI·Brent만. 빈 데이터·부분 누락 상태에서 에러 없음(데스크톱 1440/모바일 390) |
 | 엔드포인트 | `docs/endpoints.md` | E1~E23 일별, E24~E28 장중 |
 
 ## 소스 상태
@@ -60,6 +60,9 @@
 7. **휴장일 게이트**: 다음 평일 휴장일(2026-10-05 개천절 대체휴일로 추정, 미확인)에 update.yml 장중 cron이 생략되고 intraday 잡이 skip되는지
 
 ## 열린 이슈 / 다음 할 일 후보
+- **VKOSPI(장중 페이지 추가) 보류 (2026-09-27)**: 네이버 미제공, KRX 계정 필요.
+  - 네이버 확인 결과: `/domestic/index/VKOSPI` 페이지 없음(홈 리다이렉트), E24 차트에 VKOSPI·VKOSPI200·KPI200VOL·KVIX 등 7개 코드 빈 배열, `index/{code}/basic` 409 StockConflict, polling·검색 자동완성에도 없음. yfinance `^VKOSPI` 등도 없음
+  - 남은 후보(미검증): KRX 정보데이터시스템(로그인 필요, pykrx와 같은 문제), KRX OPEN API(인증키, 일별 T+1), 증권사 OpenAPI(KIS 등, 계좌 필요)
 - **선물 최종치 누락**: 선물 정규장 15:45 마감. 09-23 외국인 선물 15:40 = +152계약 vs 16:06 최종 = +1,356계약. 수집 창(08:50~15:40) 밖이라 장중 페이지 선물값은 마감 전 잠정. 창을 15:50 이상으로 늘리거나 마감 후 1회 추가 수집 검토
 - 장중 파일 크기 약 190KB/일(indent=1) → 연 50MB 수준. 필요 시 indent 제거·gzip·오래된 날짜 정리
 - FRED 키 등록(`gh secret set FRED_API_KEY`) 시 미국채 폴백 11개 만기
