@@ -134,7 +134,7 @@
       <div class="sub">최근 3개월 · 일별 종가</div>
       <div class="sparks" id="sparks"></div>
     </div>
-    <div class="panel span2">
+    <div class="panel" id="oil-panel">
       <h2>유가 WTI · Brent</h2>
       <div class="sub" id="oil-sub"></div>
       <div id="oil-chart" class="chart" style="height:320px"></div>
@@ -144,7 +144,8 @@
       <div class="sub" id="vix-sub"></div>
       <div id="vix-chart" class="chart" style="height:320px"></div>
     </div>
-    <div class="panel">
+    <!-- ADR: 비활성(ADR_ENABLED=false). hidden이라 그리드 칸을 차지하지 않음 → 유가 | VIX -->
+    <div class="panel" id="adr-panel" hidden>
       <div class="row"><h2>ADR 20일 등락비율</h2><span class="hval" id="adr-val"></span></div>
       <div class="sub" id="adr-sub"></div>
       <div id="adr-chart" class="chart" style="height:320px"></div>
@@ -172,7 +173,11 @@ const C = Object.fromEntries(['bg','panel','line','grid','text','muted','faint',
 
 const SERIES_KEYS = ['investor_kospi','investor_kosdaq','usdkrw','usdjpy','usdcnh','eurusd','dxy',
   'ust_1m','ust_2m','ust_3m','ust_6m','ust_1y','ust_2y','ust_3y','ust_5y','ust_7y','ust_10y','ust_20y','ust_30y',
-  'ktb_3y','ktb_10y','wti','brent','vix','breadth_kospi','breadth_kosdaq','adr_kospi','adr_kosdaq'];
+  'ktb_3y','ktb_10y','wti','brent','vix'];
+// ADR 차트 스위치. 데이터 누적(update.yml → breadth_*/adr_*.json)은 항상 돌고, 화면만 끔.
+// true로 바꾸면 ADR 칸 표시 + 유가를 한 줄 전체 폭으로 넓혀 VIX | ADR 배치
+const ADR_ENABLED = false;
+if (ADR_ENABLED) SERIES_KEYS.push('breadth_kospi', 'breadth_kosdaq', 'adr_kospi', 'adr_kosdaq');
 const TENORS = ['1M','2M','3M','6M','1Y','2Y','3Y','5Y','7Y','10Y','20Y','30Y'];
 // 항목별 1차 소스. 이 접두어가 아닌 레코드 = 폴백 → 점선
 const PRIMARY = { usdcnh: 'yfinance' };
@@ -562,7 +567,12 @@ async function main() {
 
   const safe = (name, fn) => { try { fn(); } catch (e) { console.error(name, e); } };
   safe('cards', renderCards); safe('main', renderMain); safe('curve', renderCurve); safe('ust', renderUst);
-  safe('ktb', renderKtb); safe('sparks', renderSparks); safe('oil', renderOil); safe('vix', renderVix); safe('adr', renderAdr); safe('tables', renderTables);
+  safe('ktb', renderKtb); safe('sparks', renderSparks); safe('oil', renderOil); safe('vix', renderVix); safe('tables', renderTables);
+  if (ADR_ENABLED) {
+    document.getElementById('adr-panel').hidden = false;
+    document.getElementById('oil-panel').classList.add('span2');
+    safe('adr', renderAdr);
+  }
 
   document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
     market = b.dataset.mkt;

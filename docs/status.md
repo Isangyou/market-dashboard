@@ -16,9 +16,9 @@
 | 일별 배치 | `.github/workflows/update.yml` | 매시 정각 + 거래일 장중 :15/:30/:45. 푸시 후 pages.yml 호출 |
 | 장중 배치 | `.github/workflows/intraday.yml` + `scripts/intraday_loop.sh` | **시작 트리거 = 외부 스케줄러(cron-job.org → workflow_dispatch API, 08:35/08:50/09:05, 사용자 등록 대기)** + GitHub cron 08:35(+08:50~15:35 15분마다 예비, 보조) → 08:50까지 대기 → **3분 루프**(수집·커밋·푸시, 09-28 오전까지 5분). 오전(~12:10)·오후(~15:40, 15:40 회차 보장) 두 잡. 먼저 시작된 실행이 진행 중이면 새 실행은 calendar 잡에서 dup 판정 후 종료. 수동 `mode=loop/once/once-force` |
 | 배포 | `.github/workflows/pages.yml` | Actions 배포(deploy-pages). 사람 푸시=push 이벤트, 봇 푸시=워크플로가 `gh workflow run pages.yml` 호출 |
-| 화면 | `index.html`(일별·라이트), `intraday.html`(장중·다크) | 상호 링크에 테마 표기. 일별에 VIX 독립 차트(3개월 기본·20일 이평·range slider, 보이는 구간에 y축 맞춤), 유가는 WTI·Brent만(한 줄 전체 폭). **VIX 옆 ADR 20일 차트**(코스피·코스닥, 3개월·range slider, 120·75 연회색 점선, 20거래일 쌓이기 전엔 차트 자리와 제목 옆에 '누적 중 (n/20일)'). 빈 데이터·부분 누락 상태에서 에러 없음(데스크톱 1440/모바일 390) |
+| 화면 | `index.html`(일별·라이트), `intraday.html`(장중·다크) | 상호 링크에 테마 표기. 일별에 VIX 독립 차트(3개월 기본·20일 이평·range slider, 보이는 구간에 y축 맞춤), 유가는 WTI·Brent만(유가 | VIX 한 줄). **ADR 차트 비활성 — 20일 누적 후 활성화 가능**(`index.html` `ADR_ENABLED = true`로 켜면 유가가 한 줄 전체 폭 + VIX | ADR, 3개월·range slider·120·75 연회색 점선, 20거래일 전엔 '누적 중 (n/20일)'). 빈 데이터·부분 누락 상태에서 에러 없음(데스크톱 1440/모바일 390) |
 | 엔드포인트 | `docs/endpoints.md` | E1~E23 일별, E24~E28 장중, E29~E30 등락 종목 수 |
-| ADR | `fetch/naver.py breadth`(E29) → `data/series/breadth_*.json` → `fetch/run.py adr_from_breadth` → `data/series/adr_*.json` | 네이버는 당일 스냅샷만 → **09-28 장 마감분부터 누적**. 첫 ADR = 20거래일째(약 10-27). **과거분 없음**(adrinfo 403, 아래) |
+| ADR | `fetch/naver.py breadth`(E29) → `data/series/breadth_*.json` → `fetch/run.py adr_from_breadth` → `data/series/adr_*.json` | 네이버는 당일 스냅샷만 → **09-28 장 마감분부터 누적**. 첫 ADR = 20거래일째(약 10-27). **과거분 없음**(adrinfo 403, 아래). **ADR 차트 비활성 — 20일 누적 후 활성화 가능** (수집은 계속) |
 
 ## 소스 상태
 | 소스 | 상태 |
@@ -72,6 +72,7 @@
 7. **휴장일 게이트**: 다음 평일 휴장일(2026-10-05 개천절 대체휴일로 추정, 미확인)에 update.yml 장중 cron이 생략되고 intraday 잡이 skip되는지(예비 트리거 29회 모두 calendar 잡만 돌고 끝나야 함)
 
 ## 열린 이슈 / 다음 할 일 후보
+- **ADR 차트 비활성 — 20일 누적 후 활성화 가능** (2026-09-28): `breadth_*.json`이 20행 이상이면 `index.html`의 `ADR_ENABLED = true`로 켜기. 코드(renderAdr·패널 HTML)는 그대로 있음
 - **ADR 계산 기준 미확인**: `risingCount`에 상한가 포함 여부, ETF·우선주 포함 여부. 외부 대조 소스 없음(adrinfo 403) → 공개 시황 기사 등의 등락 종목 수와 수기 대조가 필요할 수 있음
 - **ADR 누락일**: 마감 후 update-data가 한 번도 안 돈 날은 breadth가 빠지고, ADR 창이 20거래일보다 길어짐(미보정)
 - **VKOSPI(장중 페이지 추가) 보류 (2026-09-27)**: 네이버 미제공, KRX 계정 필요.
