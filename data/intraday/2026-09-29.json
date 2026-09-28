@@ -11,7 +11,7 @@
  "futures": null,
  "futures_price": {
   "source": "naver:indicators",
-  "asof": "2026-09-29T08:31:14+09:00",
+  "asof": "2026-09-29T08:34:14+09:00",
   "value": 1088.9,
   "change": 0.0,
   "change_pct": 0.0,
@@ -25,7 +25,7 @@
  "usdkrw": {
   "source": "naver:hana_round",
   "label": "하나은행 고시",
-  "asof": "2026-09-29T08:47:00+09:00",
+  "asof": "2026-09-29T08:53:00+09:00",
   "last_close": 1360.0,
   "rows": [
    {
@@ -51,6 +51,10 @@
    {
     "t": "08:47",
     "v": 1360.5
+   },
+   {
+    "t": "08:53",
+    "v": 1360.0
    }
   ],
   "stale": false
@@ -60,7 +64,7 @@
    "symbol": "NQ=F",
    "name": "나스닥100 선물",
    "source": "yfinance:NQ=F 1m",
-   "asof": "2026-09-29T08:41:00+09:00",
+   "asof": "2026-09-29T08:44:00+09:00",
    "since": "2026-09-29T06:00:00+09:00",
    "prev_close": 30556.75,
    "prev_close_at": "2026-09-29T05:59:00+09:00",
@@ -472,7 +476,19 @@
     },
     {
      "t": "08:41",
-     "c": 30609.25
+     "c": 30608.25
+    },
+    {
+     "t": "08:42",
+     "c": 30603.5
+    },
+    {
+     "t": "08:43",
+     "c": 30602.5
+    },
+    {
+     "t": "08:44",
+     "c": 30602.75
     }
    ],
    "stale": false
@@ -481,7 +497,7 @@
    "symbol": "CL=F",
    "name": "WTI 선물",
    "source": "yfinance:CL=F 1m",
-   "asof": "2026-09-29T08:40:00+09:00",
+   "asof": "2026-09-29T08:43:00+09:00",
    "since": "2026-09-29T06:00:00+09:00",
    "prev_close": 93.29,
    "prev_close_at": "2026-09-29T05:59:00+09:00",
@@ -870,6 +886,18 @@
     {
      "t": "08:40",
      "c": 93.2
+    },
+    {
+     "t": "08:41",
+     "c": 93.19
+    },
+    {
+     "t": "08:42",
+     "c": 93.17
+    },
+    {
+     "t": "08:43",
+     "c": 93.18
     }
    ],
    "stale": false
@@ -897,9 +925,20 @@
    "fut_foreign": null,
    "program_kospi": null,
    "usdkrw": 1360.5
+  },
+  {
+   "t": "08:54",
+   "sampled_at": "2026-09-29T08:54:06+09:00",
+   "kospi": null,
+   "kospi_chg_pct": null,
+   "foreign_kospi": null,
+   "foreign_kosdaq": null,
+   "fut_foreign": null,
+   "program_kospi": null,
+   "usdkrw": 1360.0
   }
  ],
- "updated_at": "2026-09-29T08:51:05+09:00",
+ "updated_at": "2026-09-29T08:54:06+09:00",
  "market_day": {
   "date": "2026-09-29",
   "trading": true,
