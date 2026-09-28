@@ -4,13 +4,13 @@
   "KOSPI": {
    "date": "2026-09-28",
    "source": "naver:index_chart",
-   "asof": "2026-09-28T11:39:00+09:00",
+   "asof": "2026-09-28T11:44:00+09:00",
    "status": "OPEN",
    "last_close": 7080.92,
    "open": 7057.86,
-   "value": 6907.63,
-   "change": -173.29,
-   "change_pct": -2.45,
+   "value": 6908.62,
+   "change": -172.3,
+   "change_pct": -2.43,
    "bars": [
     {
      "t": "09:00",
@@ -809,8 +809,33 @@
     },
     {
      "t": "11:39",
-     "c": 6907.63,
-     "v": 120478
+     "c": 6911.95,
+     "v": 120835
+    },
+    {
+     "t": "11:40",
+     "c": 6911.24,
+     "v": 121249
+    },
+    {
+     "t": "11:41",
+     "c": 6907.84,
+     "v": 121613
+    },
+    {
+     "t": "11:42",
+     "c": 6908.5,
+     "v": 121875
+    },
+    {
+     "t": "11:43",
+     "c": 6909.29,
+     "v": 122162
+    },
+    {
+     "t": "11:44",
+     "c": 6908.62,
+     "v": 122238
     }
    ],
    "stale": false
@@ -818,13 +843,13 @@
   "KOSDAQ": {
    "date": "2026-09-28",
    "source": "naver:index_chart",
-   "asof": "2026-09-28T11:39:00+09:00",
+   "asof": "2026-09-28T11:44:00+09:00",
    "status": "OPEN",
    "last_close": 844.48,
    "open": 845.48,
-   "value": 849.31,
-   "change": 4.83,
-   "change_pct": 0.57,
+   "value": 848.84,
+   "change": 4.36,
+   "change_pct": 0.52,
    "bars": [
     {
      "t": "09:00",
@@ -1623,8 +1648,33 @@
     },
     {
      "t": "11:39",
-     "c": 849.31,
-     "v": 315199
+     "c": 849.05,
+     "v": 316216
+    },
+    {
+     "t": "11:40",
+     "c": 848.79,
+     "v": 317374
+    },
+    {
+     "t": "11:41",
+     "c": 848.77,
+     "v": 318597
+    },
+    {
+     "t": "11:42",
+     "c": 848.85,
+     "v": 319571
+    },
+    {
+     "t": "11:43",
+     "c": 848.96,
+     "v": 320664
+    },
+    {
+     "t": "11:44",
+     "c": 848.84,
+     "v": 320840
     }
    ],
    "stale": false
@@ -1634,7 +1684,7 @@
   "KOSPI": {
    "source": "naver:trend_time",
    "unit": "억원",
-   "asof": "2026-09-28T11:39:00+09:00",
+   "asof": "2026-09-28T11:43:00+09:00",
    "basis": "KRX 장중 누적 잠정치 (~15:40, 시간외·NXT 제외)",
    "rows": [
     {
@@ -2272,6 +2322,24 @@
      "foreign": -14757.7,
      "individual": 13695.2,
      "institution": -6193.8
+    },
+    {
+     "t": "11:40",
+     "foreign": -14926.4,
+     "individual": 13779.9,
+     "institution": -6197.1
+    },
+    {
+     "t": "11:42",
+     "foreign": -15054.5,
+     "individual": 13836.3,
+     "institution": -6179.9
+    },
+    {
+     "t": "11:43",
+     "foreign": -15133.7,
+     "individual": 13895.1,
+     "institution": -6245.0
     }
    ],
    "stale": false
@@ -2279,7 +2347,7 @@
   "KOSDAQ": {
    "source": "naver:trend_time",
    "unit": "억원",
-   "asof": "2026-09-28T11:39:00+09:00",
+   "asof": "2026-09-28T11:43:00+09:00",
    "basis": "KRX 장중 누적 잠정치 (~15:40, 시간외·NXT 제외)",
    "rows": [
     {
@@ -2917,6 +2985,24 @@
      "foreign": 455.2,
      "individual": -470.1,
      "institution": 30.4
+    },
+    {
+     "t": "11:40",
+     "foreign": 446.2,
+     "individual": -454.1,
+     "institution": 22.6
+    },
+    {
+     "t": "11:42",
+     "foreign": 443.4,
+     "individual": -450.0,
+     "institution": 21.4
+    },
+    {
+     "t": "11:43",
+     "foreign": 450.4,
+     "individual": -455.9,
+     "institution": 21.6
     }
    ],
    "stale": false
@@ -2925,7 +3011,7 @@
  "futures": {
   "source": "naver:trend_time_fut",
   "unit": "계약",
-  "asof": "2026-09-28T11:20:00+09:00",
+  "asof": "2026-09-28T11:25:00+09:00",
   "rows": [
    {
     "t": "08:45",
@@ -4018,16 +4104,51 @@
     "individual": -742,
     "institution": 5154,
     "foreign_amt": -11285.0
+   },
+   {
+    "t": "11:21",
+    "foreign": -4088,
+    "individual": -757,
+    "institution": 5189,
+    "foreign_amt": -11295.9
+   },
+   {
+    "t": "11:22",
+    "foreign": -4177,
+    "individual": -718,
+    "institution": 5238,
+    "foreign_amt": -11539.1
+   },
+   {
+    "t": "11:23",
+    "foreign": -4144,
+    "individual": -750,
+    "institution": 5243,
+    "foreign_amt": -11449.0
+   },
+   {
+    "t": "11:24",
+    "foreign": -4151,
+    "individual": -744,
+    "institution": 5243,
+    "foreign_amt": -11468.1
+   },
+   {
+    "t": "11:25",
+    "foreign": -4226,
+    "individual": -717,
+    "institution": 5284,
+    "foreign_amt": -11672.9
    }
   ],
   "stale": false
  },
  "futures_price": {
   "source": "naver:indicators",
-  "asof": "2026-09-28T11:19:59+09:00",
-  "value": 1094.55,
-  "change": -33.2,
-  "change_pct": -2.94,
+  "asof": "2026-09-28T11:24:59+09:00",
+  "value": 1092.95,
+  "change": -34.8,
+  "change_pct": -3.09,
   "delay": "20분 지연",
   "stale": false
  },
@@ -4035,7 +4156,7 @@
   "KOSPI": {
    "source": "naver:program_chart",
    "unit": "억원",
-   "asof": "2026-09-28T11:30:00+09:00",
+   "asof": "2026-09-28T11:40:00+09:00",
    "rows": [
     {
      "t": "09:10",
@@ -4120,6 +4241,12 @@
      "arb": -664.9,
      "nonarb": -8144.1,
      "total": -8809.0
+    },
+    {
+     "t": "11:40",
+     "arb": -664.9,
+     "nonarb": -8750.6,
+     "total": -9415.5
     }
    ],
    "stale": false
@@ -4202,7 +4329,7 @@
  "usdkrw": {
   "source": "naver:hana_round",
   "label": "하나은행 고시",
-  "asof": "2026-09-28T11:39:00+09:00",
+  "asof": "2026-09-28T11:44:00+09:00",
   "last_close": 1359.0,
   "rows": [
    {
@@ -4744,6 +4871,22 @@
    {
     "t": "11:39",
     "v": 1358.5
+   },
+   {
+    "t": "11:41",
+    "v": 1358.6
+   },
+   {
+    "t": "11:42",
+    "v": 1358.4
+   },
+   {
+    "t": "11:43",
+    "v": 1358.0
+   },
+   {
+    "t": "11:44",
+    "v": 1357.8
    }
   ],
   "stale": false
@@ -5100,9 +5243,20 @@
    "fut_foreign": -4084,
    "program_kospi": -8809.0,
    "usdkrw": 1358.5
+  },
+  {
+   "t": "11:45",
+   "sampled_at": "2026-09-28T11:45:06+09:00",
+   "kospi": 6908.62,
+   "kospi_chg_pct": -2.43,
+   "foreign_kospi": -15133.7,
+   "foreign_kosdaq": 450.4,
+   "fut_foreign": -4226,
+   "program_kospi": -9415.5,
+   "usdkrw": 1357.8
   }
  ],
- "updated_at": "2026-09-28T11:40:05+09:00",
+ "updated_at": "2026-09-28T11:45:06+09:00",
  "market_day": {
   "date": "2026-09-28",
   "trading": true,
