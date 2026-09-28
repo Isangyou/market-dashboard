@@ -25,7 +25,9 @@ permissions:
   actions: write   # 푸시 후 pages.yml 호출
 
 # workflow concurrency는 쓰지 않음: 쓰면 예비 트리거가 진행 중 루프 뒤에 pending으로 쌓였다가
-# 15:40 이후에 빈 실행이 됨. 대신 calendar 잡이 먼저 시작된 실행이 있는지 보고 중복이면 건너뜀
+# 15:40 이후에 빈 실행이 됨. 대신 calendar 잡이 scripts/intraday_guard.sh로 판정:
+# 먼저 시작된 실행이 살아 있으면 건너뜀, 10분 넘게 장중 커밋이 없으면(09-28 무응답 사례) 취소하고 새로 시작.
+# 시작 트리거: 외부 스케줄러(cron-job.org → workflow_dispatch API, 08:35/08:50/09:05) + 아래 GitHub cron(보조)
 
 jobs:
   calendar:
@@ -44,20 +46,13 @@ jobs:
         name: 휴장일 판정 (update.yml과 공용)
         run: python -m fetch.market_day --github-output
       - id: dup
-        name: 중복 실행 판정 (스케줄·loop만. 이 실행보다 먼저 시작해 아직 안 끝난 intraday 실행이 있으면 dup)
+        name: 중복 실행 판정 (스케줄·loop만. 먼저 시작된 실행이 10분 넘게 활동 없으면 취소하고 새로 시작)
         if: inputs.mode == '' || inputs.mode == 'loop'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          older=$(gh api "repos/${{ github.repository }}/actions/workflows/intraday.yml/runs?per_page=30" \
-            --jq '[.workflow_runs[] | select(.status != "completed" and .id < ${{ github.run_id }}) | .id] | join(",")') \
-            || { echo "::warning::실행 목록 조회 실패 → 중복 아님으로 진행"; older=""; }
-          if [ -n "$older" ]; then
-            echo "먼저 시작된 실행 진행 중($older) → 이번 실행은 건너뜀"
-            echo "dup=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "dup=false" >> "$GITHUB_OUTPUT"
-          fi
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: scripts/intraday_guard.sh | tail -1 >> "$GITHUB_OUTPUT"
 
   am:
     needs: calendar
