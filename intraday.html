@@ -30,7 +30,7 @@
   .meta b { color: var(--muted); font-weight: 500; }
   .banner { border: 1px dashed var(--faint); color: var(--muted); border-radius: 8px; padding: 8px 12px; font-size: 12.5px; margin-bottom: 12px; }
 
-  .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }   /* 7개 = 4+3 */
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; min-width: 0; }
   .card .lbl { color: var(--muted); font-size: 12px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .tag { border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 10.5px; color: var(--muted); }
@@ -121,7 +121,7 @@
 const CSS = getComputedStyle(document.documentElement);
 const C = Object.fromEntries(['bg','panel','line','grid','text','muted','faint','accent','gray1','gray2']
   .map(k => [k, CSS.getPropertyValue('--' + k).trim()]));
-let D = null, SER = null, market = 'KOSPI';
+let D = null, SER = null, VK = null, market = 'KOSPI';
 
 // ── 포맷 ──
 const nf = (v, d = 2) => v == null || isNaN(v) ? '–' :
@@ -190,6 +190,9 @@ function renderCards() {
     card({ label: '외국인 순매수 60일 위치', tag: '코스피', value: pct ? `${pct.rank}위 / ${pct.n + 1}` : '–',
            chg: pct ? `백분위 ${nf(pct.pctile, 0)} · ${pct.pctile >= 50 ? '상위' : '하위'} ${nf(pct.pctile >= 50 ? 100 - pct.pctile : pct.pctile, 0)}%` : '',
            src: pct ? `장중 ${pct.t} 누적 vs 확정 일별 ${pct.from}~${pct.to}` : '데이터 없음' }),
+    (() => { const v = vkospiPrev(); return card({ label: 'VKOSPI', tag: '전일', value: v ? nf(v.value) : '–',
+      chg: v && v.pctile != null ? `60일 분위 ${nf(v.pctile, 0)} · ${v.pctile >= 50 ? '상위' : '하위'} ${nf(v.pctile >= 50 ? 100 - v.pctile : v.pctile, 0)}%` : '',
+      src: v ? `${v.source} · ${v.date} 종가 · 직전 ${v.n}거래일 대비 · KRED, CC BY-NC-ND 4.0` : '데이터 없음' }); })(),
     card({ label: '기준시각', value: snap ? snap.t : (dataAsof() ? dataAsof().slice(11, 16) : '–'),
            chg: D ? `${D.date}${k && k.status ? ` · 장 상태 ${k.status}` : ''}` : '',
            src: D ? `수집 ${fmtAsof(D.updated_at)} KST · 스냅샷 ${(D.snapshots || []).length}건` : '장중 데이터 없음' }),
@@ -213,6 +216,15 @@ function percentile() {
   const below = vals.filter(v => v < today).length, above = vals.filter(v => v > today).length;
   return { today, t: iK.t, n: vals.length, rank: above + 1, pctile: below / vals.length * 100,
            recs, from: recs[0].date, to: recs[recs.length - 1].date };
+}
+// 전일 VKOSPI(KRED 일별 종가) + 직전 60거래일 중 분위. 장중 값이 아님
+function vkospiPrev() {
+  const all = (VK && VK.records) || [], day = D ? D.date : todayKST();
+  const upto = all.filter(r => r.date < day);
+  if (!upto.length) return null;
+  const last = upto[upto.length - 1], win = upto.slice(-61, -1);
+  const pctile = win.length ? win.filter(r => r.value < last.value).length / win.length * 100 : null;
+  return { ...last, pctile, n: win.length };
 }
 function renderPct() {
   const p = D && percentile();
@@ -322,6 +334,7 @@ async function main() {
   let idx = null;
   try { idx = await getJSON('data/intraday/index.json'); } catch (e) { /* 아직 장중 데이터가 한 번도 없음 */ }
   try { SER = await getJSON('data/series/investor_kospi.json'); } catch (e) { SER = null; }
+  try { VK = await getJSON('data/series/vkospi.json'); } catch (e) { VK = null; }
   const date = idx && idx.dates && idx.dates.length ? (idx.dates.includes(today) ? today : idx.latest) : null;
   if (date) { try { D = await getJSON(`data/intraday/${date}.json`); } catch (e) { D = null; } }
 

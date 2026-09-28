@@ -222,6 +222,16 @@
    "source": "naver:vix_basic",
    "asof": "2026-09-26T05:15:01+09:00",
    "stale": false
+  },
+  "vkospi": {
+   "label": "VKOSPI",
+   "unit": "pt",
+   "value": 42.98,
+   "change": 0.56,
+   "change_pct": 1.32,
+   "source": "kred:KRVKOSPI",
+   "asof": "2026-09-23",
+   "stale": false
   }
  },
  "investor": {
@@ -896,6 +906,10 @@
   "investor_sources": [
    "naver"
   ],
-  "pykrx_enabled": false
+  "pykrx_enabled": false,
+  "kred_fetches": [
+   "2026-09-28T13:05:00+09:00",
+   "2026-09-28T13:15:00+09:00"
+  ]
  }
 }

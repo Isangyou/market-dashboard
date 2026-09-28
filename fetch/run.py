@@ -24,13 +24,13 @@ if __package__ in (None, ""):  # python fetch/run.py 로 직접 실행한 경우
 
 import pandas as pd  # noqa: E402
 
-from . import fred, krx, naver, yf  # noqa: E402
+from . import fred, krx, kred, naver, yf  # noqa: E402
 from .common import log, now_kst  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 SERIES_DIR = DATA / "series"
-PRIORITY = {"naver": 0, "pykrx": 1, "fred": 1, "yfinance": 2}
+PRIORITY = {"naver": 0, "kred": 0, "pykrx": 1, "fred": 1, "yfinance": 2}
 MARKETS = ["KOSPI", "KOSDAQ"]
 UST_TENORS = ["1M", "2M", "3M", "6M", "1Y", "2Y", "3Y", "5Y", "7Y", "10Y", "20Y", "30Y"]
 
@@ -127,6 +127,17 @@ def latest_from_history(df):
 
 
 ADR_N = 20
+KRED_MAX_PER_DAY = 2
+
+
+def kred_due(now, fetches: list, last_date: str) -> bool:
+    """KRED 요청 여부. 하루 최대 2회: 16:30 이후 첫 1회, 그게 당일 값을 못 받았으면 20:00 이후 1회 더.
+    fetches = 오늘(KST) 요청 시각 목록(ISO)."""
+    today, hm = now.strftime("%Y-%m-%d"), now.strftime("%H:%M")
+    mine = [t for t in fetches if t.startswith(today)]
+    if len(mine) >= KRED_MAX_PER_DAY or hm < "16:30":
+        return False
+    return not mine or (hm >= "20:00" and max(mine)[11:16] < "20:00" and (last_date or "") < today)
 
 
 def adr_from_breadth(recs):
@@ -235,6 +246,24 @@ def main():
         else:
             log.warning("%s: 모든 소스 실패, 이전 값도 없음", key)
 
+    # ── VKOSPI (KRED 재공표) ── 요청 1회에 전체 이력. 요청 시각은 latest.json meta.kred_fetches에 기록해 하루 2회 제한
+    s = Series("vkospi", "VKOSPI", "pt")
+    fetches = [t for t in prev_latest.get("meta", {}).get("kred_fetches", []) if t[:10] == now.strftime("%Y-%m-%d")]
+    kred_ok = None   # None = 이번엔 안 부름
+    if "kred" not in disabled and kred_due(now, fetches, s.last()[0]["date"] if len(s) else ""):
+        fetches.append(now.isoformat(timespec="seconds"))
+        df = kred.vkospi_history()
+        kred_ok = df is not None
+        n_new = s.merge(df)
+        if s.save():
+            changed.append(f"series/vkospi.json (+{n_new})")
+    if kred_ok is False and "vkospi" in prev_items:
+        items["vkospi"] = {**prev_items["vkospi"], "stale": True}
+        log.warning("vkospi: kred 실패 → 이전 값 유지(stale)")
+    elif len(s):
+        items["vkospi"] = {"label": "VKOSPI", "unit": "pt",
+                           **latest_from_history(pd.DataFrame(s.last(2))), "stale": False}
+
     # ── 투자자별 순매수 ──
     investor, prev_inv = {}, prev_latest.get("investor", {})
     for m in MARKETS:
@@ -299,7 +328,8 @@ def main():
     inv_sources = ["naver"] + ([] if "pykrx" in disabled else ["pykrx"])
     latest = {"generated_at": now.isoformat(), "items": items,
               "investor": investor, "foreign_top": top,
-              "meta": {"investor_sources": inv_sources, "pykrx_enabled": "pykrx" not in disabled}}
+              "meta": {"investor_sources": inv_sources, "pykrx_enabled": "pykrx" not in disabled,
+                       "kred_fetches": fetches}}
     if write_if_changed(DATA / "latest.json", latest):
         changed.append("latest.json")
 

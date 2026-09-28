@@ -241,6 +241,7 @@ E10 필드 + `openingPrice`, `highPriceOfDay`, `lowPriceOfDay`, `high/lowPriceOf
 | VIX | E21, 이력 E22 | |
 | (추가) 등락 종목 수 → ADR | E29 (당일만) | 이력 없음 → 장 마감 후 직접 누적 |
 | (추가) 증시자금동향 5항목 | E32 (2002-05-03~) | E31은 40행 고정 |
+| (추가) VKOSPI | 네이버 없음 → KRED E33 (2010-01-04~) | CC BY-NC-ND 4.0, 하루 ≤2회 |
 
 ---
 
@@ -325,3 +326,18 @@ E14 `/stockSecurity/exchange-rates/v2/USD/charts/round?bankType=hana` (하나은
 - `pageSize` 500/1000 → 400 `too_big` (상한 100으로 보임)
 - 전체 `totalElements` 6,007 / 100행 61페이지. 마지막 `startIdx=60` 6행, 가장 오래된 날짜 **2002-05-03** (고객예탁금 114,414억, 신용잔고 3,552억)
 - 수집: 첫 실행·`--backfill` 전 페이지(약 70초), 이후 매 실행 `startIdx=0` 1페이지. 날짜 중복 제거 후 6,006일
+
+---
+
+## 9. VKOSPI — KRED (kred.dev) 재공표 (2026-09-28, 네이버 외 소스)
+
+화면: `https://kred.dev/ko/series/KRVKOSPI` ("대한민국 코스피 200 변동성지수 (V-KOSPI 200)", 공식 지수 재공표 계열). 라이선스 JSON-LD `license` = **CC BY-NC-ND 4.0**. `temporalCoverage` 2010-01-04/2026-09-23, 일별.
+
+### E33. 시리즈 페이지 HTML 안의 `initialData` ★ 수집용
+`GET https://kred.dev/ko/series/KRVKOSPI` (text/html, 약 570KB, `cache-control: s-maxage=300`)
+- 별도 데이터 API 없음: Playwright 캡처 결과 "전체" 기간 클릭 = 요청 0건, "표" 탭 = 분석용 핑 1건. 전체 이력이 첫 문서의 Next.js RSC 페이로드(`self.__next_f.push`)에 `\"initialData\":[{\"date\":\"2010-01-04\",\"value\":20.94},…]` 로 들어 있음
+- 09-28 13시 기준 4,118행, 2010-01-04(20.94) ~ **2026-09-23(42.98)**. 단위 변동성 포인트(페이지 표기 %)
+- 평범한 `requests` GET(브라우저 UA)으로 200, Cloudflare 챌린지 없이 받아짐. robots.txt `Allow: /` (`/u/`·`*-api/` 등만 Disallow)
+- 파싱: 정규식 `\\"initialData\\":(\[.*?\])` → `\"`→`"` 치환 후 JSON (`fetch/kred.py parse`)
+- 요청 제한: `fetch/run.py kred_due` — 하루 최대 2회. KST 16:30 이후 첫 1회, 그 결과에 당일 값이 없으면 20:00 이후 1회 더. 요청 시각은 `latest.json` `meta.kred_fetches`
+- 2026-09-28 요청 이력: Playwright 1회(엔드포인트 확인) + requests 1회(구조 확인). 백필은 Playwright 때 저장한 HTML로 → 이날 Actions 요청 없음(2회 소진으로 기록)

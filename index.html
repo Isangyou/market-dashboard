@@ -30,7 +30,7 @@
   .meta b { color: var(--muted); font-weight: 500; }
 
   /* 카드 */
-  .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }   /* 9개 = 3×3 */
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; min-width: 0; }
   .card .lbl { color: var(--muted); font-size: 12px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .tag { border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 10.5px; color: var(--muted); }
@@ -144,7 +144,7 @@
       <div class="sub">최근 3개월 · 일별 종가</div>
       <div class="sparks" id="sparks"></div>
     </div>
-    <div class="panel" id="oil-panel">
+    <div class="panel span2" id="oil-panel">
       <h2>유가 WTI · Brent</h2>
       <div class="sub" id="oil-sub"></div>
       <div id="oil-chart" class="chart" style="height:320px"></div>
@@ -154,7 +154,13 @@
       <div class="sub" id="vix-sub"></div>
       <div id="vix-chart" class="chart" style="height:320px"></div>
     </div>
-    <!-- ADR: 비활성(ADR_ENABLED=false). hidden이라 그리드 칸을 차지하지 않음 → 유가 | VIX -->
+    <div class="panel">
+      <h2>VKOSPI · 20일 이동평균</h2>
+      <div class="sub" id="vkospi-sub"></div>
+      <div id="vkospi-chart" class="chart" style="height:320px"></div>
+      <div class="note">출처: <a href="https://kred.dev/ko/series/KRVKOSPI" target="_blank" rel="noopener">KRED (kred.dev)</a>, <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank" rel="noopener">CC BY-NC-ND 4.0</a> · 20일 이동평균은 이 대시보드의 자체 계산</div>
+    </div>
+    <!-- ADR: 비활성(ADR_ENABLED=false). hidden이라 그리드 칸을 차지하지 않음 -->
     <div class="panel" id="adr-panel" hidden>
       <div class="row"><h2>ADR 20일 등락비율</h2><span class="hval" id="adr-val"></span></div>
       <div class="sub" id="adr-sub"></div>
@@ -197,14 +203,14 @@ const C = Object.fromEntries(['bg','panel','line','grid','text','muted','faint',
 
 const SERIES_KEYS = ['investor_kospi','investor_kosdaq','usdkrw','usdjpy','usdcnh','eurusd','dxy',
   'ust_1m','ust_2m','ust_3m','ust_6m','ust_1y','ust_2y','ust_3y','ust_5y','ust_7y','ust_10y','ust_20y','ust_30y',
-  'ktb_3y','ktb_10y','wti','brent','vix','deposit'];
+  'ktb_3y','ktb_10y','wti','brent','vix','vkospi','deposit'];
 // ADR 차트 스위치. 데이터 누적(update.yml → breadth_*/adr_*.json)은 항상 돌고, 화면만 끔.
-// true로 바꾸면 ADR 칸 표시 + 유가를 한 줄 전체 폭으로 넓혀 VIX | ADR 배치
+// true로 바꾸면 ADR 칸 표시 + 유가를 한 칸으로 줄여 유가 | VIX, VKOSPI | ADR 배치
 const ADR_ENABLED = false;
 if (ADR_ENABLED) SERIES_KEYS.push('breadth_kospi', 'breadth_kosdaq', 'adr_kospi', 'adr_kosdaq');
 const TENORS = ['1M','2M','3M','6M','1Y','2Y','3Y','5Y','7Y','10Y','20Y','30Y'];
 // 항목별 1차 소스. 이 접두어가 아닌 레코드 = 폴백 → 점선
-const PRIMARY = { usdcnh: 'yfinance' };
+const PRIMARY = { usdcnh: 'yfinance', vkospi: 'kred' };
 const primaryOf = k => PRIMARY[k] || 'naver';
 
 let L = null, S = {}, market = 'KOSPI';
@@ -322,6 +328,7 @@ function renderCards() {
     itemCard('ktb_10y', { label: '국고 10Y', digits: 3, bp: true }),
     itemCard('wti', { label: 'WTI' }),
     itemCard('vix', { label: 'VIX' }),
+    itemCard('vkospi', { label: 'VKOSPI', tag: 'KRED' }),
   ].join('');
 }
 
@@ -490,9 +497,9 @@ function keepYFit(id, yFit, full) {
 }
 
 // ── VIX + 20일 이동평균 (3개월 기본, range slider) ──
-function renderVix() {
-  const v = recs('vix');
-  if (!v.length) return empty('vix-chart');
+function renderVolChart(key, name, maNote = '') {
+  const v = recs(key), id = key + '-chart';
+  if (!v.length) return empty(id);
   const x = v.map(r => r.date);
   // 20거래일 단순이동평균. 20개 미만 구간은 비움
   const ma = v.map((_, i) => i < 19 ? null : v.slice(i - 19, i + 1).reduce((a, r) => a + r.value, 0) / 20);
@@ -502,17 +509,19 @@ function renderVix() {
     rangeslider: { visible: true, thickness: 0.1, bgcolor: C.bg, bordercolor: C.line, borderwidth: 1 } };
   const yFit = yFitter(x, [v.map(r => r.value), ma]);
   lay.yaxis = { ...lay.yaxis, tickformat: '.0f', range: yFit(lay.xaxis.range) };
-  plot('vix-chart', [
-    ...lineTraces(v, 'vix', { name: 'VIX', color: C.accent }),
-    { x, y: ma, name: '20일 이동평균', type: 'scatter', mode: 'lines', line: { color: C.gray1, width: 1.4, dash: 'dash' },
+  plot(id, [
+    ...lineTraces(v, key, { name, color: C.accent }),
+    { x, y: ma, name: '20일 이동평균' + maNote, type: 'scatter', mode: 'lines', line: { color: C.gray1, width: 1.4, dash: 'dash' },
       connectgaps: false, hovertemplate: '%{y:.2f}<extra>20일 이평</extra>' },
   ], lay);
-  keepYFit('vix-chart', yFit, [x[0], last]);
-  const it = L.items.vix, m = ma[ma.length - 1];
-  document.getElementById('vix-sub').textContent = `3개월 기본 · 일별 종가 · ${v[0].date} ~ ${last}` +
-    (m != null ? ` · 20일 이평 ${nf(m)} (VIX ${v[v.length - 1].value >= m ? '≥' : '<'} 이평)` : '') +
+  keepYFit(id, yFit, [x[0], last]);
+  const it = L.items[key], m = ma[ma.length - 1];
+  document.getElementById(key + '-sub').textContent = `3개월 기본 · 일별 종가 · ${v[0].date} ~ ${last}` +
+    (m != null ? ` · 20일 이평${maNote} ${nf(m)} (${name} ${v[v.length - 1].value >= m ? '≥' : '<'} 이평)` : '') +
     (it ? ` · ${srcLine(it.source, it.asof)}` : ` · ${v[v.length - 1].source}`);
 }
+const renderVix = () => renderVolChart('vix', 'VIX');
+const renderVkospi = () => renderVolChart('vkospi', 'VKOSPI', ' (자체 계산)');
 
 // ── ADR 20일 등락비율 (코스피·코스닥, 3개월 기본, range slider) ──
 // ADR = 최근 20거래일 상승 종목 수 합 ÷ 하락 종목 수 합 × 100 (fetch/run.py adr_from_breadth).
@@ -631,10 +640,10 @@ async function main() {
 
   const safe = (name, fn) => { try { fn(); } catch (e) { console.error(name, e); } };
   safe('cards', renderCards); safe('main', renderMain); safe('curve', renderCurve); safe('ust', renderUst);
-  safe('ktb', renderKtb); safe('sparks', renderSparks); safe('oil', renderOil); safe('vix', renderVix); safe('funds', renderFunds); safe('tables', renderTables);
+  safe('ktb', renderKtb); safe('sparks', renderSparks); safe('oil', renderOil); safe('vix', renderVix); safe('vkospi', renderVkospi); safe('funds', renderFunds); safe('tables', renderTables);
   if (ADR_ENABLED) {
     document.getElementById('adr-panel').hidden = false;
-    document.getElementById('oil-panel').classList.add('span2');
+    document.getElementById('oil-panel').classList.remove('span2');
     safe('adr', renderAdr);
   }
 

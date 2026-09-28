@@ -16,8 +16,9 @@
 | 일별 배치 | `.github/workflows/update.yml` | 매시 정각 + 거래일 장중 :15/:30/:45. 푸시 후 pages.yml 호출 |
 | 장중 배치 | `.github/workflows/intraday.yml` + `scripts/intraday_loop.sh` | **시작 트리거 = 외부 스케줄러(cron-job.org → workflow_dispatch API, 08:35/08:50/09:05, 사용자 등록 대기)** + GitHub cron 08:35(+08:50~15:35 15분마다 예비, 보조) → 08:50까지 대기 → **3분 루프**(수집·커밋·푸시, 09-28 오전까지 5분). 오전(~12:10)·오후(~15:40, 15:40 회차 보장) 두 잡. 먼저 시작된 실행이 진행 중이면 새 실행은 calendar 잡에서 dup 판정 후 종료. 수동 `mode=loop/once/once-force` |
 | 배포 | `.github/workflows/pages.yml` | Actions 배포(deploy-pages). 사람 푸시=push 이벤트, 봇 푸시=워크플로가 `gh workflow run pages.yml` 호출 |
-| 화면 | `index.html`(일별·라이트), `intraday.html`(장중·다크) | 상호 링크에 테마 표기. 일별에 VIX 독립 차트(3개월 기본·20일 이평·range slider, 보이는 구간에 y축 맞춤), 유가는 WTI·Brent만(유가 | VIX 한 줄). **ADR 차트 비활성 — 20일 누적 후 활성화 가능**(`index.html` `ADR_ENABLED = true`로 켜면 유가가 한 줄 전체 폭 + VIX | ADR, 3개월·range slider·120·75 연회색 점선, 20거래일 전엔 '누적 중 (n/20일)'). **증시자금동향 행**(유가 | VIX 아래, 3열 카드: 고객예탁금·신용잔고·주식형펀드 기본 + 혼합형·채권형 토글, 최신값·전주대비(7일 전 이하 마지막 값)·기준일·지연 거래일 수(투자자 일별 날짜로 셈), 3개월, 1만억 이상 조, 신용잔고 90일 고점 대비). 빈 데이터·부분 누락 상태에서 에러 없음(데스크톱 1440/모바일 390) |
-| 엔드포인트 | `docs/endpoints.md` | E1~E23 일별, E24~E28 장중, E29~E30 등락 종목 수, E31~E32 증시자금동향 |
+| 화면 | `index.html`(일별·라이트), `intraday.html`(장중·다크) | 상호 링크에 테마 표기. 일별에 VIX 독립 차트(3개월 기본·20일 이평·range slider, 보이는 구간에 y축 맞춤), 유가는 WTI·Brent만(유가 | VIX 한 줄). **ADR 차트 비활성 — 20일 누적 후 활성화 가능**(`index.html` `ADR_ENABLED = true`로 켜면 유가가 한 줄 전체 폭 + VIX | ADR, 3개월·range slider·120·75 연회색 점선, 20거래일 전엔 '누적 중 (n/20일)'). 상단 카드 9개 3×3(모바일 2열, VKOSPI 추가). **VIX | VKOSPI**(유가 한 줄 전체 폭, VKOSPI 원값 실선 + 20일 이평 점선 '자체 계산', 아래 'KRED, CC BY-NC-ND 4.0'). 장중 페이지 카드 7개 4+3, VKOSPI 전일 종가 + 직전 60거래일 분위(장중값 아님). **증시자금동향 행**(유가 | VIX 아래, 3열 카드: 고객예탁금·신용잔고·주식형펀드 기본 + 혼합형·채권형 토글, 최신값·전주대비(7일 전 이하 마지막 값)·기준일·지연 거래일 수(투자자 일별 날짜로 셈), 3개월, 1만억 이상 조, 신용잔고 90일 고점 대비). 빈 데이터·부분 누락 상태에서 에러 없음(데스크톱 1440/모바일 390) |
+| 엔드포인트 | `docs/endpoints.md` | E1~E23 일별, E24~E28 장중, E29~E30 등락 종목 수, E31~E32 증시자금동향, E33 VKOSPI(KRED) |
+| VKOSPI | `fetch/kred.py`(E33) → `data/series/vkospi.json` (source=kred:KRVKOSPI, 2010-01-04~, 4,118행) | 요청 1회 = 전체 이력. update.yml 안에서 `kred_due`로 하루 ≤2회(16:30 이후 1회 + 당일값 없으면 20:00 이후 1회). 실패 시 카드 stale. 09-28은 로컬 확인 2회로 소진 → Actions 첫 요청은 09-29 16:30 이후 |
 | 증시자금동향 | `fetch/naver.py deposit_trend`(E32) → `data/series/deposit.json` (고객예탁금·신용잔고·주식형/혼합형/채권형 펀드, 억원) | 2002-05-03~2026-09-22 6,006일 백필(로컬 1회). update.yml 매 실행 최신 1페이지, `asof`=기준일이라 값이 같으면 파일 안 씀(재실행 0건 변경 확인). 2거래일 지연. 파일 1.26MB(gzip 약 170KB) — 화면이 전체를 읽음 |
 | ADR | `fetch/naver.py breadth`(E29) → `data/series/breadth_*.json` → `fetch/run.py adr_from_breadth` → `data/series/adr_*.json` | 네이버는 당일 스냅샷만 → **09-28 장 마감분부터 누적**. 첫 ADR = 20거래일째(약 10-27). **과거분 없음**(adrinfo 403, 아래). **ADR 차트 비활성 — 20일 누적 후 활성화 가능** (수집은 계속) |
 
@@ -63,6 +64,7 @@
 - **장중 간격 5분 → 3분** (09-28 커밋 이후). 오늘 오전 잡은 이미 체크아웃한 5분 스크립트로 계속, 12:10 오후 잡부터 3분. 1회 수집 약 13초(요청 간격 1.1초 유지)
 
 ## 미검증 (다음 거래일 09-29에 확인)
+0-1. **KRED 첫 자동 요청**: 09-29 16:30 이후 update-data 실행에서 `meta.kred_fetches`에 1건, vkospi.json에 09-28·09-29가 붙는지. KRED가 당일 값을 몇 시에 올리는지 미확인
 0. **ADR 첫 누적**: 09-28 장 마감 후 update-data 실행에서 `breadth_kospi/kosdaq.json`에 09-28 1행이 생기는지(15:30 이전·장중엔 저장 안 함이 정상). update-data schedule도 누락이 심하므로 마감 후~익일 개장 전 사이 1회라도 돌아야 함
 1. **예비 트리거 동작**: 08:35/08:50 중 어느 회차가 실제로 떴는지, 이후 예비 회차가 dup으로 끝나는지(calendar 로그 "먼저 시작된 실행 진행 중"), 누락 시 몇 분 늦게 이어받는지
 2. **3분 루프**: 오전 약 68회·오후 약 72회, 마지막 회차 15:40:05. 로그 마지막 줄 `루프 종료 … 실행 N회 · 푸시 M회`
@@ -77,9 +79,8 @@
 - **ADR 차트 비활성 — 20일 누적 후 활성화 가능** (2026-09-28): `breadth_*.json`이 20행 이상이면 `index.html`의 `ADR_ENABLED = true`로 켜기. 코드(renderAdr·패널 HTML)는 그대로 있음
 - **ADR 계산 기준 미확인**: `risingCount`에 상한가 포함 여부, ETF·우선주 포함 여부. 외부 대조 소스 없음(adrinfo 403) → 공개 시황 기사 등의 등락 종목 수와 수기 대조가 필요할 수 있음
 - **ADR 누락일**: 마감 후 update-data가 한 번도 안 돈 날은 breadth가 빠지고, ADR 창이 20거래일보다 길어짐(미보정)
-- **VKOSPI(장중 페이지 추가) 보류 (2026-09-27)**: 네이버 미제공, KRX 계정 필요.
-  - 네이버 확인 결과: `/domestic/index/VKOSPI` 페이지 없음(홈 리다이렉트), E24 차트에 VKOSPI·VKOSPI200·KPI200VOL·KVIX 등 7개 코드 빈 배열, `index/{code}/basic` 409 StockConflict, polling·검색 자동완성에도 없음. yfinance `^VKOSPI` 등도 없음
-  - 남은 후보(미검증): KRX 정보데이터시스템(로그인 필요, pykrx와 같은 문제), KRX OPEN API(인증키, 일별 T+1), 증권사 OpenAPI(KIS 등, 계좌 필요)
+- **VKOSPI 해결 (2026-09-28)**: 네이버·KRX 대신 KRED(kred.dev) 재공표 계열 사용(E33). 이전 보류 사유: 네이버 미제공(VKOSPI 코드 빈 배열·409), KRX는 로그인·인증키 필요 (상세는 git 이력의 이 파일 09-27판)
+  - 라이선스 CC BY-NC-ND 4.0: 출처 표기함(일별 차트 아래·장중 카드). **ND(변경 금지) 주의** — 원값은 그대로 게시, 20일 이평·60일 분위는 우리 계산으로 명시했지만 파생 표시가 'adaptation'에 해당하는지는 미판단. 공개 저장소에 전체 이력(vkospi.json)을 원형 그대로 재배포 중
 - **선물 최종치 누락**: 선물 정규장 15:45 마감. 09-23 외국인 선물 15:40 = +152계약 vs 16:06 최종 = +1,356계약. 수집 창(08:50~15:40) 밖이라 장중 페이지 선물값은 마감 전 잠정. 창을 15:50 이상으로 늘리거나 마감 후 1회 추가 수집 검토
 - update-data schedule 누락 대응 후보: 장중엔 intraday 루프가 15분마다 `gh workflow run update-data` 호출 (미적용)
 - 장중 파일 크기 약 190KB/일(indent=1) → 연 50MB 수준. 3분 루프로 스냅샷은 늘지만 이력(1분 행)이 대부분이라 크기 변화 작을 것(미확인). 필요 시 indent 제거·gzip·오래된 날짜 정리
