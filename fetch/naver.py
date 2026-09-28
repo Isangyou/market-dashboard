@@ -207,6 +207,30 @@ def usdkrw_latest():
                           "source": "naver:hana", "asof": to_kst_iso(b["announcedAt"])}])
 
 
+DEPOSIT_FIELDS = {"deposit": "customerDeposit", "credit": "creditLoan", "fund_stock": "beneficiaryCertificateStock",
+                  "fund_mixed": "beneficiaryCertificateMixing", "fund_bond": "beneficiaryCertificateBond"}
+
+
+@safe
+def deposit_trend(max_pages: int = 1):
+    """E32. 증시자금동향 일별 (억원): 고객예탁금·신용잔고·주식형/혼합형/채권형 펀드. 최신순 페이지(pageSize 최대 100).
+    전체 이력 2002-05-03~ 약 61페이지. 금투협 집계라 통상 2거래일 지연.
+    asof = 데이터 기준일(수집 시각이 아님) → 값이 같으면 파일도 같음."""
+    rows = []
+    for page in range(max_pages):
+        b = _get("/domestic/market/trendDeposit", {"startIdx": page, "pageSize": 100})
+        if b is None:
+            if not rows:
+                return None
+            break
+        for it in b.get("content", []):
+            date = ymd_to_iso(it["bizdate"])
+            rows.append({"date": date, **{k: int(_num(it.get(f))) for k, f in DEPOSIT_FIELDS.items()},
+                         "source": "naver:trend_deposit", "asof": date})
+        if b.get("last") in (True, "true"):
+            break
+    return pd.DataFrame(rows)
+
 @safe
 def breadth():
     """E29. 코스피·코스닥 상승·하락·보합 종목 수 (당일 스냅샷만, 이력 없음).

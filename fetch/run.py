@@ -271,6 +271,15 @@ def main():
         if a.save():
             changed.append(f"series/adr_{m.lower()}.json (+{n_new})")
 
+    # ── 증시자금동향 (하루 1회 갱신, 2거래일 지연) ── 첫 실행·--backfill은 전체 이력(약 61페이지),
+    # 이후엔 최신 100행만. asof=기준일이라 값이 같으면 write_if_changed가 파일을 안 씀
+    s = Series("deposit", "증시자금동향 (고객예탁금·신용잔고·펀드)", "억원")
+    df = call("naver", naver.deposit_trend, 70 if args.backfill or len(s) < 1000 else 1)
+    n_new = s.merge(df)
+    if s.save():
+        changed.append(f"series/deposit.json (+{n_new})")
+    deposit_last = s.last()[0] if len(s) else None
+
     # ── 외국인 상위 10 ──
     top, prev_top = {}, prev_latest.get("foreign_top", {})
     for m in MARKETS:
@@ -302,6 +311,10 @@ def main():
     for m, v in investor.items():
         print(f"investor {m:7} {v['date']} 외국인 {v['foreign']:,.0f}억 개인 {v['individual']:,.0f}억 "
               f"기관계 {v['institution']:,.0f}억  [{v['source']} {v['asof']}] stale={v['stale']}")
+    if deposit_last:
+        r = deposit_last
+        print(f"deposit {r['date']} 고객예탁금 {r['deposit']:,.0f}억 신용잔고 {r['credit']:,.0f}억 "
+              f"주식형 {r['fund_stock']:,.0f}억 [{r['source']}]")
     for m, bs in breadth.items():
         if len(bs):
             r = bs.last()[0]

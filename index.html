@@ -78,10 +78,20 @@
   .hval { font-size: 12.5px; color: var(--text); font-variant-numeric: tabular-nums; }
   .hval .k { color: var(--muted); margin-left: 8px; }
 
+  /* 증시자금동향 3열 카드 */
+  .funds { margin-bottom: 14px; }
+  .fgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 8px; padding-bottom: 6px; }
+  .fcard { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px 4px; min-width: 0; }
+  .fcard .top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+  .fcard .name { font-size: 12.5px; font-weight: 600; }
+  .fcard .v { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .fcard .c { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .fcard .pos { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
   footer { color: var(--faint); font-size: 11px; margin-top: 18px; line-height: 1.7; }
 
   @media (max-width: 900px) {
-    .grid, .tables { grid-template-columns: 1fr; }
+    .grid, .tables, .fgrid { grid-template-columns: 1fr; }
   }
   @media (max-width: 720px) {
     .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -152,6 +162,20 @@
     </div>
   </section>
 
+  <section class="panel funds">
+    <div class="row">
+      <div>
+        <h2>증시자금동향</h2>
+        <div class="sub" id="fund-sub"></div>
+      </div>
+      <div class="seg" id="fund-seg" role="group" aria-label="추가 항목 표시">
+        <button data-fund="fund_mixed" aria-pressed="false">혼합형펀드</button>
+        <button data-fund="fund_bond" aria-pressed="false">채권형펀드</button>
+      </div>
+    </div>
+    <div class="fgrid" id="fgrid"></div>
+  </section>
+
   <section class="panel">
     <h2>외국인 순매수 · 순매도 상위 10</h2>
     <div class="sub" id="top-sub"></div>
@@ -173,7 +197,7 @@ const C = Object.fromEntries(['bg','panel','line','grid','text','muted','faint',
 
 const SERIES_KEYS = ['investor_kospi','investor_kosdaq','usdkrw','usdjpy','usdcnh','eurusd','dxy',
   'ust_1m','ust_2m','ust_3m','ust_6m','ust_1y','ust_2y','ust_3y','ust_5y','ust_7y','ust_10y','ust_20y','ust_30y',
-  'ktb_3y','ktb_10y','wti','brent','vix'];
+  'ktb_3y','ktb_10y','wti','brent','vix','deposit'];
 // ADR 차트 스위치. 데이터 누적(update.yml → breadth_*/adr_*.json)은 항상 돌고, 화면만 끔.
 // true로 바꾸면 ADR 칸 표시 + 유가를 한 줄 전체 폭으로 넓혀 VIX | ADR 배치
 const ADR_ENABLED = false;
@@ -525,6 +549,46 @@ function renderAdr() {
   keepYFit('adr-chart', yFit, [first, last]);
 }
 
+// ── 증시자금동향 (고객예탁금·신용잔고·펀드, 억원) ──
+// 금투협 집계라 통상 2거래일 지연. 지연 = 기준일 이후 거래일 수(투자자 일별 시계열의 날짜로 셈)
+const FUND_ITEMS = [['deposit', '고객예탁금'], ['credit', '신용잔고'], ['fund_stock', '주식형펀드'],
+                    ['fund_mixed', '혼합형펀드'], ['fund_bond', '채권형펀드']];
+const fundOn = new Set(['deposit', 'credit', 'fund_stock']);
+const eokJo = (v, d = 1) => v == null || isNaN(v) ? '–' : Math.abs(v) >= 1e4 ? `${nf(v / 1e4, d)}조` : `${nf(v, 0)}억`;
+function renderFunds() {
+  const all = recs('deposit'), box = document.getElementById('fgrid');
+  if (!all.length) { box.innerHTML = '<div class="empty">데이터 없음</div>'; return; }
+  const last = all[all.length - 1], win = lastN(all, 91), wk = valueAt(all, shiftDate(last.date, 7));
+  const lag = recs('investor_kospi').filter(r => r.date > last.date).length;
+  const basis = `기준일 ${last.date.slice(5)}` + (lag ? ` · 데이터 지연 ${lag}거래일` : '');
+  document.getElementById('fund-sub').textContent =
+    `3개월 · 일별 · 1만억 이상은 조 · 전주대비 = 7일 전(${wk ? wk.date.slice(5) : '–'}) 대비 · 이력 ${all[0].date}~ · ${basis}`;
+  const items = FUND_ITEMS.filter(([k]) => fundOn.has(k));
+  box.innerHTML = items.map(([k, name]) => `<div class="fcard"><div class="top"><span class="name">${name}</span>
+      <span><span class="v">${eokJo(last[k])}</span> <span class="c" id="fc-${k}"></span></span></div>
+      ${k === 'credit' ? '<div class="pos" id="fpos"></div>' : ''}
+      <div id="fch-${k}" style="height:150px"></div>
+      <div class="src">${esc(last.source)} · ${basis}</div></div>`).join('');
+  for (const [k, name] of items) {
+    const d = wk ? last[k] - wk[k] : null;
+    document.getElementById('fc-' + k).textContent = d == null ? '' : `전주대비 ${arrow(d)} ${money(d)}`;
+    // 단위: 보이는 구간 최댓값이 1만억 이상이면 조
+    const jo = Math.max(...win.map(r => Math.abs(r[k]))) >= 1e4, sc = jo ? 1e4 : 1;
+    const lay = baseLayout({ margin: { l: 44, r: 8, t: 6, b: 22 }, showlegend: false });
+    lay.xaxis = { ...lay.xaxis, tickformat: '%m/%d', nticks: 4, range: [win[0].date, last.date] };
+    lay.yaxis = { ...lay.yaxis, tickformat: ',.0f', ticksuffix: jo ? '조' : '억', nticks: 4 };
+    plot('fch-' + k, lineTraces(win, 'deposit', { name, color: C.accent, width: 1.6, val: r => r[k] / sc,
+      fmt: jo ? ',.2f' : ',.0f', unit: jo ? '조' : '억', legend: false }), lay);
+  }
+  if (fundOn.has('credit')) {   // 신용잔고: 90일 고점 대비 위치
+    const w90 = all.filter(r => r.date >= shiftDate(last.date, 90));
+    const hi = w90.reduce((a, r) => r.credit > a.credit ? r : a, w90[0]);
+    const pct = (last.credit / hi.credit - 1) * 100;
+    document.getElementById('fpos').textContent = pct === 0 ? `90일 고점 (${eokJo(hi.credit)})`
+      : `90일 고점 대비 ${signed(pct, 1)}% · 고점 ${eokJo(hi.credit)} (${hi.date.slice(5)})`;
+  }
+}
+
 // ── 상위 종목 테이블 ──
 function table(rows, caption) {
   if (!rows || !rows.length) return `<div class="empty">${caption}: 데이터 없음</div>`;
@@ -567,17 +631,23 @@ async function main() {
 
   const safe = (name, fn) => { try { fn(); } catch (e) { console.error(name, e); } };
   safe('cards', renderCards); safe('main', renderMain); safe('curve', renderCurve); safe('ust', renderUst);
-  safe('ktb', renderKtb); safe('sparks', renderSparks); safe('oil', renderOil); safe('vix', renderVix); safe('tables', renderTables);
+  safe('ktb', renderKtb); safe('sparks', renderSparks); safe('oil', renderOil); safe('vix', renderVix); safe('funds', renderFunds); safe('tables', renderTables);
   if (ADR_ENABLED) {
     document.getElementById('adr-panel').hidden = false;
     document.getElementById('oil-panel').classList.add('span2');
     safe('adr', renderAdr);
   }
 
-  document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.main .seg button').forEach(b => b.addEventListener('click', () => {
     market = b.dataset.mkt;
-    document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    document.querySelectorAll('.main .seg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
     renderMain();
+  }));
+  document.querySelectorAll('#fund-seg button').forEach(b => b.addEventListener('click', () => {
+    const on = b.getAttribute('aria-pressed') !== 'true';
+    b.setAttribute('aria-pressed', String(on));
+    fundOn[on ? 'add' : 'delete'](b.dataset.fund);
+    safe('funds', renderFunds);
   }));
 }
 main();

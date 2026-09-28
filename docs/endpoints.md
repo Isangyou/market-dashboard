@@ -240,6 +240,7 @@ E10 필드 + `openingPrice`, `highPriceOfDay`, `lowPriceOfDay`, `high/lowPriceOf
 | WTI, Brent | E19, 이력 E20 | |
 | VIX | E21, 이력 E22 | |
 | (추가) 등락 종목 수 → ADR | E29 (당일만) | 이력 없음 → 장 마감 후 직접 누적 |
+| (추가) 증시자금동향 5항목 | E32 (2002-05-03~) | E31은 40행 고정 |
 
 ---
 
@@ -306,3 +307,21 @@ E14 `/stockSecurity/exchange-rates/v2/USD/charts/round?bankType=hana` (하나은
 - `http://adrinfo.kr/chart`: 2026-09-28 Playwright 접속 2회(09:5x, 10:10:37 KST, 사용자 지시로 1회 재시도) 모두 **403** `text/html` 94B:
   `<html><head></head><body>Blocked due to excessive traffic. Please avoid crawling or frequent access during market hours</body></html>`
   robots.txt는 curl에 "who are you?" 응답. 데이터 엔드포인트 미확인. **결론: 과거분 없이 네이버 누적만 사용, 이 사이트는 다시 호출하지 않음**
+
+---
+
+## 8. 증시자금동향 (2026-09-28 추가 캡처)
+
+캡처 화면: `/market/stock/kr/deposit` (국내 증시 메뉴 "증시자금동향"), `/market/stock/kr` 위젯. 화면 항목 = 고객예탁금·신용잔고·주식형펀드 + 넘기면 혼합형펀드·채권형펀드 (5개 전부 같은 응답에 있음). 단위 억원, 문자열 숫자(쉼표 없음). 금투협 집계라 **통상 2거래일 지연** (09-28 기준 최신 09-22 — 그 사이 거래일 09-23·09-28).
+
+필드: `bizdate`(YYYYMMDD), `customerDeposit`(고객예탁금), `creditLoan`(신용잔고), `beneficiaryCertificateStock`(주식형), `beneficiaryCertificateMixing`(혼합형), `beneficiaryCertificateBond`(채권형). 항목마다 `{…}Diff`(부호 있는 전일 증감), `{…}DiffAbs`.
+
+### E31. 차트용 (화면 기본 호출)
+`GET /domestic/market/trendDeposit/chart?startDate=YYYYMMDD&endDate=YYYYMMDD` → 배열, 오래된 순. **최근 40행 고정** — `startDate`를 2025·2010·1990으로 줘도 40행(20260728~20260922). 이력용으로 못 씀
+
+### E32. 표용 페이지 ★ 수집용
+`GET /domestic/market/trendDeposit?startIdx={페이지번호}&pageSize={≤100}` → `{content[], totalPages, totalElements, last, …}`, 최신순
+- `startIdx`는 **페이지 번호**(E3와 같음): `startIdx=1,pageSize=100` → 20260427~20251128
+- `pageSize` 500/1000 → 400 `too_big` (상한 100으로 보임)
+- 전체 `totalElements` 6,007 / 100행 61페이지. 마지막 `startIdx=60` 6행, 가장 오래된 날짜 **2002-05-03** (고객예탁금 114,414억, 신용잔고 3,552억)
+- 수집: 첫 실행·`--backfill` 전 페이지(약 70초), 이후 매 실행 `startIdx=0` 1페이지. 날짜 중복 제거 후 6,006일
