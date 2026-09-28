@@ -155,10 +155,10 @@
       <div id="vix-chart" class="chart" style="height:320px"></div>
     </div>
     <div class="panel">
-      <h2>VKOSPI · 20일 이동평균</h2>
+      <h2>VKOSPI</h2>
       <div class="sub" id="vkospi-sub"></div>
       <div id="vkospi-chart" class="chart" style="height:320px"></div>
-      <div class="note">출처: <a href="https://kred.dev/ko/series/KRVKOSPI" target="_blank" rel="noopener">KRED (kred.dev)</a>, <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank" rel="noopener">CC BY-NC-ND 4.0</a> · 20일 이동평균은 이 대시보드의 자체 계산</div>
+      <div class="note">출처: <a href="https://kred.dev/ko/series/KRVKOSPI" target="_blank" rel="noopener">KRED (kred.dev)</a>, <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank" rel="noopener">CC BY-NC-ND 4.0</a> · 원값 그대로 표시</div>
     </div>
     <!-- ADR: 비활성(ADR_ENABLED=false). hidden이라 그리드 칸을 차지하지 않음 -->
     <div class="panel" id="adr-panel" hidden>
@@ -497,12 +497,13 @@ function keepYFit(id, yFit, full) {
 }
 
 // ── VIX + 20일 이동평균 (3개월 기본, range slider) ──
-function renderVolChart(key, name, maNote = '') {
+// withMa=false: 원값만 (VKOSPI — CC BY-NC-ND의 ND 조항 때문에 파생선을 그리지 않음)
+function renderVolChart(key, name, withMa = true) {
   const v = recs(key), id = key + '-chart';
   if (!v.length) return empty(id);
   const x = v.map(r => r.date);
   // 20거래일 단순이동평균. 20개 미만 구간은 비움
-  const ma = v.map((_, i) => i < 19 ? null : v.slice(i - 19, i + 1).reduce((a, r) => a + r.value, 0) / 20);
+  const ma = withMa ? v.map((_, i) => i < 19 ? null : v.slice(i - 19, i + 1).reduce((a, r) => a + r.value, 0) / 20) : [];
   const last = x[x.length - 1];
   const lay = baseLayout({ margin: { l: 40, r: 12, t: 30, b: 24 } });
   lay.xaxis = { ...lay.xaxis, range: [shiftDate(last, 91), shiftDate(last, -2)],
@@ -511,17 +512,17 @@ function renderVolChart(key, name, maNote = '') {
   lay.yaxis = { ...lay.yaxis, tickformat: '.0f', range: yFit(lay.xaxis.range) };
   plot(id, [
     ...lineTraces(v, key, { name, color: C.accent }),
-    { x, y: ma, name: '20일 이동평균' + maNote, type: 'scatter', mode: 'lines', line: { color: C.gray1, width: 1.4, dash: 'dash' },
-      connectgaps: false, hovertemplate: '%{y:.2f}<extra>20일 이평</extra>' },
+    ...(withMa ? [{ x, y: ma, name: '20일 이동평균', type: 'scatter', mode: 'lines', line: { color: C.gray1, width: 1.4, dash: 'dash' },
+      connectgaps: false, hovertemplate: '%{y:.2f}<extra>20일 이평</extra>' }] : []),
   ], lay);
   keepYFit(id, yFit, [x[0], last]);
   const it = L.items[key], m = ma[ma.length - 1];
   document.getElementById(key + '-sub').textContent = `3개월 기본 · 일별 종가 · ${v[0].date} ~ ${last}` +
-    (m != null ? ` · 20일 이평${maNote} ${nf(m)} (${name} ${v[v.length - 1].value >= m ? '≥' : '<'} 이평)` : '') +
+    (m != null ? ` · 20일 이평 ${nf(m)} (${name} ${v[v.length - 1].value >= m ? '≥' : '<'} 이평)` : '') +
     (it ? ` · ${srcLine(it.source, it.asof)}` : ` · ${v[v.length - 1].source}`);
 }
 const renderVix = () => renderVolChart('vix', 'VIX');
-const renderVkospi = () => renderVolChart('vkospi', 'VKOSPI', ' (자체 계산)');
+const renderVkospi = () => renderVolChart('vkospi', 'VKOSPI', false);
 
 // ── ADR 20일 등락비율 (코스피·코스닥, 3개월 기본, range slider) ──
 // ADR = 최근 20거래일 상승 종목 수 합 ÷ 하락 종목 수 합 × 100 (fetch/run.py adr_from_breadth).

@@ -9,12 +9,15 @@
 #   GH_TOKEN 이 있으면 푸시 후 pages.yml 배포 호출
 set -uo pipefail
 INTERVAL=180   # 초. 3분 경계(:00,:03,…)마다 실행
+FETCH_TIMEOUT=150   # 초. 수집 1회 상한 (넘으면 종료코드 124로 끊고 다음 회차)
 END="${1:?종료 시각 HH:MM}"
 INCLUSIVE="${2:-}"
 ONCE="${ONCE:-}"
 ARGS=()
 [[ -n "${FORCE:-}" ]] && ARGS+=(--force)
 kst() { TZ=Asia/Seoul date "+$1"; }
+# 단계별 로그: [HH:MM:SS] #회차 단계 메시지 (장애 원인 추적용, 2026-09-28 pm 잡 무응답 이후)
+step() { echo "[$(kst %H:%M:%S)] #${n:-0} $*"; }
 running() {
   local now; now="$(kst %H:%M)"
   if [[ -n "$INCLUSIVE" ]]; then [[ ! "$now" > "$END" ]]; else [[ "$now" < "$END" ]]; fi
@@ -33,25 +36,32 @@ n=0; pushed=0
 while [[ -n "$ONCE" && $n -eq 0 ]] || { [[ -z "$ONCE" ]] && running; }; do
   n=$((n + 1))
   echo "::group::[$(kst '%H:%M:%S')] #$n intraday"
-  python -m fetch.intraday ${ARGS[@]+"${ARGS[@]}"}
+  t0=$(date +%s); step "fetch 시작 (timeout ${FETCH_TIMEOUT}s)"
+  timeout "$FETCH_TIMEOUT" python -m fetch.intraday ${ARGS[@]+"${ARGS[@]}"}
   rc=$?
+  step "fetch 끝 rc=$rc $(( $(date +%s) - t0 ))s"
   echo "::endgroup::"
   if [[ $rc -eq 0 ]]; then
     git add data/intraday
     if ! git diff --cached --quiet; then
       git commit -q -m "intraday: $(kst '%Y-%m-%d %H:%M') KST"
+      step "commit $(git rev-parse --short HEAD)"
       for i in 1 2 3; do
+        t1=$(date +%s)
         if git pull -q --rebase --autostash && git push -q; then
           pushed=$((pushed + 1))
+          step "push 성공 (시도 $i, $(( $(date +%s) - t1 ))s, 누적 ${pushed}회)"
           # 봇 푸시는 push 이벤트를 만들지 않으므로 Pages 배포를 직접 호출
           if [[ -n "${GH_TOKEN:-}" ]]; then gh workflow run pages.yml --ref main || echo "::warning::pages 배포 호출 실패"; fi
           break
         fi
-        echo "::warning::push 실패 (시도 $i/3), 5초 후 재시도"; sleep 5
+        echo "::warning::push 실패 (시도 $i/3, $(( $(date +%s) - t1 ))s), 5초 후 재시도"; sleep 5
       done
     else
-      echo "변경 없음 → 커밋 생략"
+      step "변경 없음 → 커밋 생략"
     fi
+  elif [[ $rc -eq 124 ]]; then
+    echo "::warning::fetch.intraday ${FETCH_TIMEOUT}초 초과로 중단"
   elif [[ $rc -ne 3 ]]; then
     echo "::warning::fetch.intraday 종료코드 $rc"
   fi
@@ -64,6 +74,7 @@ while [[ -n "$ONCE" && $n -eq 0 ]] || { [[ -z "$ONCE" ]] && running; }; do
     end_s=$(( $(TZ=Asia/Seoul date -d "$END" +%s) + 5 ))
     (( now_s < end_s && end_s < next )) && next=$end_s
   fi
+  step "대기 $(( next - now_s ))s → $(TZ=Asia/Seoul date -d "@$next" +%H:%M:%S)"
   sleep $(( next - now_s ))
 done
 echo "루프 종료 $(kst %H:%M) KST · 실행 ${n}회 · 푸시 ${pushed}회"
