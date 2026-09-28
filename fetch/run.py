@@ -287,6 +287,13 @@ def main():
             investor[m] = {**prev_inv[m], "stale": True}
             log.warning("investor %s: 실패 → stale", m)
 
+    # ── 개별 종목 일별 종가 (이격도 차트용) ── 첫 실행 3페이지(약 300거래일), 이후 1페이지
+    for code, name in naver.STOCKS.items():
+        s = Series(f"stock_{code}", name, "원")
+        n_new = s.merge(call("naver", naver.stock_daily, code, 3 if args.backfill or len(s) < 250 else 1))
+        if s.save():
+            changed.append(f"series/stock_{code}.json (+{n_new})")
+
     # ── 등락 종목 수 → ADR ── 네이버에 이력이 없어 장 마감 후 스냅샷을 날짜별로 직접 누적하고
     # 20일 ADR을 계산해 adr_*.json에 source=naver로 이어 붙임. 장중엔 breadth()가 None → 아무것도 안 함
     bdf, breadth = call("naver", naver.breadth), {}

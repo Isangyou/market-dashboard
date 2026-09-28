@@ -243,6 +243,7 @@ E10 필드 + `openingPrice`, `highPriceOfDay`, `lowPriceOfDay`, `high/lowPriceOf
 | (추가) 증시자금동향 5항목 | E32 (2002-05-03~) | E31은 40행 고정 |
 | (추가) VKOSPI | 네이버 없음 → KRED E33 (2010-01-04~) | CC BY-NC-ND 4.0, 하루 ≤2회 |
 | (추가) 코스피·코스닥 일별 종가 | E34 (1997~) | 오늘 행은 15:40 이후만 |
+| (추가) 삼성전자·SK하이닉스 일별 종가 | E35 (10년 이상) | 오늘 행은 15:40 이후만 |
 
 ---
 
@@ -354,3 +355,11 @@ E14 `/stockSecurity/exchange-rates/v2/USD/charts/round?bankType=hana` (하나은
 - `localTradedAt`은 **날짜만**(시각 없음). **장중엔 첫 행이 오늘 실시간 값** → 수집 시 오늘 행은 15:40 KST 전이면 버림, asof = 그날 15:30
 - 09-28 15:22 수집: 5페이지 299행, 2025-07-07 ~ 2026-09-23. 09-23 코스피 7,080.92 / 코스닥 844.48 (E24 `lastClosePrice`와 일치)
 - `securityService/chart/domestic/index/KOSPI?periodType=month` = 일봉 20개, `year` = 주봉 53개, `threeYear` = 400 → 이력용은 E34
+
+### E35. 종목 일별 시세 ★ 수집용 (삼성전자·SK하이닉스 이격도 차트)
+`GET /domestic/detail/{종목코드}/trend?tradeType=KRX&startIdx={페이지번호}&pageSize={≤100}` → 배열, 최신순
+- 캡처: `/domestic/stock/005930/price` (종목 "시세" 탭의 일별 표, 화면은 `pageSize=20·50`으로 호출)
+- 필드: `bizdate`(YYYYMMDD), `closePrice`(원), `prevChangePrice`, `upDownGb`(상승/하락), `tradeVolume`, `foreignerPureBuyQuant`·`organPureBuyQuant`·`individualPureBuyQuant`(순매수 수량), `frgnStock`, `frgnHoldRatio`(외국인 보유율 %). 문자열 숫자
+- `startIdx`는 **페이지 번호**(E3·E32와 같음): `startIdx=1,pageSize=50` → 20260713~20260429, `startIdx=50,pageSize=50` → 20160714~ (10년 이상 있음). `pageSize=100` 됨
+- 09-28 15:3x 수집: 100행×3페이지 = 300행, 2025-07-04 ~ 2026-09-23. 09-23 삼성전자 286,500원 / SK하이닉스 1,863,000원. 장중에도 오늘 행은 없었음(최신 09-23) — 그래도 오늘 행은 15:40 이후만 저장
+- 같은 화면의 다른 호출: `domestic/detail/{code}/siseTick`(체결), `…/hoga`(호가), `…/traderInfo`, `securityFe/api/fchart/domestic/stock/{code}`(차트) — 미사용

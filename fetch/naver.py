@@ -231,6 +231,31 @@ def deposit_trend(max_pages: int = 1):
             break
     return pd.DataFrame(rows)
 
+# 이격도 차트용 개별 종목 (코드 → 이름)
+STOCKS = {"005930": "삼성전자", "000660": "SK하이닉스"}
+
+
+@safe
+def stock_daily(code: str, pages: int = 1):
+    """E35. 종목 일별 시세 (KRX, 최신순, 100행/페이지, startIdx=페이지 번호). 종가만 사용(원).
+    오늘 행은 15:40 KST 이후만 (장중 값 방지), asof = 그날 15:30."""
+    now = now_kst()
+    today, before_close = now.strftime("%Y-%m-%d"), now.strftime("%H:%M") < KRX_CLOSE_FINAL
+    rows = []
+    for page in range(pages):
+        b = _get(f"/domestic/detail/{code}/trend", {"tradeType": "KRX", "startIdx": page, "pageSize": 100})
+        if not b:
+            break
+        for it in b:
+            date = ymd_to_iso(it["bizdate"])
+            if date == today and before_close:
+                continue
+            rows.append({"date": date, "value": _num(it["closePrice"]), "source": "naver:stock_trend",
+                         "asof": f"{date}T15:30:00+09:00"})
+        if len(b) < 100:
+            break
+    return pd.DataFrame(rows)
+
 @safe
 def breadth():
     """E29. 코스피·코스닥 상승·하락·보합 종목 수 (당일 스냅샷만, 이력 없음).
