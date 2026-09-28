@@ -4,13 +4,13 @@
   "KOSPI": {
    "date": "2026-09-28",
    "source": "naver:index_chart",
-   "asof": "2026-09-28T09:39:00+09:00",
+   "asof": "2026-09-28T09:45:00+09:00",
    "status": "OPEN",
    "last_close": 7080.92,
    "open": 7057.86,
-   "value": 7017.3,
-   "change": -63.62,
-   "change_pct": -0.9,
+   "value": 6999.28,
+   "change": -81.64,
+   "change_pct": -1.15,
    "bars": [
     {
      "t": "09:00",
@@ -209,8 +209,38 @@
     },
     {
      "t": "09:39",
-     "c": 7017.3,
-     "v": 53205
+     "c": 7014.49,
+     "v": 54231
+    },
+    {
+     "t": "09:40",
+     "c": 7004,
+     "v": 55245
+    },
+    {
+     "t": "09:41",
+     "c": 6996.55,
+     "v": 56381
+    },
+    {
+     "t": "09:42",
+     "c": 6989.34,
+     "v": 57469
+    },
+    {
+     "t": "09:43",
+     "c": 7001.1,
+     "v": 58369
+    },
+    {
+     "t": "09:44",
+     "c": 6998.89,
+     "v": 59261
+    },
+    {
+     "t": "09:45",
+     "c": 6999.28,
+     "v": 59400
     }
    ],
    "stale": false
@@ -218,13 +248,13 @@
   "KOSDAQ": {
    "date": "2026-09-28",
    "source": "naver:index_chart",
-   "asof": "2026-09-28T09:39:00+09:00",
+   "asof": "2026-09-28T09:43:00+09:00",
    "status": "OPEN",
    "last_close": 844.48,
    "open": 845.48,
-   "value": 857.17,
-   "change": 12.69,
-   "change_pct": 1.5,
+   "value": 855.99,
+   "change": 11.51,
+   "change_pct": 1.36,
    "bars": [
     {
      "t": "09:00",
@@ -423,8 +453,28 @@
     },
     {
      "t": "09:39",
-     "c": 857.17,
-     "v": 136173
+     "c": 857.03,
+     "v": 137513
+    },
+    {
+     "t": "09:40",
+     "c": 856.69,
+     "v": 138953
+    },
+    {
+     "t": "09:41",
+     "c": 856.35,
+     "v": 140567
+    },
+    {
+     "t": "09:42",
+     "c": 855.89,
+     "v": 142409
+    },
+    {
+     "t": "09:43",
+     "c": 855.99,
+     "v": 142733
     }
    ],
    "stale": false
@@ -434,7 +484,7 @@
   "KOSPI": {
    "source": "naver:trend_time",
    "unit": "억원",
-   "asof": "2026-09-28T09:39:00+09:00",
+   "asof": "2026-09-28T09:43:00+09:00",
    "basis": "KRX 장중 누적 잠정치 (~15:40, 시간외·NXT 제외)",
    "rows": [
     {
@@ -592,6 +642,24 @@
      "foreign": -2635.3,
      "individual": 1784.2,
      "institution": -935.9
+    },
+    {
+     "t": "09:40",
+     "foreign": -2801.0,
+     "individual": 1966.2,
+     "institution": -1057.8
+    },
+    {
+     "t": "09:42",
+     "foreign": -3059.5,
+     "individual": 1920.0,
+     "institution": -819.0
+    },
+    {
+     "t": "09:43",
+     "foreign": -3302.7,
+     "individual": 1695.7,
+     "institution": -420.2
     }
    ],
    "stale": false
@@ -599,7 +667,7 @@
   "KOSDAQ": {
    "source": "naver:trend_time",
    "unit": "억원",
-   "asof": "2026-09-28T09:39:00+09:00",
+   "asof": "2026-09-28T09:43:00+09:00",
    "basis": "KRX 장중 누적 잠정치 (~15:40, 시간외·NXT 제외)",
    "rows": [
     {
@@ -757,6 +825,24 @@
      "foreign": 564.6,
      "individual": -448.8,
      "institution": -79.1
+    },
+    {
+     "t": "09:40",
+     "foreign": 584.8,
+     "individual": -475.7,
+     "institution": -72.2
+    },
+    {
+     "t": "09:42",
+     "foreign": 588.8,
+     "individual": -483.2,
+     "institution": -74.0
+    },
+    {
+     "t": "09:43",
+     "foreign": 603.6,
+     "individual": -515.1,
+     "institution": -57.0
     }
    ],
    "stale": false
@@ -765,7 +851,7 @@
  "futures": {
   "source": "naver:trend_time_fut",
   "unit": "계약",
-  "asof": "2026-09-28T09:20:00+09:00",
+  "asof": "2026-09-28T09:25:00+09:00",
   "rows": [
    {
     "t": "08:45",
@@ -1018,16 +1104,51 @@
     "individual": -144,
     "institution": 601,
     "foreign_amt": -1342.7
+   },
+   {
+    "t": "09:21",
+    "foreign": -570,
+    "individual": -84,
+    "institution": 626,
+    "foreign_amt": -1591.4
+   },
+   {
+    "t": "09:22",
+    "foreign": -552,
+    "individual": -98,
+    "institution": 622,
+    "foreign_amt": -1541.0
+   },
+   {
+    "t": "09:23",
+    "foreign": -536,
+    "individual": -112,
+    "institution": 620,
+    "foreign_amt": -1496.2
+   },
+   {
+    "t": "09:24",
+    "foreign": -436,
+    "individual": -128,
+    "institution": 535,
+    "foreign_amt": -1216.2
+   },
+   {
+    "t": "09:25",
+    "foreign": -486,
+    "individual": -112,
+    "institution": 562,
+    "foreign_amt": -1356.1
    }
   ],
   "stale": false
  },
  "futures_price": {
   "source": "naver:indicators",
-  "asof": "2026-09-28T09:20:59+09:00",
-  "value": 1117.35,
-  "change": -10.4,
-  "change_pct": -0.92,
+  "asof": "2026-09-28T09:25:59+09:00",
+  "value": 1118.5,
+  "change": -9.25,
+  "change_pct": -0.82,
   "delay": "20분 지연",
   "stale": false
  },
@@ -1035,7 +1156,7 @@
   "KOSPI": {
    "source": "naver:program_chart",
    "unit": "억원",
-   "asof": "2026-09-28T09:30:00+09:00",
+   "asof": "2026-09-28T09:40:00+09:00",
    "rows": [
     {
      "t": "09:10",
@@ -1054,6 +1175,12 @@
      "arb": -111.9,
      "nonarb": 461.9,
      "total": 350.0
+    },
+    {
+     "t": "09:40",
+     "arb": -171.0,
+     "nonarb": 49.7,
+     "total": -121.3
     }
    ],
    "stale": false
@@ -1076,7 +1203,7 @@
  "usdkrw": {
   "source": "naver:hana_round",
   "label": "하나은행 고시",
-  "asof": "2026-09-28T09:39:00+09:00",
+  "asof": "2026-09-28T09:44:00+09:00",
   "last_close": 1359.0,
   "rows": [
    {
@@ -1246,6 +1373,26 @@
    {
     "t": "09:39",
     "v": 1359.0
+   },
+   {
+    "t": "09:40",
+    "v": 1359.3
+   },
+   {
+    "t": "09:41",
+    "v": 1359.1
+   },
+   {
+    "t": "09:42",
+    "v": 1358.9
+   },
+   {
+    "t": "09:43",
+    "v": 1358.9
+   },
+   {
+    "t": "09:44",
+    "v": 1358.1
    }
   ],
   "stale": false
@@ -1338,9 +1485,20 @@
    "fut_foreign": -481,
    "program_kospi": 350.0,
    "usdkrw": 1359.0
+  },
+  {
+   "t": "09:45",
+   "sampled_at": "2026-09-28T09:45:05+09:00",
+   "kospi": 6999.28,
+   "kospi_chg_pct": -1.15,
+   "foreign_kospi": -3302.7,
+   "foreign_kosdaq": 603.6,
+   "fut_foreign": -486,
+   "program_kospi": -121.3,
+   "usdkrw": 1358.1
   }
  ],
- "updated_at": "2026-09-28T09:40:06+09:00",
+ "updated_at": "2026-09-28T09:45:05+09:00",
  "market_day": {
   "date": "2026-09-28",
   "trading": true,
