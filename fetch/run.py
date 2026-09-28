@@ -41,6 +41,7 @@ VALUE_SERIES = {
     "usdkrw": ("USD/KRW", "KRW"), "usdjpy": ("USD/JPY", "JPY"), "usdcnh": ("USD/CNH", "CNH"),
     "eurusd": ("EUR/USD", "USD"), "dxy": ("DXY", "pt"),
     "wti": ("WTI", "USD/bbl"), "brent": ("Brent", "USD/bbl"), "vix": ("VIX", "pt"),
+    "kospi": ("코스피", "pt"), "kosdaq": ("코스닥", "pt"),
 }
 
 # pykrx는 KRX 로그인 요구로 현재 동작하지 않아 기본 비활성 (코드는 유지, --enable pykrx 로 켬)

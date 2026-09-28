@@ -125,6 +125,19 @@
 
   <section class="grid">
     <div class="panel">
+      <div class="row"><h2>코스피 · 50일 이동평균 · 50일 이격도</h2><span class="hval" id="kospi-val"></span></div>
+      <div class="sub" id="kospi-sub"></div>
+      <div id="kospi-chart" class="chart" style="height:420px"></div>
+    </div>
+    <div class="panel">
+      <div class="row"><h2>코스닥 · 50일 이동평균 · 50일 이격도</h2><span class="hval" id="kosdaq-val"></span></div>
+      <div class="sub" id="kosdaq-sub"></div>
+      <div id="kosdaq-chart" class="chart" style="height:420px"></div>
+    </div>
+  </section>
+
+  <section class="grid">
+    <div class="panel">
       <h2>미국채 수익률 곡선</h2>
       <div class="sub" id="curve-sub"></div>
       <div id="curve-chart" class="chart" style="height:300px"></div>
@@ -203,7 +216,7 @@ const C = Object.fromEntries(['bg','panel','line','grid','text','muted','faint',
 
 const SERIES_KEYS = ['investor_kospi','investor_kosdaq','usdkrw','usdjpy','usdcnh','eurusd','dxy',
   'ust_1m','ust_2m','ust_3m','ust_6m','ust_1y','ust_2y','ust_3y','ust_5y','ust_7y','ust_10y','ust_20y','ust_30y',
-  'ktb_3y','ktb_10y','wti','brent','vix','vkospi','deposit'];
+  'ktb_3y','ktb_10y','wti','brent','vix','vkospi','deposit','kospi','kosdaq'];
 // ADR 차트 스위치. 데이터 누적(update.yml → breadth_*/adr_*.json)은 항상 돌고, 화면만 끔.
 // true로 바꾸면 ADR 칸 표시 + 유가를 한 칸으로 줄여 유가 | VIX, VKOSPI | ADR 배치
 const ADR_ENABLED = false;
@@ -483,16 +496,18 @@ function yFitter(x, ys, { fixed = [], minPad = 0.5 } = {}) {
     return [lo - pad, hi + pad];
   };
 }
-function keepYFit(id, yFit, full) {
+function keepYFit(id, yFit, full) {   // yFit: 함수(yaxis) 또는 {yaxis: fn, yaxis2: fn, …}
   const el = document.getElementById(id);
-  el._yFit = yFit; el._full = full;   // 재렌더 시 최신 데이터로 교체
+  el._yFit = typeof yFit === 'function' ? { yaxis: yFit } : yFit; el._full = full;   // 재렌더 시 최신 데이터로 교체
   if (el._yfitOn) return;             // 리스너 1회만 등록
   el._yfitOn = true;
   el.on('plotly_relayout', e => {
     const r = e['xaxis.range'] || (e['xaxis.range[0]'] && [e['xaxis.range[0]'], e['xaxis.range[1]']]);
     const x = r || (e['xaxis.autorange'] ? el._full : null);
-    const y = x && el._yFit(x.map(String));
-    if (y) Plotly.relayout(el, { 'yaxis.range': y });
+    if (!x) return;
+    const upd = {};
+    for (const [ax, fit] of Object.entries(el._yFit)) { const y = fit(x.map(String)); if (y) upd[ax + '.range'] = y; }
+    if (Object.keys(upd).length) Plotly.relayout(el, upd);
   });
 }
 
@@ -557,6 +572,43 @@ function renderAdr() {
   lay.yaxis = { ...lay.yaxis, tickformat: '.0f', range: yFit(lay.xaxis.range) };
   plot('adr-chart', mk.flatMap(o => lineTraces(o.rs, o.k, { name: o.name, color: o.color, width: o.k === 'adr_kospi' ? 2 : 1.6, fmt: '.1f' })), lay);
   keepYFit('adr-chart', yFit, [first, last]);
+}
+
+// ── 코스피·코스닥 + 50일 이평 + 50일 이격도 (6개월 기본, range slider, 상하 2패널 x축 공유) ──
+// 이격도 = 종가 ÷ 50일 이평 × 100. 이평·이격도는 이 대시보드 계산. 50거래일 미만 구간은 비움
+const MA_N = 50;
+function renderIndex(key, name) {
+  const v = recs(key), id = key + '-chart';
+  if (!v.length) return empty(id);
+  const x = v.map(r => r.date), last = x[x.length - 1];
+  const ma = v.map((_, i) => i < MA_N - 1 ? null : v.slice(i - MA_N + 1, i + 1).reduce((a, r) => a + r.value, 0) / MA_N);
+  const gap = v.map((r, i) => ma[i] == null ? null : r.value / ma[i] * 100);
+  const lay = baseLayout({ margin: { l: 52, r: 12, t: 30, b: 24 } });
+  lay.xaxis = { ...lay.xaxis, anchor: 'y2', range: [shiftDate(last, 183), shiftDate(last, -2)],
+    rangeslider: { visible: true, thickness: 0.07, bgcolor: C.bg, bordercolor: C.line, borderwidth: 1 } };
+  const fitTop = yFitter(x, [v.map(r => r.value), ma], { minPad: 1 });
+  const fitGap = yFitter(x, [gap], { fixed: [95, 105], minPad: 0.5 });
+  lay.yaxis = { ...lay.yaxis, domain: [0.4, 1], tickformat: ',.0f', range: fitTop(lay.xaxis.range) };
+  lay.yaxis2 = { ...lay._ax, showspikes: false, domain: [0, 0.3], tickformat: '.0f', range: fitGap(lay.xaxis.range),
+                 title: { text: '50일 이격도', font: { size: 10.5 } } };
+  // 이격도 100 기준선·105/95 참고선: 연한 회색 점선 (아래 패널 y2에만)
+  lay.shapes = [100, 105, 95].map(y => ({ type: 'line', xref: 'paper', x0: 0, x1: 1, yref: 'y2', y0: y, y1: y,
+    line: { color: C.gray2, width: 1, dash: 'dot' }, layer: 'below' }));
+  lay.annotations = [105, 100, 95].map(y => ({ xref: 'paper', x: 1, yref: 'y2', y, text: String(y), showarrow: false,
+    xanchor: 'right', yanchor: 'bottom', font: { size: 10, color: C.faint } }));
+  plot(id, [
+    ...lineTraces(v, key, { name: `${name} 종가`, color: C.accent, fmt: ',.2f' }),
+    { x, y: ma, name: '50일 이동평균', type: 'scatter', mode: 'lines', line: { color: C.gray1, width: 1.4, dash: 'dash' },
+      connectgaps: false, hovertemplate: '%{y:,.2f}<extra>50일 이평</extra>' },
+    { x, y: gap, name: '50일 이격도', type: 'scatter', mode: 'lines', yaxis: 'y2', line: { color: C.gray1, width: 1.6 },
+      connectgaps: false, hovertemplate: '%{y:.1f}<extra>이격도</extra>' },
+  ], lay);
+  keepYFit(id, { yaxis: fitTop, yaxis2: fitGap }, [x[0], last]);
+  const g = gap[gap.length - 1], lr = v[v.length - 1];
+  document.getElementById(key + '-val').innerHTML = g == null ? '' : `<span class="k">이격도</span> ${nf(g, 1)}`;
+  document.getElementById(key + '-sub').textContent = `6개월 기본 · 일별 종가 ${x[0]} ~ ${last}` +
+    (g != null ? ` · 종가 ${nf(lr.value)} / 50일 이평 ${nf(ma[ma.length - 1])} (이평·이격도 자체 계산)` : '') +
+    ` · ${srcLine(lr.source, lr.asof)}`;
 }
 
 // ── 증시자금동향 (고객예탁금·신용잔고·펀드, 억원) ──
@@ -640,7 +692,7 @@ async function main() {
     `갱신 <b>${fmtAsof(L.generated_at)}</b> KST · stale ${staleN}건` + (miss ? ` · 시계열 누락 ${miss}건` : '');
 
   const safe = (name, fn) => { try { fn(); } catch (e) { console.error(name, e); } };
-  safe('cards', renderCards); safe('main', renderMain); safe('curve', renderCurve); safe('ust', renderUst);
+  safe('cards', renderCards); safe('main', renderMain); safe('kospi', () => renderIndex('kospi', '코스피')); safe('kosdaq', () => renderIndex('kosdaq', '코스닥')); safe('curve', renderCurve); safe('ust', renderUst);
   safe('ktb', renderKtb); safe('sparks', renderSparks); safe('oil', renderOil); safe('vix', renderVix); safe('vkospi', renderVkospi); safe('funds', renderFunds); safe('tables', renderTables);
   if (ADR_ENABLED) {
     document.getElementById('adr-panel').hidden = false;

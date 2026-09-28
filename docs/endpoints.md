@@ -242,6 +242,7 @@ E10 필드 + `openingPrice`, `highPriceOfDay`, `lowPriceOfDay`, `high/lowPriceOf
 | (추가) 등락 종목 수 → ADR | E29 (당일만) | 이력 없음 → 장 마감 후 직접 누적 |
 | (추가) 증시자금동향 5항목 | E32 (2002-05-03~) | E31은 40행 고정 |
 | (추가) VKOSPI | 네이버 없음 → KRED E33 (2010-01-04~) | CC BY-NC-ND 4.0, 하루 ≤2회 |
+| (추가) 코스피·코스닥 일별 종가 | E34 (1997~) | 오늘 행은 15:40 이후만 |
 
 ---
 
@@ -341,3 +342,15 @@ E14 `/stockSecurity/exchange-rates/v2/USD/charts/round?bankType=hana` (하나은
 - 파싱: 정규식 `\\"initialData\\":(\[.*?\])` → `\"`→`"` 치환 후 JSON (`fetch/kred.py parse`)
 - 요청 제한: `fetch/run.py kred_due` — 하루 최대 2회. KST 16:30 이후 첫 1회, 그 결과에 당일 값이 없으면 20:00 이후 1회 더. 요청 시각은 `latest.json` `meta.kred_fetches`
 - 2026-09-28 요청 이력: Playwright 1회(엔드포인트 확인) + requests 1회(구조 확인). 백필은 Playwright 때 저장한 HTML로 → 이날 Actions 요청 없음(2회 소진으로 기록)
+
+---
+
+## 10. 국내 지수 일별 (2026-09-28)
+
+### E34. 코스피·코스닥 일별 시세 ★ 수집용
+`GET /securityFe/api/index/{KOSPI|KOSDAQ}/price?page={1..}&pageSize={≤60}` → 배열, 최신순. E22와 같은 형식(`localTradedAt`, `closePrice`, `compareToPreviousClosePrice`, `fluctuationsRatio`, `openPrice`, `highPrice`, `lowPrice`, 문자열 숫자)
+- 캡처: `/domestic/index/KOSPI/price` 화면 (§7 등락 종목 수 캡처 때 함께 잡힘)
+- `pageSize` 100 → 400, 60은 됨. `page=120` → 1997-10-07까지 있음
+- `localTradedAt`은 **날짜만**(시각 없음). **장중엔 첫 행이 오늘 실시간 값** → 수집 시 오늘 행은 15:40 KST 전이면 버림, asof = 그날 15:30
+- 09-28 15:22 수집: 5페이지 299행, 2025-07-07 ~ 2026-09-23. 09-23 코스피 7,080.92 / 코스닥 844.48 (E24 `lastClosePrice`와 일치)
+- `securityService/chart/domestic/index/KOSPI?periodType=month` = 일봉 20개, `year` = 주봉 53개, `threeYear` = 400 → 이력용은 E34

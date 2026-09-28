@@ -290,20 +290,32 @@ PRICE_PATHS = {
     "wti": "/securityService/marketindex/energy/CLcv1/prices",
     "brent": "/securityService/marketindex/energy/LCOcv1/prices",
     "vix": "/securityService/index/.VIX/price",
+    # 국내 지수 일별 (E34). 날짜만 옴(시각 없음), 장중엔 첫 행이 오늘 실시간 값
+    "kospi": "/securityFe/api/index/KOSPI/price",
+    "kosdaq": "/securityFe/api/index/KOSDAQ/price",
 }
+KRX_INDEX = {"kospi", "kosdaq"}
+KRX_CLOSE_FINAL = "15:40"   # 이 시각 전의 오늘 행은 장중 값이라 버림 (종가 아님)
 
 
 @safe
 def prices_history(key: str, pages: int = 1):
-    """E17/E18/E20/E22. 일별 종가 (최신순 페이지, 60행/페이지). date는 현지 거래일."""
+    """E17/E18/E20/E22/E34. 일별 종가 (최신순 페이지, 60행/페이지). date는 현지 거래일."""
     rows = []
+    now = now_kst()
+    today, before_close = now.strftime("%Y-%m-%d"), now.strftime("%H:%M") < KRX_CLOSE_FINAL
     for page in range(1, pages + 1):
         b = _get(PRICE_PATHS[key], {"page": page, "pageSize": 60})
         if not b:
             break
-        rows += [{"date": p["localTradedAt"][:10], "value": _num(p["closePrice"]),
-                  "source": f"naver:prices", "asof": to_kst_iso(p["localTradedAt"])}
-                 for p in b]
+        if key in KRX_INDEX:   # asof = 그날 15:30 (정규장 종가)
+            rows += [{"date": p["localTradedAt"][:10], "value": _num(p["closePrice"]),
+                      "source": "naver:index_price", "asof": f"{p['localTradedAt'][:10]}T15:30:00+09:00"}
+                     for p in b if not (p["localTradedAt"][:10] == today and before_close)]
+        else:
+            rows += [{"date": p["localTradedAt"][:10], "value": _num(p["closePrice"]),
+                      "source": f"naver:prices", "asof": to_kst_iso(p["localTradedAt"])}
+                     for p in b]
         if len(b) < 60:
             break
     return pd.DataFrame(rows) if rows else None
