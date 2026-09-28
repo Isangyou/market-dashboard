@@ -30,7 +30,7 @@
   .meta b { color: var(--muted); font-weight: 500; }
 
   /* 카드 */
-  .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }   /* 8개 = 4×2 */
+  .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }   /* 7개 = 4+3 */
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; min-width: 0; }
   .card .lbl { color: var(--muted); font-size: 12px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .tag { border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 10.5px; color: var(--muted); }
@@ -352,7 +352,6 @@ function renderCards() {
     investorCard('KOSPI'), investorCard('KOSDAQ'),
     itemCard('usdkrw', { tag: L.items.usdkrw && !String(L.items.usdkrw.source).startsWith('naver:hana') ? '폴백 · 시장가 (하나은행 고시 아님)' : '하나은행 고시' }),
     itemCard('vkospi', { label: 'VKOSPI', tag: 'KRED' }),   // DXY 카드 자리 (DXY는 환율 스파크라인에만)
-    itemCard('ktb_10y', { label: '국고 10Y', digits: 3, bp: true }),
     itemCard('ust_10y', { label: '미국채 10Y', digits: 3, bp: true }),
     itemCard('wti', { label: 'WTI' }),
     itemCard('vix', { label: 'VIX' }),
