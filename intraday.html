@@ -28,6 +28,9 @@
   .sw-dark { background: #15171a; border: 1px solid #8b9098; }
   .meta, .src { color: var(--faint); font-size: 11px; }
   .meta b { color: var(--muted); font-weight: 500; }
+  /* 자동 갱신으로 새 데이터가 들어오면 잠깐 강조 */
+  #upd { border-radius: 3px; padding: 0 3px; transition: background-color 1.6s ease, color 1.6s ease; }
+  #upd.flash { background-color: rgba(123, 147, 196, 0.35); color: var(--text); transition: none; }
   .banner { border: 1px dashed var(--faint); color: var(--muted); border-radius: 8px; padding: 8px 12px; font-size: 12.5px; margin-bottom: 12px; }
 
   .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }   /* 7개 = 4+3 */
@@ -162,6 +165,7 @@ function layout(extra = {}) {
     paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
     font: { color: C.muted, size: 11, family: getComputedStyle(document.body).fontFamily },
     margin: { l: 56, r: 16, t: 28, b: 30 }, hovermode: 'x unified',
+    uirevision: D ? D.date : 'none',   // 자동 갱신(Plotly.react) 때 확대·범위 조작 유지. 거래일이 바뀌면 초기화
     hoverlabel: { bgcolor: C.panel, bordercolor: C.line, font: { color: C.text, size: 11.5 } },
     legend: { orientation: 'h', x: 0, y: 1.14, font: { size: 11, color: C.muted }, bgcolor: 'rgba(0,0,0,0)' },
     xaxis: { ...AX(), type: 'date', tickformat: '%H:%M', hoverformat: '%H:%M' },
@@ -338,7 +342,9 @@ function renderFx() {
 }
 
 // ── 로드 ──
-async function getJSON(p) { const r = await fetch(p, { cache: 'no-store' }); if (!r.ok) throw new Error(`${p} ${r.status}`); return r.json(); }
+// Pages CDN(max-age 600) 캐시를 피하려고 쿼리스트링을 붙임
+async function getText(p) { const r = await fetch(`${p}?t=${Date.now()}`, { cache: 'no-store' }); if (!r.ok) throw new Error(`${p} ${r.status}`); return r.text(); }
+async function getJSON(p) { return JSON.parse(await getText(p)); }
 // ── 미국 선물 1분봉 (yfinance 지연 시세) ── 전일 미국장 마감(KST 06:00)부터. 기준가 = 06:00 이하 마지막 봉 종가
 function renderUsFut(sym, id, digits) {
   const u = D && D.us_futures && D.us_futures[sym];
@@ -350,9 +356,7 @@ function renderUsFut(sym, id, digits) {
     ` · 기준 전일 미국장 마감 ${u.prev_close_at.slice(5, 10)} ${u.prev_close_at.slice(11, 16)} KST 봉 ${nf(u.prev_close, digits)} (정산가 아님)`;
   const lay = layout({ showlegend: false });
   lay.xaxis = { ...lay.xaxis, range: [X('06:00'), X('15:45')] };
-  // 기준선(shape)은 자동 범위에 안 들어감 → 전일 마감가를 포함해 y범위 지정
-  const ys = [...u.rows.map(x => x.c), u.prev_close], lo = Math.min(...ys), hi = Math.max(...ys), pad = (hi - lo) * 0.06 || hi * 0.001;
-  lay.yaxis = { ...lay.yaxis, tickformat: `,.${digits}f`, range: [lo - pad, hi + pad] };
+  lay.yaxis = { ...lay.yaxis, tickformat: `,.${digits}f` };
   lay.shapes = [
     { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: u.prev_close, y1: u.prev_close, line: { color: C.faint, width: 1, dash: 'dot' }, layer: 'below' },
     { type: 'line', yref: 'paper', y0: 0, y1: 1, x0: X('09:00'), x1: X('09:00'), line: { color: C.faint, width: 1, dash: 'dot' }, layer: 'below' },
@@ -361,37 +365,85 @@ function renderUsFut(sym, id, digits) {
     { xref: 'paper', x: 0, y: u.prev_close, text: '전일 마감', showarrow: false, xanchor: 'left', yanchor: 'bottom', font: { size: 10, color: C.faint } },
     { yref: 'paper', y: 1, x: X('09:00'), text: '09:00 국내 개장', showarrow: false, xanchor: 'left', yanchor: 'top', font: { size: 10, color: C.faint } },
   ];
-  plot(id + '-chart', [line(u.rows, 'c', u.name, C.accent, { fmt: `,.${digits}f`, src: u.symbol })], lay);
+  plot(id + '-chart', [line(u.rows, 'c', u.name, C.accent, { fmt: `,.${digits}f`, src: u.symbol }),
+    // 기준선(shape)은 자동 범위에 안 들어감 → 기준가 위치에 투명 점을 둬서 y 자동 범위에 포함
+    { x: [X(u.rows[0].t)], y: [u.prev_close], type: 'scatter', mode: 'markers', marker: { opacity: 0 }, hoverinfo: 'skip', showlegend: false }], lay);
 }
 
 function renderAll() {
   const safe = (n, fn) => { try { fn(); } catch (e) { console.error(n, e); } };
   safe('cards', renderCards); safe('main', renderMain); safe('fut', renderFut); safe('prg', renderPrg); safe('nq', () => renderUsFut('NQ', 'nq', 2)); safe('cl', () => renderUsFut('CL', 'cl', 2)); safe('fx', renderFx); safe('pct', renderPct);
 }
-async function main() {
-  const today = todayKST(), banner = document.getElementById('banner');
-  let idx = null;
-  try { idx = await getJSON('data/intraday/index.json'); } catch (e) { /* 아직 장중 데이터가 한 번도 없음 */ }
-  try { SER = await getJSON('data/series/investor_kospi.json'); } catch (e) { SER = null; }
-  try { VK = await getJSON('data/series/vkospi.json'); } catch (e) { VK = null; }
-  const date = idx && idx.dates && idx.dates.length ? (idx.dates.includes(today) ? today : idx.latest) : null;
-  if (date) { try { D = await getJSON(`data/intraday/${date}.json`); } catch (e) { D = null; } }
+// ── 로드·자동 갱신 ──
+// 장중(08:50~15:50 KST) 60초, 그 외 10분마다 오늘(없으면 최근 거래일) 파일을 다시 받아 내용이 바뀐 경우에만 다시 그림.
+// 탭이 백그라운드면 멈추고, 돌아오면 즉시 1회 갱신
+const REFRESH_SESSION_MS = 60e3, REFRESH_IDLE_MS = 600e3;
+let lastText = null, timer = null, loading = false;
+const kstHM = () => new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' });
+const inSession = () => { const hm = kstHM(); return hm >= '08:50' && hm <= '15:50'; };
+const hms = iso => (String(iso).match(/T(\d\d:\d\d:\d\d)/) || [])[1] || '';
 
+function renderHeader(flash) {
+  const today = todayKST(), banner = document.getElementById('banner'), meta = document.getElementById('meta');
+  const every = inSession() ? '1분' : '10분';
   if (!D) {
     banner.hidden = false;
     banner.textContent = `장중 데이터가 아직 없습니다. 평일 08:50~15:40 KST에 3분 간격으로 쌓입니다. (오늘 ${today})`;
-    document.getElementById('meta').textContent = '장중 데이터 없음';
-  } else {
-    if (D.date !== today) { banner.hidden = false; banner.textContent = `오늘(${today}) 장중 데이터 없음 — 휴장 또는 장 시작 전. 최근 거래일 ${D.date} 기록을 표시합니다.`; }
-    const staleN = [D.index && D.index.KOSPI, D.investor && D.investor.KOSPI, D.futures, D.program && D.program.KOSPI, D.usdkrw].filter(s => !s || s.stale).length;
-    document.getElementById('meta').innerHTML = `거래일 <b>${D.date}</b> · 갱신 <b>${fmtAsof(D.updated_at)}</b> KST · stale·누락 ${staleN}건`;
+    meta.textContent = `장중 데이터 없음 · 자동 확인 ${every}마다`;
+    return;
   }
-  renderAll();
+  banner.hidden = D.date === today;
+  if (D.date !== today) banner.textContent = `오늘(${today}) 장중 데이터 없음 — 휴장 또는 장 시작 전. 최근 거래일 ${D.date} 기록을 표시합니다.`;
+  const staleN = [D.index && D.index.KOSPI, D.investor && D.investor.KOSPI, D.futures, D.program && D.program.KOSPI, D.usdkrw].filter(s => !s || s.stale).length;
+  meta.innerHTML = `거래일 <b>${D.date}</b> · 갱신 <b id="upd">${hms(D.updated_at)}</b> KST · stale·누락 ${staleN}건 · 자동 갱신 ${every}마다`;
+  if (flash) {
+    const u = document.getElementById('upd');
+    u.classList.add('flash');
+    requestAnimationFrame(() => requestAnimationFrame(() => u.classList.remove('flash')));   // 다음 프레임에 빼서 서서히 사라지게
+  }
+}
+
+async function refresh() {
+  if (loading) return;
+  loading = true;
+  try {
+    const today = todayKST();
+    let idx = null;
+    try { idx = await getJSON('data/intraday/index.json'); } catch (e) { /* 아직 장중 데이터가 한 번도 없음 */ }
+    const date = idx && idx.dates && idx.dates.length ? (idx.dates.includes(today) ? today : idx.latest) : null;
+    let txt = null;
+    if (date) { try { txt = await getText(`data/intraday/${date}.json`); } catch (e) { txt = null; } }
+    if (txt === null) {
+      if (lastText === null) { D = null; renderHeader(false); renderAll(); lastText = ''; }
+      return;
+    }
+    if (txt === lastText) { renderHeader(false); return; }   // 바뀐 것 없음 (주기 표기만 갱신)
+    const first = !lastText;
+    lastText = txt; D = JSON.parse(txt);
+    renderHeader(!first);
+    renderAll();
+  } finally { loading = false; }
+}
+function schedule() {
+  clearTimeout(timer);
+  if (document.hidden) return;
+  timer = setTimeout(async () => { await refresh(); schedule(); }, inSession() ? REFRESH_SESSION_MS : REFRESH_IDLE_MS);
+}
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden) { clearTimeout(timer); return; }
+  await refresh(); schedule();
+});
+
+async function main() {
+  try { SER = await getJSON('data/series/investor_kospi.json'); } catch (e) { SER = null; }
+  try { VK = await getJSON('data/series/vkospi.json'); } catch (e) { VK = null; }
   document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
     market = b.dataset.mkt;
     document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
     renderMain(); renderPrg();
   }));
+  await refresh();
+  schedule();
 }
 main();
 </script>
