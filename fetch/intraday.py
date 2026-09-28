@@ -271,7 +271,8 @@ def main():
         return 1 if not args.force else SKIPPED
 
     snaps = {s["t"]: s for s in old.get("snapshots", [])}
-    if date == now.date().isoformat():  # 실시간 샘플만 기록 (--force로 지난 거래일을 채울 땐 생략)
+    # 실시간 샘플만 기록: 오늘 + 수집 창 안 (--force로 지난 거래일을 채우거나 장 마감 후 보충할 땐 생략)
+    if date == now.date().isoformat() and WINDOW[0] <= hhmm <= WINDOW[1]:
         snap = snapshot(now, doc)
         snaps[snap["t"]] = snap
     doc["snapshots"] = [snaps[t] for t in sorted(snaps)]
