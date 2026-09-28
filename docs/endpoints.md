@@ -239,6 +239,7 @@ E10 필드 + `openingPrice`, `highPriceOfDay`, `lowPriceOfDay`, `high/lowPriceOf
 | DXY | E16, 이력 E17 | |
 | WTI, Brent | E19, 이력 E20 | |
 | VIX | E21, 이력 E22 | |
+| (추가) 등락 종목 수 → ADR | E29 (당일만) | 이력 없음 → 장 마감 후 직접 누적 |
 
 ---
 
@@ -279,3 +280,27 @@ E25와 같은 경로, `marketType=FUT`. 09-23 422행 (~16:06 확정치).
 
 ### USD/KRW 장중
 E14 `/stockSecurity/exchange-rates/v2/USD/charts/round?bankType=hana` (하나은행 고시 회차별, 당일 6,255회, 650KB) → 1분 단위 마지막 값으로 축약해서 사용
+
+---
+
+## 7. 등락 종목 수 (ADR용, 2026-09-28 추가 캡처)
+
+캡처 화면: `/domestic/index/KOSPI/price`, `/domestic/index/KOSDAQ/price`, `/market/stock/kr`, `/market/stock/kr/stocklist/up`, 홈(`/`). API 응답 109건 중 등락 종목 수가 있는 것은 아래 2개. **둘 다 당일 스냅샷만, 일별 이력 없음** (날짜 파라미터 `bizdate`·`date`·`tradeDate`는 무시되고 당일 값이 옴).
+
+### E29. 지수 지표 + 등락 종목 수 ★ 수집용
+`GET /securityService/integration/v1/indicators?domesticIndexCodes=KOSPI,KOSDAQ&includeBreadth=true`
+- `domesticIndex.{KOSPI|KOSDAQ}.breadth`: `risingCount`, `fallingCount`, `unchangedCount`, `upperLimitCount`, `lowerLimitCount`, `exchangeType`(KRX)
+- `domesticIndex.{…}.price`: `marketStatus`(OPEN/CLOSE), `localTradedAt`(KST), `isHoliday`
+- 09-28 09:39: KOSPI 상승 628 · 하락 228 · 보합 54 · 상한 1 · 하한 0 / KOSDAQ 1,116 · 536 · 78 · 8 · 1
+- `foreignIndex`(.INX 등)에도 breadth가 있음 (미사용)
+- 수집 규칙(`fetch/naver.py breadth`): `marketStatus=CLOSE`이고, 날짜가 오늘이면 15:30 이후일 때만 저장. 합계 0이면 버림
+
+### E30. 지수 통합 (같은 값, 날짜 필드 없음)
+`GET /securityFe/api/index/{KOSPI|KOSDAQ}/integration` → `upDownStockInfo.{riseCount,fallCount,steadyCount,upperCount,lowerCount}` (문자열, 쉼표 포함). E29와 같은 시각에 같은 값. 날짜가 없어 E29 사용
+
+### 미확인
+- `risingCount`에 상한가(`upperLimitCount`)가 포함되는지. 현재 ADR 계산은 `risingCount`/`fallingCount` 그대로 사용
+- 집계 대상(ETF·ETN·우선주·스팩 포함 여부). KOSPI 합계 911(09-28 09:39)
+
+### 외부 (검증·과거분 후보, 수집 소스 아님)
+- `http://adrinfo.kr/chart`: 2026-09-28 10:0x KST Playwright 1회 접속 → **403** "Blocked due to excessive traffic. Please avoid crawling or frequent access during market hours". robots.txt는 curl에 "who are you?" 응답. 재시도 안 함

@@ -30,7 +30,7 @@ from .common import log, now_kst  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 SERIES_DIR = DATA / "series"
-PRIORITY = {"naver": 0, "pykrx": 1, "fred": 1, "yfinance": 2}
+PRIORITY = {"naver": 0, "pykrx": 1, "fred": 1, "yfinance": 2, "adrinfo": 3}
 MARKETS = ["KOSPI", "KOSDAQ"]
 UST_TENORS = ["1M", "2M", "3M", "6M", "1Y", "2Y", "3Y", "5Y", "7Y", "10Y", "20Y", "30Y"]
 
@@ -124,6 +124,22 @@ def latest_from_history(df):
     pct = None if not prev else round(chg / prev * 100, 2)
     return {"value": clean(last["value"]), "change": clean(chg), "change_pct": clean(pct),
             "source": last["source"], "asof": last["asof"]}
+
+
+ADR_N = 20
+
+
+def adr_from_breadth(recs):
+    """ADR = 최근 20거래일 상승 종목 수 합 ÷ 하락 종목 수 합 × 100. 누적 20일 미만이면 None.
+    누락된 날(마감 후 실행이 한 번도 안 돈 날)이 있으면 창이 20거래일보다 길어짐 — 미보정."""
+    out = []
+    for i in range(ADR_N - 1, len(recs)):
+        w = recs[i - ADR_N + 1:i + 1]
+        fall = sum(r["fall"] for r in w)
+        if fall:
+            out.append({"date": w[-1]["date"], "value": round(sum(r["rise"] for r in w) / fall * 100, 2),
+                        "source": "naver:indicators_breadth", "asof": w[-1]["asof"]})
+    return pd.DataFrame(out) if out else None
 
 
 def row_of(df, col, code):
@@ -241,6 +257,20 @@ def main():
             investor[m] = {**prev_inv[m], "stale": True}
             log.warning("investor %s: 실패 → stale", m)
 
+    # ── 등락 종목 수 → ADR ── 네이버에 이력이 없어 장 마감 후 스냅샷을 날짜별로 직접 누적하고
+    # 20일 ADR을 계산해 adr_*.json에 source=naver로 이어 붙임. 장중엔 breadth()가 None → 아무것도 안 함
+    bdf, breadth = call("naver", naver.breadth), {}
+    for m in MARKETS:
+        s = breadth[m] = Series(f"breadth_{m.lower()}", f"{m} 상승·하락 종목 수", "종목")
+        rows = None if bdf is None else bdf[bdf["market"] == m].drop(columns="market")
+        n_new = s.merge(rows if rows is not None and len(rows) else None)
+        if s.save():
+            changed.append(f"series/breadth_{m.lower()}.json (+{n_new})")
+        a = Series(f"adr_{m.lower()}", f"{m} ADR 20일", "%")
+        n_new = a.merge(adr_from_breadth(s.last(len(s))))
+        if a.save():
+            changed.append(f"series/adr_{m.lower()}.json (+{n_new})")
+
     # ── 외국인 상위 10 ──
     top, prev_top = {}, prev_latest.get("foreign_top", {})
     for m in MARKETS:
@@ -272,6 +302,11 @@ def main():
     for m, v in investor.items():
         print(f"investor {m:7} {v['date']} 외국인 {v['foreign']:,.0f}억 개인 {v['individual']:,.0f}억 "
               f"기관계 {v['institution']:,.0f}억  [{v['source']} {v['asof']}] stale={v['stale']}")
+    for m, bs in breadth.items():
+        if len(bs):
+            r = bs.last()[0]
+            print(f"breadth {m:7} {r['date']} 상승 {r['rise']} 하락 {r['fall']} 보합 {r['steady']} "
+                  f"[{r['source']} {r['asof']}] 누적 {len(bs)}일")
     for m, v in top.items():
         b, s_ = v["buy"][0], v["sell"][0]
         print(f"top {m:7} 매수1 {b['name']} {b['net_amount']:,}억 / 매도1 {s_['name']} {s_['net_amount']:,}억 "

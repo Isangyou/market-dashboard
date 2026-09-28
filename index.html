@@ -75,6 +75,8 @@
   td:first-child { color: var(--faint); width: 1.6em; }
   td.name { max-width: 9em; overflow: hidden; text-overflow: ellipsis; }
   .empty { color: var(--faint); font-size: 12px; padding: 24px 0; text-align: center; }
+  .hval { font-size: 12.5px; color: var(--text); font-variant-numeric: tabular-nums; }
+  .hval .k { color: var(--muted); margin-left: 8px; }
 
   footer { color: var(--faint); font-size: 11px; margin-top: 18px; line-height: 1.7; }
 
@@ -132,7 +134,7 @@
       <div class="sub">최근 3개월 · 일별 종가</div>
       <div class="sparks" id="sparks"></div>
     </div>
-    <div class="panel">
+    <div class="panel span2">
       <h2>유가 WTI · Brent</h2>
       <div class="sub" id="oil-sub"></div>
       <div id="oil-chart" class="chart" style="height:320px"></div>
@@ -141,6 +143,11 @@
       <h2>VIX · 20일 이동평균</h2>
       <div class="sub" id="vix-sub"></div>
       <div id="vix-chart" class="chart" style="height:320px"></div>
+    </div>
+    <div class="panel">
+      <div class="row"><h2>ADR 20일 등락비율</h2><span class="hval" id="adr-val"></span></div>
+      <div class="sub" id="adr-sub"></div>
+      <div id="adr-chart" class="chart" style="height:320px"></div>
     </div>
   </section>
 
@@ -165,7 +172,7 @@ const C = Object.fromEntries(['bg','panel','line','grid','text','muted','faint',
 
 const SERIES_KEYS = ['investor_kospi','investor_kosdaq','usdkrw','usdjpy','usdcnh','eurusd','dxy',
   'ust_1m','ust_2m','ust_3m','ust_6m','ust_1y','ust_2y','ust_3y','ust_5y','ust_7y','ust_10y','ust_20y','ust_30y',
-  'ktb_3y','ktb_10y','wti','brent','vix'];
+  'ktb_3y','ktb_10y','wti','brent','vix','breadth_kospi','breadth_kosdaq','adr_kospi','adr_kosdaq'];
 const TENORS = ['1M','2M','3M','6M','1Y','2Y','3Y','5Y','7Y','10Y','20Y','30Y'];
 // 항목별 1차 소스. 이 접두어가 아닌 레코드 = 폴백 → 점선
 const PRIMARY = { usdcnh: 'yfinance' };
@@ -212,24 +219,28 @@ function baseLayout(extra = {}) {
 }
 function plot(id, traces, layout) { delete layout._ax; Plotly.react(id, traces, layout, CONFIG); }
 
-/** 레코드 → [실선, 점선(폴백 구간), 호버 전용] 트레이스. 폴백 점선은 앞뒤 1차 점까지 이어 그림. */
-function lineTraces(recs, key, { name, color, width = 2, yaxis = 'y', xaxis = 'x', val = r => r.value, fmt = '.2f', unit = '', legend = true }) {
+/** 레코드 → [실선, 점선(폴백 구간), 호버 전용] 트레이스. 폴백 점선은 앞뒤 1차 점까지 이어 그림.
+ *  gapDays: 이웃 점과 이 일수보다 멀면 잇지 않음 (소스 사이 공백 구간을 선으로 메우지 않기 위함) */
+function lineTraces(recs, key, { name, color, width = 2, yaxis = 'y', xaxis = 'x', val = r => r.value, fmt = '.2f', unit = '', legend = true,
+                                 gapDays = Infinity, fbLabel = '폴백 구간' }) {
   const x = recs.map(r => r.date), y = recs.map(val);
   const pri = primaryOf(key);
   const fb = recs.map(r => !String(r.source).startsWith(pri));
+  // near[i]: i-1 → i 가 gapDays 이내
+  const near = x.map((d, i) => i > 0 && (new Date(d) - new Date(x[i - 1])) / 864e5 <= gapDays);
   const anyFb = fb.some(Boolean);
   const out = [{
     x, y: y.map((v, i) => fb[i] ? null : v), name, type: 'scatter', mode: 'lines', xaxis, yaxis,
     line: { color, width }, connectgaps: false, hoverinfo: 'skip', showlegend: legend, legendgroup: key,
   }];
   if (anyFb) out.push({
-    x, y: y.map((v, i) => (fb[i] || fb[i - 1] || fb[i + 1]) ? v : null), name: name + ' · 폴백 구간', type: 'scatter',
+    x, y: y.map((v, i) => (fb[i] || (fb[i - 1] && near[i]) || (fb[i + 1] && near[i + 1])) ? v : null), name: `${name} · ${fbLabel}`, type: 'scatter',
     mode: 'lines', xaxis, yaxis, line: { color, width, dash: 'dot' }, connectgaps: false, hoverinfo: 'skip',
     showlegend: legend, legendgroup: key,
   });
   out.push({
     x, y, name, type: 'scatter', mode: 'markers', xaxis, yaxis, marker: { size: 8, opacity: 0 }, showlegend: false,
-    customdata: recs.map((r, i) => r.source + (fb[i] ? ' · 폴백' : '')),
+    customdata: recs.map((r, i) => r.source + (fb[i] && fbLabel === '폴백 구간' ? ' · 폴백' : '')),
     hovertemplate: `%{y:${fmt}}${unit} <span style="color:${C.faint}">%{customdata}</span><extra>${name}</extra>`,
   });
   return out;
@@ -428,6 +439,31 @@ function renderOil() {
   document.getElementById('oil-sub').textContent = `최근 6개월 기본 (휠/드래그로 확대) · ${s.join(' | ')}`;
 }
 
+// range slider는 y축을 자동 조정하지 않음 → 보이는 기간의 값 최소/최대로 y축 맞춤
+// x: 날짜 배열, ys: x와 같은 길이의 값 배열들, fixed: 항상 포함할 값(기준선 등)
+function yFitter(x, ys, { fixed = [], minPad = 0.5 } = {}) {
+  return ([x0, x1]) => {
+    const a = String(x0).slice(0, 10), b = String(x1).slice(0, 10);
+    const vals = x.flatMap((d, i) => d >= a && d <= b ? ys.map(s => s[i]) : []).filter(y => y != null);
+    if (!vals.length) return null;
+    vals.push(...fixed);
+    const lo = Math.min(...vals), hi = Math.max(...vals), pad = Math.max((hi - lo) * 0.08, minPad);
+    return [lo - pad, hi + pad];
+  };
+}
+function keepYFit(id, yFit, full) {
+  const el = document.getElementById(id);
+  el._yFit = yFit; el._full = full;   // 재렌더 시 최신 데이터로 교체
+  if (el._yfitOn) return;             // 리스너 1회만 등록
+  el._yfitOn = true;
+  el.on('plotly_relayout', e => {
+    const r = e['xaxis.range'] || (e['xaxis.range[0]'] && [e['xaxis.range[0]'], e['xaxis.range[1]']]);
+    const x = r || (e['xaxis.autorange'] ? el._full : null);
+    const y = x && el._yFit(x.map(String));
+    if (y) Plotly.relayout(el, { 'yaxis.range': y });
+  });
+}
+
 // ── VIX + 20일 이동평균 (3개월 기본, range slider) ──
 function renderVix() {
   const v = recs('vix');
@@ -439,33 +475,54 @@ function renderVix() {
   const lay = baseLayout({ margin: { l: 40, r: 12, t: 30, b: 24 } });
   lay.xaxis = { ...lay.xaxis, range: [shiftDate(last, 91), shiftDate(last, -2)],
     rangeslider: { visible: true, thickness: 0.1, bgcolor: C.bg, bordercolor: C.line, borderwidth: 1 } };
-  // range slider는 y축을 자동 조정하지 않음 → 보이는 기간의 VIX·이평 최소/최대로 y축 맞춤
-  const yFit = ([x0, x1]) => {
-    const ys = v.flatMap((r, i) => r.date >= x0.slice(0, 10) && r.date <= x1.slice(0, 10) ? [r.value, ma[i]] : []).filter(y => y != null);
-    if (!ys.length) return null;
-    const lo = Math.min(...ys), hi = Math.max(...ys), pad = Math.max((hi - lo) * 0.08, 0.5);
-    return [lo - pad, hi + pad];
-  };
+  const yFit = yFitter(x, [v.map(r => r.value), ma]);
   lay.yaxis = { ...lay.yaxis, tickformat: '.0f', range: yFit(lay.xaxis.range) };
   plot('vix-chart', [
     ...lineTraces(v, 'vix', { name: 'VIX', color: C.accent }),
     { x, y: ma, name: '20일 이동평균', type: 'scatter', mode: 'lines', line: { color: C.gray1, width: 1.4, dash: 'dash' },
       connectgaps: false, hovertemplate: '%{y:.2f}<extra>20일 이평</extra>' },
   ], lay);
-  const el = document.getElementById('vix-chart');
-  if (!el._yfit) {   // 리스너 1회만 등록
-    el._yfit = true;
-    el.on('plotly_relayout', e => {
-      const r = e['xaxis.range'] || (e['xaxis.range[0]'] && [e['xaxis.range[0]'], e['xaxis.range[1]']]);
-      const x = r || (e['xaxis.autorange'] ? [v[0].date, last] : null);
-      const y = x && yFit(x.map(String));
-      if (y) Plotly.relayout(el, { 'yaxis.range': y });
-    });
-  }
+  keepYFit('vix-chart', yFit, [x[0], last]);
   const it = L.items.vix, m = ma[ma.length - 1];
   document.getElementById('vix-sub').textContent = `3개월 기본 · 일별 종가 · ${v[0].date} ~ ${last}` +
     (m != null ? ` · 20일 이평 ${nf(m)} (VIX ${v[v.length - 1].value >= m ? '≥' : '<'} 이평)` : '') +
     (it ? ` · ${srcLine(it.source, it.asof)}` : ` · ${v[v.length - 1].source}`);
+}
+
+// ── ADR 20일 등락비율 (코스피·코스닥, 3개월 기본, range slider) ──
+// ADR = 최근 20거래일 상승 종목 수 합 ÷ 하락 종목 수 합 × 100 (fetch/run.py adr_from_breadth).
+// 1차 = naver(장 마감 후 등락 종목 수를 직접 누적해 계산, 실선). 과거분 adrinfo = 폴백 취급 점선
+const ADR_N = 20;
+function renderAdr() {
+  const mk = [['adr_kospi', 'breadth_kospi', '코스피', C.accent], ['adr_kosdaq', 'breadth_kosdaq', '코스닥', C.gray1]]
+    .map(([k, bk, name, color]) => ({ k, name, color, rs: recs(k), n: recs(bk).length }));
+  // 네이버 집계가 20거래일 쌓여 첫 ADR이 나오기 전까지 진행 표시
+  const n = Math.min(...mk.map(o => o.n)), naverAdr = mk.some(o => o.rs.some(r => String(r.source).startsWith('naver')));
+  const acc = naverAdr ? '' : `네이버 집계 누적 중 (${n}/${ADR_N}일)`;
+  const cur = mk.map(o => { const r = o.rs[o.rs.length - 1]; return r ? `<span class="k">${o.name}</span> ${nf(r.value, 1)}` : ''; }).join('');
+  document.getElementById('adr-val').innerHTML = cur + (acc ? `<span class="tag" style="margin-left:8px">${acc}</span>` : '');
+  const lastR = mk.map(o => o.rs[o.rs.length - 1]).filter(Boolean)[0];
+  document.getElementById('adr-sub').textContent = '3개월 기본 · 최근 20거래일 상승 합 ÷ 하락 합 × 100 · 120·75 기준선 · 실선 naver 계산, 점선 adrinfo 과거분' +
+    (lastR ? ` · ${srcLine(lastR.source, lastR.asof)}` : '');
+  if (!mk.some(o => o.rs.length)) {
+    document.getElementById('adr-chart').innerHTML = `<div class="empty">${acc || '데이터 없음'} · ADR은 ${ADR_N}거래일째부터 표시</div>`;
+    return;
+  }
+  const dates = [...new Set(mk.flatMap(o => o.rs.map(r => r.date)))].sort();
+  const first = dates[0], last = dates[dates.length - 1];
+  const lay = baseLayout({ margin: { l: 40, r: 12, t: 30, b: 24 } });
+  lay.xaxis = { ...lay.xaxis, range: [shiftDate(last, 91) > first ? shiftDate(last, 91) : first, shiftDate(last, -2)],
+    rangeslider: { visible: true, thickness: 0.1, bgcolor: C.bg, bordercolor: C.line, borderwidth: 1 } };
+  // 기준선은 shape(연한 회색 점선) — 범례·호버에 안 섞임
+  lay.shapes = [120, 75].map(y => ({ type: 'line', xref: 'paper', x0: 0, x1: 1, y0: y, y1: y,
+    line: { color: C.gray2, width: 1, dash: 'dot' }, layer: 'below' }));
+  lay.annotations = [120, 75].map(y => ({ xref: 'paper', x: 1, y, text: String(y), showarrow: false,
+    xanchor: 'right', yanchor: 'bottom', font: { size: 10, color: C.faint } }));
+  const byDate = o => { const m = new Map(o.rs.map(r => [r.date, r.value])); return dates.map(d => m.has(d) ? m.get(d) : null); };
+  const yFit = yFitter(dates, mk.map(byDate), { fixed: [75, 120], minPad: 2 });
+  lay.yaxis = { ...lay.yaxis, tickformat: '.0f', range: yFit(lay.xaxis.range) };
+  plot('adr-chart', mk.flatMap(o => lineTraces(o.rs, o.k, { name: o.name, color: o.color, width: o.k === 'adr_kospi' ? 2 : 1.6, fmt: '.1f', gapDays: 7, fbLabel: 'adrinfo' })), lay);
+  keepYFit('adr-chart', yFit, [first, last]);
 }
 
 // ── 상위 종목 테이블 ──
@@ -510,7 +567,7 @@ async function main() {
 
   const safe = (name, fn) => { try { fn(); } catch (e) { console.error(name, e); } };
   safe('cards', renderCards); safe('main', renderMain); safe('curve', renderCurve); safe('ust', renderUst);
-  safe('ktb', renderKtb); safe('sparks', renderSparks); safe('oil', renderOil); safe('vix', renderVix); safe('tables', renderTables);
+  safe('ktb', renderKtb); safe('sparks', renderSparks); safe('oil', renderOil); safe('vix', renderVix); safe('adr', renderAdr); safe('tables', renderTables);
 
   document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
     market = b.dataset.mkt;

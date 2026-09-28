@@ -207,6 +207,31 @@ def usdkrw_latest():
                           "source": "naver:hana", "asof": to_kst_iso(b["announcedAt"])}])
 
 
+@safe
+def breadth():
+    """E29. 코스피·코스닥 상승·하락·보합 종목 수 (당일 스냅샷만, 이력 없음).
+    장 마감(marketStatus=CLOSE) 뒤 값만 반환 — 장중 값은 누적하지 않는다. 장중이면 None(@safe)."""
+    b = _get("/securityService/integration/v1/indicators",
+             {"domesticIndexCodes": "KOSPI,KOSDAQ", "includeBreadth": "true"})
+    if b is None:
+        return None
+    now = now_kst()
+    rows = []
+    for m in ("KOSPI", "KOSDAQ"):
+        it = b["domesticIndex"][m]
+        pr, br = it["price"], it["breadth"]
+        asof = to_kst_iso(pr["localTradedAt"])
+        # 같은 날짜는 15:30 이후만 (장 시작 전 CLOSE 상태에서 당일 날짜로 0/전일 값이 오는 경우 방지)
+        if pr.get("marketStatus") != "CLOSE" or (asof[:10] == now.strftime("%Y-%m-%d") and now.strftime("%H:%M") < "15:30"):
+            continue
+        r = {k: int(_num(br[f])) for k, f in (("rise", "risingCount"), ("fall", "fallingCount"),
+             ("steady", "unchangedCount"), ("upper", "upperLimitCount"), ("lower", "lowerLimitCount"))}
+        if r["rise"] + r["fall"] + r["steady"] == 0:
+            continue
+        rows.append({"market": m, "date": asof[:10], **r, "source": "naver:indicators_breadth", "asof": asof})
+    return pd.DataFrame(rows, columns=["market", "date", "rise", "fall", "steady", "upper", "lower", "source", "asof"])
+
+
 # ── 시계열 ────────────────────────────────────────────────────────
 
 @safe
