@@ -219,28 +219,24 @@ function baseLayout(extra = {}) {
 }
 function plot(id, traces, layout) { delete layout._ax; Plotly.react(id, traces, layout, CONFIG); }
 
-/** 레코드 → [실선, 점선(폴백 구간), 호버 전용] 트레이스. 폴백 점선은 앞뒤 1차 점까지 이어 그림.
- *  gapDays: 이웃 점과 이 일수보다 멀면 잇지 않음 (소스 사이 공백 구간을 선으로 메우지 않기 위함) */
-function lineTraces(recs, key, { name, color, width = 2, yaxis = 'y', xaxis = 'x', val = r => r.value, fmt = '.2f', unit = '', legend = true,
-                                 gapDays = Infinity, fbLabel = '폴백 구간' }) {
+/** 레코드 → [실선, 점선(폴백 구간), 호버 전용] 트레이스. 폴백 점선은 앞뒤 1차 점까지 이어 그림. */
+function lineTraces(recs, key, { name, color, width = 2, yaxis = 'y', xaxis = 'x', val = r => r.value, fmt = '.2f', unit = '', legend = true }) {
   const x = recs.map(r => r.date), y = recs.map(val);
   const pri = primaryOf(key);
   const fb = recs.map(r => !String(r.source).startsWith(pri));
-  // near[i]: i-1 → i 가 gapDays 이내
-  const near = x.map((d, i) => i > 0 && (new Date(d) - new Date(x[i - 1])) / 864e5 <= gapDays);
   const anyFb = fb.some(Boolean);
   const out = [{
     x, y: y.map((v, i) => fb[i] ? null : v), name, type: 'scatter', mode: 'lines', xaxis, yaxis,
     line: { color, width }, connectgaps: false, hoverinfo: 'skip', showlegend: legend, legendgroup: key,
   }];
   if (anyFb) out.push({
-    x, y: y.map((v, i) => (fb[i] || (fb[i - 1] && near[i]) || (fb[i + 1] && near[i + 1])) ? v : null), name: `${name} · ${fbLabel}`, type: 'scatter',
+    x, y: y.map((v, i) => (fb[i] || fb[i - 1] || fb[i + 1]) ? v : null), name: name + ' · 폴백 구간', type: 'scatter',
     mode: 'lines', xaxis, yaxis, line: { color, width, dash: 'dot' }, connectgaps: false, hoverinfo: 'skip',
     showlegend: legend, legendgroup: key,
   });
   out.push({
     x, y, name, type: 'scatter', mode: 'markers', xaxis, yaxis, marker: { size: 8, opacity: 0 }, showlegend: false,
-    customdata: recs.map((r, i) => r.source + (fb[i] && fbLabel === '폴백 구간' ? ' · 폴백' : '')),
+    customdata: recs.map((r, i) => r.source + (fb[i] ? ' · 폴백' : '')),
     hovertemplate: `%{y:${fmt}}${unit} <span style="color:${C.faint}">%{customdata}</span><extra>${name}</extra>`,
   });
   return out;
@@ -491,18 +487,17 @@ function renderVix() {
 
 // ── ADR 20일 등락비율 (코스피·코스닥, 3개월 기본, range slider) ──
 // ADR = 최근 20거래일 상승 종목 수 합 ÷ 하락 종목 수 합 × 100 (fetch/run.py adr_from_breadth).
-// 1차 = naver(장 마감 후 등락 종목 수를 직접 누적해 계산, 실선). 과거분 adrinfo = 폴백 취급 점선
+// 네이버에 이력이 없어 09-28 장 마감분부터 직접 누적(과거분 없음). 20거래일 쌓이기 전엔 '누적 중' 표시
 const ADR_N = 20;
 function renderAdr() {
   const mk = [['adr_kospi', 'breadth_kospi', '코스피', C.accent], ['adr_kosdaq', 'breadth_kosdaq', '코스닥', C.gray1]]
     .map(([k, bk, name, color]) => ({ k, name, color, rs: recs(k), n: recs(bk).length }));
-  // 네이버 집계가 20거래일 쌓여 첫 ADR이 나오기 전까지 진행 표시
-  const n = Math.min(...mk.map(o => o.n)), naverAdr = mk.some(o => o.rs.some(r => String(r.source).startsWith('naver')));
-  const acc = naverAdr ? '' : `네이버 집계 누적 중 (${n}/${ADR_N}일)`;
+  const n = Math.min(...mk.map(o => o.n));
+  const acc = n < ADR_N ? `누적 중 (${n}/${ADR_N}일)` : '';
   const cur = mk.map(o => { const r = o.rs[o.rs.length - 1]; return r ? `<span class="k">${o.name}</span> ${nf(r.value, 1)}` : ''; }).join('');
   document.getElementById('adr-val').innerHTML = cur + (acc ? `<span class="tag" style="margin-left:8px">${acc}</span>` : '');
   const lastR = mk.map(o => o.rs[o.rs.length - 1]).filter(Boolean)[0];
-  document.getElementById('adr-sub').textContent = '3개월 기본 · 최근 20거래일 상승 합 ÷ 하락 합 × 100 · 120·75 기준선 · 실선 naver 계산, 점선 adrinfo 과거분' +
+  document.getElementById('adr-sub').textContent = '3개월 기본 · 최근 20거래일 상승 합 ÷ 하락 합 × 100 · 120·75 기준선 · 09-28부터 장 마감 후 등락 종목 수 누적' +
     (lastR ? ` · ${srcLine(lastR.source, lastR.asof)}` : '');
   if (!mk.some(o => o.rs.length)) {
     document.getElementById('adr-chart').innerHTML = `<div class="empty">${acc || '데이터 없음'} · ADR은 ${ADR_N}거래일째부터 표시</div>`;
@@ -521,7 +516,7 @@ function renderAdr() {
   const byDate = o => { const m = new Map(o.rs.map(r => [r.date, r.value])); return dates.map(d => m.has(d) ? m.get(d) : null); };
   const yFit = yFitter(dates, mk.map(byDate), { fixed: [75, 120], minPad: 2 });
   lay.yaxis = { ...lay.yaxis, tickformat: '.0f', range: yFit(lay.xaxis.range) };
-  plot('adr-chart', mk.flatMap(o => lineTraces(o.rs, o.k, { name: o.name, color: o.color, width: o.k === 'adr_kospi' ? 2 : 1.6, fmt: '.1f', gapDays: 7, fbLabel: 'adrinfo' })), lay);
+  plot('adr-chart', mk.flatMap(o => lineTraces(o.rs, o.k, { name: o.name, color: o.color, width: o.k === 'adr_kospi' ? 2 : 1.6, fmt: '.1f' })), lay);
   keepYFit('adr-chart', yFit, [first, last]);
 }
 

@@ -30,7 +30,7 @@ from .common import log, now_kst  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 SERIES_DIR = DATA / "series"
-PRIORITY = {"naver": 0, "pykrx": 1, "fred": 1, "yfinance": 2, "adrinfo": 3}
+PRIORITY = {"naver": 0, "pykrx": 1, "fred": 1, "yfinance": 2}
 MARKETS = ["KOSPI", "KOSDAQ"]
 UST_TENORS = ["1M", "2M", "3M", "6M", "1Y", "2Y", "3Y", "5Y", "7Y", "10Y", "20Y", "30Y"]
 

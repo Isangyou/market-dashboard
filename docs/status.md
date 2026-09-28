@@ -16,9 +16,9 @@
 | 일별 배치 | `.github/workflows/update.yml` | 매시 정각 + 거래일 장중 :15/:30/:45. 푸시 후 pages.yml 호출 |
 | 장중 배치 | `.github/workflows/intraday.yml` + `scripts/intraday_loop.sh` | **시작 트리거 = 외부 스케줄러(cron-job.org → workflow_dispatch API, 08:35/08:50/09:05, 사용자 등록 대기)** + GitHub cron 08:35(+08:50~15:35 15분마다 예비, 보조) → 08:50까지 대기 → **3분 루프**(수집·커밋·푸시, 09-28 오전까지 5분). 오전(~12:10)·오후(~15:40, 15:40 회차 보장) 두 잡. 먼저 시작된 실행이 진행 중이면 새 실행은 calendar 잡에서 dup 판정 후 종료. 수동 `mode=loop/once/once-force` |
 | 배포 | `.github/workflows/pages.yml` | Actions 배포(deploy-pages). 사람 푸시=push 이벤트, 봇 푸시=워크플로가 `gh workflow run pages.yml` 호출 |
-| 화면 | `index.html`(일별·라이트), `intraday.html`(장중·다크) | 상호 링크에 테마 표기. 일별에 VIX 독립 차트(3개월 기본·20일 이평·range slider, 보이는 구간에 y축 맞춤), 유가는 WTI·Brent만(한 줄 전체 폭). **VIX 옆 ADR 20일 차트**(코스피·코스닥, 3개월·range slider, 120·75 연회색 점선, naver 실선/adrinfo 점선, 7일 넘는 공백은 잇지 않음, 네이버 20일 전까지 '네이버 집계 누적 중 (n/20일)'). 빈 데이터·부분 누락 상태에서 에러 없음(데스크톱 1440/모바일 390) |
+| 화면 | `index.html`(일별·라이트), `intraday.html`(장중·다크) | 상호 링크에 테마 표기. 일별에 VIX 독립 차트(3개월 기본·20일 이평·range slider, 보이는 구간에 y축 맞춤), 유가는 WTI·Brent만(한 줄 전체 폭). **VIX 옆 ADR 20일 차트**(코스피·코스닥, 3개월·range slider, 120·75 연회색 점선, 20거래일 쌓이기 전엔 차트 자리와 제목 옆에 '누적 중 (n/20일)'). 빈 데이터·부분 누락 상태에서 에러 없음(데스크톱 1440/모바일 390) |
 | 엔드포인트 | `docs/endpoints.md` | E1~E23 일별, E24~E28 장중, E29~E30 등락 종목 수 |
-| ADR | `fetch/naver.py breadth`(E29) → `data/series/breadth_*.json` → `fetch/run.py adr_from_breadth` → `data/series/adr_*.json` | 네이버는 당일 스냅샷만 → **09-28 장 마감분부터 누적**. 첫 naver ADR = 20거래일째(약 10-27). 과거분 adrinfo 미확보(아래) |
+| ADR | `fetch/naver.py breadth`(E29) → `data/series/breadth_*.json` → `fetch/run.py adr_from_breadth` → `data/series/adr_*.json` | 네이버는 당일 스냅샷만 → **09-28 장 마감분부터 누적**. 첫 ADR = 20거래일째(약 10-27). **과거분 없음**(adrinfo 403, 아래) |
 
 ## 소스 상태
 | 소스 | 상태 |
@@ -58,7 +58,7 @@
 - **수동 실행**: 09:06 KST `workflow_dispatch`(run 36360908144, mode=loop). 스냅샷 09:06 → 09:10 → 09:15 정상 누적, 커밋 3건(`intraday: 2026-09-28 09:06/09:10/09:15 KST`)
 - **예비 cron도 누락**: 새 cron 푸시(09:19) 뒤 09:20·09:35·09:50 회차 모두 실행 0건 → GitHub schedule만으로는 시작 보장 불가. 외부 스케줄러로 전환 결정
 - **workflow_dispatch API 경로 확인**: `POST /repos/Isangyou/market-dashboard/actions/workflows/intraday.yml/dispatches` `{"ref":"main","inputs":{"mode":"loop"}}` → 204, run 36363289132 생성. calendar 잡이 "먼저 시작된 실행 진행 중(36360908144) → 이번 실행은 건너뜀", am·pm skipped (중복 판정 동작 확인)
-- **ADR 과거분(adrinfo.kr)**: 10:0x KST Playwright 1회 접속 → 403 "Blocked due to excessive traffic. Please avoid crawling or frequent access during market hours". 재시도 안 함 → 과거분 없음. 받게 되면 `data/series/adr_*.json`에 `source=adrinfo`로 저장(PRIORITY adrinfo=3, 겹치는 날짜는 naver가 우선). 원본은 별도 파일로 보존해 대조용
+- **ADR 과거분(adrinfo.kr)**: 09:5x·10:10 KST 두 번 접속 모두 403 "Blocked due to excessive traffic. Please avoid crawling or frequent access during market hours" → **과거분 포기, 09-28부터 네이버 누적만**. 이 사이트는 다시 호출하지 않음
 - **장중 간격 5분 → 3분** (09-28 커밋 이후). 오늘 오전 잡은 이미 체크아웃한 5분 스크립트로 계속, 12:10 오후 잡부터 3분. 1회 수집 약 13초(요청 간격 1.1초 유지)
 
 ## 미검증 (다음 거래일 09-29에 확인)
@@ -72,7 +72,7 @@
 7. **휴장일 게이트**: 다음 평일 휴장일(2026-10-05 개천절 대체휴일로 추정, 미확인)에 update.yml 장중 cron이 생략되고 intraday 잡이 skip되는지(예비 트리거 29회 모두 calendar 잡만 돌고 끝나야 함)
 
 ## 열린 이슈 / 다음 할 일 후보
-- **ADR 계산 기준 미확인**: `risingCount`에 상한가 포함 여부, ETF·우선주 포함 여부. adrinfo 과거분과 겹치는 날짜가 생기면 오차를 여기 기록하고 차이가 크면 기준 조정. 지금 구조로는 adrinfo를 다시 부르지 않으므로 naver ADR(20일째부터)과 겹치는 날짜가 없을 수 있음
+- **ADR 계산 기준 미확인**: `risingCount`에 상한가 포함 여부, ETF·우선주 포함 여부. 외부 대조 소스 없음(adrinfo 403) → 공개 시황 기사 등의 등락 종목 수와 수기 대조가 필요할 수 있음
 - **ADR 누락일**: 마감 후 update-data가 한 번도 안 돈 날은 breadth가 빠지고, ADR 창이 20거래일보다 길어짐(미보정)
 - **VKOSPI(장중 페이지 추가) 보류 (2026-09-27)**: 네이버 미제공, KRX 계정 필요.
   - 네이버 확인 결과: `/domestic/index/VKOSPI` 페이지 없음(홈 리다이렉트), E24 차트에 VKOSPI·VKOSPI200·KPI200VOL·KVIX 등 7개 코드 빈 배열, `index/{code}/basic` 409 StockConflict, polling·검색 자동완성에도 없음. yfinance `^VKOSPI` 등도 없음

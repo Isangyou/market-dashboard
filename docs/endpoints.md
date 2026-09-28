@@ -302,5 +302,7 @@ E14 `/stockSecurity/exchange-rates/v2/USD/charts/round?bankType=hana` (하나은
 - `risingCount`에 상한가(`upperLimitCount`)가 포함되는지. 현재 ADR 계산은 `risingCount`/`fallingCount` 그대로 사용
 - 집계 대상(ETF·ETN·우선주·스팩 포함 여부). KOSPI 합계 911(09-28 09:39)
 
-### 외부 (검증·과거분 후보, 수집 소스 아님)
-- `http://adrinfo.kr/chart`: 2026-09-28 10:0x KST Playwright 1회 접속 → **403** "Blocked due to excessive traffic. Please avoid crawling or frequent access during market hours". robots.txt는 curl에 "who are you?" 응답. 재시도 안 함
+### 외부 (과거분 후보였음 — 사용 안 함)
+- `http://adrinfo.kr/chart`: 2026-09-28 Playwright 접속 2회(09:5x, 10:10:37 KST, 사용자 지시로 1회 재시도) 모두 **403** `text/html` 94B:
+  `<html><head></head><body>Blocked due to excessive traffic. Please avoid crawling or frequent access during market hours</body></html>`
+  robots.txt는 curl에 "who are you?" 응답. 데이터 엔드포인트 미확인. **결론: 과거분 없이 네이버 누적만 사용, 이 사이트는 다시 호출하지 않음**
