@@ -14,7 +14,7 @@
 | 장중 수집 | `fetch/intraday.py` | 휴장일 skip, `--force` 백필, 증분 페이지 수집 확인 |
 | 휴장일 판정 | `fetch/market_day.py` | 네이버 market-status `today.isTradingDay`. 실패 시 평일=거래일 |
 | 일별 배치 | `.github/workflows/update.yml` | 매시 정각 + 거래일 장중 :15/:30/:45. 푸시 후 pages.yml 호출 |
-| 장중 배치 | `.github/workflows/intraday.yml` + `scripts/intraday_loop.sh` + `scripts/intraday_guard.sh` | 시작 = 외부 스케줄러(cron-job.org → workflow_dispatch API, 08:35/08:50/09:05, 사용자 등록 예정) + GitHub cron 보조(08:35~15:35 15분마다) → 08:50까지 대기 → **3분 루프**(수집 timeout 150초, 단계별 로그). 오전(~12:10)·오후(~15:40, 15:40 회차 보장) 두 잡. 중복 판정: 먼저 시작된 실행이 살아 있으면 skip, 10분 넘게 활동 없으면 cancel(→force-cancel) 후 새로 시작. 수동 `mode=loop/once/once-force` |
+| 장중 배치 | `.github/workflows/intraday.yml` + `scripts/intraday_loop.sh` + `scripts/intraday_guard.sh` | **장중 루프 시작은 당분간 수동(Actions → intraday → Run workflow, mode=loop), 외부 스케줄러는 추후** (2026-09-28 결정). GitHub cron 보조(08:35~15:35 15분마다)는 유지 — 뜨면 자동 시작 → 08:50까지 대기 → **3분 루프**(수집 timeout 150초, 단계별 로그). 오전(~12:10)·오후(~15:40, 15:40 회차 보장) 두 잡. 중복 판정: 먼저 시작된 실행이 살아 있으면 skip, 10분 넘게 활동 없으면 cancel(→force-cancel) 후 새로 시작. 수동 `mode=loop/once/once-force` |
 | 배포 | `.github/workflows/pages.yml` | Actions 배포(deploy-pages). 사람 푸시=push 이벤트, 봇 푸시=워크플로가 `gh workflow run pages.yml` 호출 |
 | 화면 | `index.html`(일별·라이트), `intraday.html`(장중·다크) | 상호 링크에 테마 표기. 일별에 VIX 독립 차트(3개월 기본·20일 이평·range slider, 보이는 구간에 y축 맞춤), 유가는 WTI·Brent만(유가 | VIX 한 줄). **ADR 차트 비활성 — 20일 누적 후 활성화 가능**(`index.html` `ADR_ENABLED = true`로 켜면 유가가 한 줄 전체 폭 + VIX | ADR, 3개월·range slider·120·75 연회색 점선, 20거래일 전엔 '누적 중 (n/20일)'). 상단 카드 9개 3×3(모바일 2열, VKOSPI 추가). **VIX | VKOSPI**(유가 한 줄 전체 폭, VKOSPI 원값만 — ND 조항으로 이평선 없음, 아래 'KRED, CC BY-NC-ND 4.0'). 장중 페이지 카드 7개 4+3, VKOSPI 전일 종가 + 직전 60거래일 분위(장중값 아님). **증시자금동향 행**(유가 | VIX 아래, 3열 카드: 고객예탁금·신용잔고·주식형펀드 기본 + 혼합형·채권형 토글, 최신값·전주대비(7일 전 이하 마지막 값)·기준일·지연 거래일 수(투자자 일별 날짜로 셈), 3개월, 1만억 이상 조, 신용잔고 90일 고점 대비). 빈 데이터·부분 누락 상태에서 에러 없음(데스크톱 1440/모바일 390) |
 | 엔드포인트 | `docs/endpoints.md` | E1~E23 일별, E24~E28 장중, E29~E30 등락 종목 수, E31~E32 증시자금동향, E33 VKOSPI(KRED) |
@@ -70,9 +70,9 @@
 - 루프 5분 → **3분**(수집·커밋·푸시), 15:40 회차 보장. 1회 수집 약 13~15초(요청 간격 1.1초 유지)
 - 수집 1회 `timeout 150`(rc=124 경고 후 다음 회차) + 단계별 로그(`[HH:MM:SS] #n fetch 끝 rc=… Ns`, `commit`, `push 성공 (시도 i, Ns)`, `대기 Ns → HH:MM:SS`)
 - 중복 판정: 먼저 시작된 실행의 마지막 활동 = max(마지막 장중 커밋, 그 실행 시작, 08:50) 이 **600초 이상**이면 cancel → 60초 무응답이면 force-cancel → 새 실행 진행. 살아 있으면 skip. 조회 실패 시 진행. 가짜 gh로 5개 경우 검증(없음/08:50 대기 중/활동 3분 전/25분 무활동→cancel/무응답→force-cancel). **죽은 실행 취소 경로는 실환경 미확인**
-- 시작 트리거: **외부 스케줄러(cron-job.org, 사용자 등록 예정)** + GitHub cron(보조, 08:35~15:35 15분마다) 유지
+- 시작 트리거: **장중 루프 시작은 당분간 수동(Actions → intraday → Run workflow, mode=loop), 외부 스케줄러는 추후**. GitHub cron(보조, 08:35~15:35 15분마다)은 유지
 
-### 외부 스케줄러 (cron-job.org) 등록값 — 토큰은 사용자가 직접 입력
+### 외부 스케줄러 (cron-job.org) 등록값 — **보류(추후 등록)**, 토큰은 사용자가 직접 입력
 - 토큰: fine-grained PAT, 저장소 `Isangyou/market-dashboard`만, Repository permissions → **Actions: Read and write** (Metadata read-only 자동)
 - 3건: 월~금 **08:35 / 08:50 / 09:05**, 시간대 **Asia/Seoul**
 - `POST https://api.github.com/repos/Isangyou/market-dashboard/actions/workflows/intraday.yml/dispatches`
@@ -85,10 +85,10 @@
 - 증시자금동향 행(2002-05-03~ 6,006일), VKOSPI(KRED, 2010-01-04~ 4,118행, 원값만), 상단 카드 9개
 
 ## 09-29 (화) 확인할 점
-1. **외부 트리거**: cron-job.org 3건이 08:35·08:50·09:05에 204로 떴는지(cron-job.org 실행 기록), Actions에 `workflow_dispatch` 실행 3건 → 첫 건만 루프, 나머지 2건은 calendar 로그 `[guard] … 살아 있음, 건너뜀`
-2. **08:35 실행의 08:50 대기**: 08:50 트리거가 대기 중인 08:35 실행을 죽이지 않는지(guard 로그 "마지막 활동 Ns 전"이 600 미만)
+1. **루프 시작(수동)**: 장중 루프 시작은 당분간 수동(Actions → intraday → Run workflow, mode=loop), 외부 스케줄러는 추후. 08:50 전에 실행해도 됨(08:50까지 대기 후 시작). GitHub 보조 cron이 먼저 떴으면 수동 실행은 calendar 로그 `[guard] … 살아 있음, 건너뜀`으로 끝나는 게 정상
+2. **08:50 전 시작한 실행의 대기**: 이후 뜬 트리거(보조 cron·수동)가 대기 중인 실행을 죽이지 않는지(guard 로그 "마지막 활동 Ns 전"이 600 미만)
 3. **3분 루프 전체**: 오전 약 68회·오후 약 72회, 마지막 15:40:05, 로그 끝 줄 `루프 종료 … 실행 N회 · 푸시 M회`. 단계별 로그로 fetch·push 소요 분포, `rc=124`(timeout) 발생 여부
-4. **멈춤 재발 시**: 10분 뒤 다음 트리거(외부 or GitHub 예비 cron)가 cancel/force-cancel 후 새로 시작하는지 — 공백이 최대 약 25분(10분 판정 + 15분 트리거 간격)으로 줄어드는지
+4. **멈춤 재발 시**: 10분 뒤 다음 트리거(GitHub 보조 cron 또는 수동 실행)가 cancel/force-cancel 후 새로 시작하는지. 보조 cron이 누락되면 자동 복구 안 됨 → 커밋이 10분 넘게 없으면 수동으로 mode=loop 실행
 5. **update-data**: 마감 후 1회라도 돌아서 `breadth_*.json`에 09-28·09-29 행이 생기는지, KRED 첫 자동 요청(16:30 이후, `meta.kred_fetches` 1건)으로 vkospi.json에 09-24 이후 값이 붙는지(KRED 당일 반영 시각 미확인)
 6. **Pages 배포**: 3분 루프로 시간당 최대 20회 dispatch — pages concurrency로 중간 건 취소·배포 지연
 7. **장 시작 전(08:50~09:00)**: 전일 데이터가 대상일 필터로 버려지는지
