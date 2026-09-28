@@ -19,7 +19,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     __package__ = "fetch"
 
-from . import market_day, naver  # noqa: E402
+from . import market_day, naver, yf  # noqa: E402
 from .common import log, now_kst, ymd_to_iso  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -178,6 +178,21 @@ def usdkrw_round(date: str):
 
 # ── 저장 ─────────────────────────────────────────────────────────
 
+def us_futures(now, date, old: dict):
+    """NQ=F·CL=F 1분봉 (yfinance, 지연). 같은 시각(t)은 새 값으로 덮어쓰고 이전 행은 유지.
+    실시간 수집일(date == 오늘)에만 받는다 — --force로 지난 날을 채울 땐 이전 값 그대로."""
+    out = {}
+    for sym in yf.US_FUT:
+        o = (old or {}).get(sym)
+        new = yf.us_future_1m(sym, now) if date == now.date().isoformat() else None
+        if new and o and o.get("since") == new["since"]:
+            by_t = {r["t"]: r for r in o.get("rows", [])}
+            by_t.update({r["t"]: r for r in new["rows"]})
+            new["rows"] = [by_t[t] for t in sorted(by_t)]
+        out[sym] = keep_or_stale(new, o, f"us_futures {sym}")
+    return out
+
+
 def keep_or_stale(new, old, name):
     if new is not None:
         return {**new, "stale": False}
@@ -248,6 +263,7 @@ def main():
         "futures_price": keep_or_stale(futures_price(date), old.get("futures_price"), "futures_price"),
         "program": {m: keep_or_stale(program_chart(m, date), o_prg.get(m), f"program {m}") for m in MARKETS},
         "usdkrw": keep_or_stale(usdkrw_round(date), old.get("usdkrw"), "usdkrw"),
+        "us_futures": us_futures(now, date, old.get("us_futures")),
     }
     ok = [doc["index"]["KOSPI"], doc["investor"]["KOSPI"], doc["futures"], doc["program"]["KOSPI"], doc["usdkrw"]]
     if not any(x and not x.get("stale") for x in ok):
@@ -279,6 +295,10 @@ def main():
     fx = (doc["usdkrw"] or {}).get("rows", [{}])[-1]
     print(f"[{now.isoformat()}] {path.relative_to(Path(args.data_dir).parent)}  대상일 {date}")
     print(f"  KOSPI {k.get('value')} ({k.get('change_pct')}%) 분봉 {len(k.get('bars', []))}개")
+    for sym, u in (doc["us_futures"] or {}).items():
+        if u:
+            print(f"  {u['symbol']} {u['rows'][-1]['c'] if u['rows'] else '-'} (기준 {u['prev_close']}) 1분봉 {len(u['rows'])}개 "
+                  f"마지막 {u['asof'][11:16]} 지연 {u.get('delay_min')}분 stale={u.get('stale')}")
     print(f"  외국인 현물 KOSPI {inv.get('foreign')}억 @{inv.get('t')}  행 {len((doc['investor']['KOSPI'] or {}).get('rows', []))}")
     print(f"  외국인 선물 {fut.get('foreign')}계약 ({fut.get('foreign_amt')}억) @{fut.get('t')}")
     print(f"  프로그램 KOSPI 전체 {prg.get('total')}억 (차익 {prg.get('arb')} / 비차익 {prg.get('nonarb')}) @{prg.get('t')}")

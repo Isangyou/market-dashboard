@@ -48,6 +48,8 @@
   .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
   .chart { width: 100%; }
   .row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+  .hval { font-size: 13px; color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .hval .k { color: var(--muted); font-weight: 400; margin-left: 4px; }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
   .seg button { background: transparent; color: var(--muted); border: 0; padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer; }
   .seg button[aria-pressed="true"] { background: var(--line); color: var(--text); }
@@ -96,6 +98,16 @@
       <h2 id="prg-title">프로그램 매매 누적</h2>
       <div class="sub" id="prg-sub"></div>
       <div id="prg-chart" class="chart" style="height:280px"></div>
+    </div>
+    <div class="panel">
+      <div class="row"><h2>나스닥100 선물 <span class="tag">NQ=F · 지연</span></h2><span class="hval" id="nq-val"></span></div>
+      <div class="sub" id="nq-sub"></div>
+      <div id="nq-chart" class="chart" style="height:280px"></div>
+    </div>
+    <div class="panel">
+      <div class="row"><h2>WTI 선물 <span class="tag">CL=F · 지연</span></h2><span class="hval" id="cl-val"></span></div>
+      <div class="sub" id="cl-sub"></div>
+      <div id="cl-chart" class="chart" style="height:280px"></div>
     </div>
     <div class="panel">
       <h2>USD/KRW 장중 <span class="tag">하나은행 고시</span></h2>
@@ -327,9 +339,34 @@ function renderFx() {
 
 // ── 로드 ──
 async function getJSON(p) { const r = await fetch(p, { cache: 'no-store' }); if (!r.ok) throw new Error(`${p} ${r.status}`); return r.json(); }
+// ── 미국 선물 1분봉 (yfinance 지연 시세) ── 전일 미국장 마감(KST 06:00)부터. 기준가 = 06:00 이하 마지막 봉 종가
+function renderUsFut(sym, id, digits) {
+  const u = D && D.us_futures && D.us_futures[sym];
+  const val = document.getElementById(id + '-val'), sub = document.getElementById(id + '-sub');
+  if (!u || !u.rows.length) { val.textContent = ''; sub.textContent = u ? `${u.source} · 전일 마감 이후 봉 없음` : '데이터 없음'; return empty(id + '-chart'); }
+  const r = u.rows[u.rows.length - 1], pct = (r.c / u.prev_close - 1) * 100;
+  val.innerHTML = `${nf(r.c, digits)} <span class="k">${arrow(pct)} ${signed(pct)}%</span>` + (u.stale ? ' <span class="stale-note">stale · 이전 값</span>' : '');
+  sub.textContent = `${u.source} · 지연 시세 · 마지막 봉 ${r.t} KST` + (u.delay_min != null ? ` (수집 시점 ${u.delay_min}분 지연)` : '') +
+    ` · 기준 전일 미국장 마감 ${u.prev_close_at.slice(5, 10)} ${u.prev_close_at.slice(11, 16)} KST 봉 ${nf(u.prev_close, digits)} (정산가 아님)`;
+  const lay = layout({ showlegend: false });
+  lay.xaxis = { ...lay.xaxis, range: [X('06:00'), X('15:45')] };
+  // 기준선(shape)은 자동 범위에 안 들어감 → 전일 마감가를 포함해 y범위 지정
+  const ys = [...u.rows.map(x => x.c), u.prev_close], lo = Math.min(...ys), hi = Math.max(...ys), pad = (hi - lo) * 0.06 || hi * 0.001;
+  lay.yaxis = { ...lay.yaxis, tickformat: `,.${digits}f`, range: [lo - pad, hi + pad] };
+  lay.shapes = [
+    { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: u.prev_close, y1: u.prev_close, line: { color: C.faint, width: 1, dash: 'dot' }, layer: 'below' },
+    { type: 'line', yref: 'paper', y0: 0, y1: 1, x0: X('09:00'), x1: X('09:00'), line: { color: C.faint, width: 1, dash: 'dot' }, layer: 'below' },
+  ];
+  lay.annotations = [
+    { xref: 'paper', x: 0, y: u.prev_close, text: '전일 마감', showarrow: false, xanchor: 'left', yanchor: 'bottom', font: { size: 10, color: C.faint } },
+    { yref: 'paper', y: 1, x: X('09:00'), text: '09:00 국내 개장', showarrow: false, xanchor: 'left', yanchor: 'top', font: { size: 10, color: C.faint } },
+  ];
+  plot(id + '-chart', [line(u.rows, 'c', u.name, C.accent, { fmt: `,.${digits}f`, src: u.symbol })], lay);
+}
+
 function renderAll() {
   const safe = (n, fn) => { try { fn(); } catch (e) { console.error(n, e); } };
-  safe('cards', renderCards); safe('main', renderMain); safe('fut', renderFut); safe('prg', renderPrg); safe('fx', renderFx); safe('pct', renderPct);
+  safe('cards', renderCards); safe('main', renderMain); safe('fut', renderFut); safe('prg', renderPrg); safe('nq', () => renderUsFut('NQ', 'nq', 2)); safe('cl', () => renderUsFut('CL', 'cl', 2)); safe('fx', renderFx); safe('pct', renderPct);
 }
 async function main() {
   const today = todayKST(), banner = document.getElementById('banner');
