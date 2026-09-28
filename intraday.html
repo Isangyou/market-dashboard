@@ -35,6 +35,7 @@
   .card .lbl { color: var(--muted); font-size: 12px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .tag { border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 10.5px; color: var(--muted); }
   .card .val { font-size: 32px; font-weight: 600; margin: 4px 0 2px; letter-spacing: -0.015em; }
+  .card .val .vnote { font-size: 11px; font-weight: 400; color: var(--muted); margin-left: 6px; letter-spacing: 0; white-space: nowrap; }
   .card .chg { font-size: 13px; color: var(--gray1); font-variant-numeric: tabular-nums; }
   .card .src { margin-top: 6px; overflow-wrap: anywhere; }
   .stale .val, .stale .chg { opacity: .5; }
@@ -182,8 +183,9 @@ function renderCards() {
     card({ label: '외국인 현물 순매수', tag: '장중 잠정', value: iK ? money(iK.foreign) : '–', stale: inv.KOSPI && inv.KOSPI.stale,
            chg: iQ ? `코스피 · 코스닥 ${arrow(iQ.foreign)} ${money(iQ.foreign)}` : '코스피',
            src: `${(inv.KOSPI && inv.KOSPI.basis) || SPOT_BASIS} · ` + srcLine(inv.KOSPI) + (iK ? ` (${iK.t} 누적)` : '') }),
-    card({ label: '외국인 선물 순매수', tag: 'KOSPI200', value: f ? `${signed(f.foreign, 0)}계약` : '–', stale: fut && fut.stale,
-           chg: f ? `${arrow(f.foreign_amt)} ${money(f.foreign_amt)}` + (fp ? ` · 선물 ${nf(fp.value)} (${signed(fp.change_pct)}%, ${fp.delay})` : '') : '',
+    // 큰 글씨 = 순매수 금액(E26 매수대금−매도대금, 계약수×가격 추정 아님), 아래 = 계약수
+    card({ label: '외국인 선물 순매수', tag: 'KOSPI200', value: f ? `${money(f.foreign_amt)}<span class="vnote">매수−매도 대금(네이버 집계)</span>` : '–', stale: fut && fut.stale,
+           chg: f ? `${arrow(f.foreign)} ${signed(f.foreign, 0)}계약` + (fp ? ` · 선물 ${nf(fp.value)} (${signed(fp.change_pct)}%, ${fp.delay})` : '') : '',
            src: srcLine(fut) }),
     card({ label: 'USD/KRW', tag: '하나은행 고시', value: x ? nf(x.v) : '–', stale: fx && fx.stale,
            chg: fxChg != null ? `${arrow(fxChg)} ${signed(fxChg)} (전일 ${nf(fx.last_close)})` : '', src: srcLine(fx) }),
