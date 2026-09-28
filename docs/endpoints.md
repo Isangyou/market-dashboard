@@ -265,6 +265,8 @@ E10 필드 + `openingPrice`, `highPriceOfDay`, `lowPriceOfDay`, `high/lowPriceOf
 ### E25. 투자자별 장중 누적 (현물) — 기존 E4
 `GET /domestic/market/trend/time?tradeType=KRX&marketType={KOSPI|KOSDAQ}&bizdate=YYYYMMDD&startIdx={page}&pageSize=100`
 1~2분 간격 누적치, 최신순. 09-23 KOSPI 443행 (09:01~20:04, 15:30 이후는 NXT 시간외 포함). 코드·단위는 E3과 동일(원).
+- **코스닥** = 같은 경로 `marketType=KOSDAQ` (화면: 투자자별 매매동향 `marketType=kosdaq` 탭 → API는 대문자 `KOSDAQ`). `fetch/intraday.py investor_time`이 처음부터 KOSPI·KOSDAQ 둘 다 3분 루프로 수집 중. 외국인 = 9000+9001(E3과 동일)
+- 확인값(저장 기준 15:40 누적): 09-23 KOSDAQ 외국인 -486.2억 · 개인 +320.8억 · 기관계 +61.4억 / 09-28 KOSDAQ 외국인 +467.6억 · 개인 +214.1억 · 기관계 -744.3억
 
 ### E26. 선물 투자자별 장중 누적
 E25와 같은 경로, `marketType=FUT`. 09-23 422행 (~16:06 확정치).

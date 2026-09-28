@@ -33,7 +33,7 @@
   #upd.flash { background-color: rgba(123, 147, 196, 0.35); color: var(--text); transition: none; }
   .banner { border: 1px dashed var(--faint); color: var(--muted); border-radius: 8px; padding: 8px 12px; font-size: 12.5px; margin-bottom: 12px; }
 
-  .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }   /* 7개 = 4+3 */
+  .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }   /* 8개 = 4×2 */
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; min-width: 0; }
   .card .lbl { color: var(--muted); font-size: 12px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .tag { border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 10.5px; color: var(--muted); }
@@ -187,6 +187,13 @@ function card({ label, tag, value, chg, src, stale }) {
   return `<div class="card${stale ? ' stale' : ''}"><div class="lbl">${label}${tag ? `<span class="tag">${tag}</span>` : ''}${stale ? '<span class="stale-note">stale · 이전 값</span>' : ''}</div>
     <div class="val">${value}</div><div class="chg">${chg}</div><div class="src">${esc(src)}</div></div>`;
 }
+// 외국인 현물 순매수 (E25 장중 누적 잠정, 시장별). 섹션이 아직 없으면 '수집 대기'
+function spotCard(m, sec, r) {
+  const label = `외국인 현물 순매수 · ${mktName(m)}`;
+  if (!r) return card({ label, tag: '장중 잠정', value: '–', chg: '수집 대기', src: '다음 수집 회차부터 표시' });
+  return card({ label, tag: '장중 잠정', value: money(r.foreign), stale: sec.stale,
+                chg: `${r.t} 기준 · 장중 누적 잠정`, src: `${sec.basis || SPOT_BASIS} · ${srcLine(sec)}` });
+}
 function renderCards() {
   const k = D && D.index && D.index.KOSPI, inv = D && D.investor || {}, fut = D && D.futures, fx = D && D.usdkrw, fp = D && D.futures_price;
   const iK = lastRow(inv.KOSPI), iQ = lastRow(inv.KOSDAQ), f = lastRow(fut), x = lastRow(fx);
@@ -196,9 +203,7 @@ function renderCards() {
   document.getElementById('cards').innerHTML = [
     card({ label: '코스피', value: k ? nf(k.value) : '–', stale: k && k.stale,
            chg: k ? `${arrow(k.change)} ${signed(k.change)} (${signed(k.change_pct)}%)` : '', src: srcLine(k) }),
-    card({ label: '외국인 현물 순매수', tag: '장중 잠정', value: iK ? money(iK.foreign) : '–', stale: inv.KOSPI && inv.KOSPI.stale,
-           chg: iQ ? `코스피 · 코스닥 ${arrow(iQ.foreign)} ${money(iQ.foreign)}` : '코스피',
-           src: `${(inv.KOSPI && inv.KOSPI.basis) || SPOT_BASIS} · ` + srcLine(inv.KOSPI) + (iK ? ` (${iK.t} 누적)` : '') }),
+    spotCard('KOSPI', inv.KOSPI, iK), spotCard('KOSDAQ', inv.KOSDAQ, iQ),
     // 큰 글씨 = 순매수 금액(E26 매수대금−매도대금, 계약수×가격 추정 아님), 아래 = 계약수
     card({ label: '외국인 선물 순매수', tag: 'KOSPI200', value: f ? `${money(f.foreign_amt)}<span class="vnote">매수−매도 대금(네이버 집계)</span>` : '–', stale: fut && fut.stale,
            chg: f ? `${arrow(f.foreign)} ${signed(f.foreign, 0)}계약` + (fp ? ` · 선물 ${nf(fp.value)} (${signed(fp.change_pct)}%, ${fp.delay})` : '') : '',
