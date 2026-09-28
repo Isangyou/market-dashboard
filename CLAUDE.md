@@ -31,12 +31,12 @@
     status.md       # 현재 상태·미검증 항목 (세션 인계용)
     positioning.md  # 주간 포지셔닝: 실행법·모델 가정·확정 규칙·미검증 항목
   scripts/
-    intraday_loop.sh  # Actions 장중 루프 (5분 경계마다 intraday.py → 변경 시 커밋·푸시)
+    intraday_loop.sh  # Actions 장중 루프 (3분 경계마다 intraday.py → 변경 시 커밋·푸시)
   index.html        # 대시보드 화면 (Plotly CDN, 단일 파일)
   intraday.html     # 장중 화면 (index.html과 상호 링크)
   weekly.html       # 주간 포지셔닝 리포트 (라이트, 주차 드롭다운, Notion용 결론 복사)
   .github/workflows/update.yml    # 매시 + 거래일 장중 15분
-  .github/workflows/intraday.yml  # 평일 08:35 시작→08:50 대기, 오전(~12:10)·오후(~15:40) 두 잡 루프
+  .github/workflows/intraday.yml  # 평일 08:35 시작(+15분마다 예비)→08:50 대기, 오전(~12:10)·오후(~15:40) 두 잡 루프
   .github/workflows/pages.yml     # Pages Actions 배포 (봇 푸시 후 호출됨)
   .github/workflows/positioning.yml  # 주간 포지셔닝: KST 화~토 07:10
   requirements.txt
@@ -79,7 +79,7 @@
 
 ## 배치 (GitHub Actions)
 - 15분 간격, 한국 장중(평일 08:30~16:00 KST)은 매 15분, 그 외 시간은 1시간 간격. 휴장일은 fetch/market_day.py로 판정해 매시 정각만 실행
-- 장중 페이지용 intraday.yml: 평일 08:50 KST 시작, 5분 간격 루프, 휴장일이면 잡 생략. 로컬(launchd) 실행은 쓰지 않음
+- 장중 페이지용 intraday.yml: 평일 08:50 KST 시작, 3분 간격 루프(수집·커밋·푸시), 휴장일이면 잡 생략. cron 누락 대비 15분마다 예비 트리거 + 중복 실행 판정. 로컬(launchd) 실행은 쓰지 않음
 - run.py 실행 후 data/ 변경분만 커밋·푸시. 변경 없으면 커밋하지 않음
 - API 키(FRED 등)는 GitHub Secrets. 코드에 하드코딩 금지
 

@@ -1,10 +1,17 @@
 name: intraday
 
-# 평일 08:35 KST 시작(러너 준비·cron 지연 여유) → 08:50까지 대기 → 5분 간격 fetch.intraday 루프.
+# 평일 08:35 KST 시작(러너 준비·cron 지연 여유) → 08:50까지 대기 → 3분 간격 fetch.intraday 루프.
 # 잡 6시간 제한 때문에 오전(~12:10)·오후(12:10~15:40) 두 잡으로 나눔. cron은 UTC (KST-9)
+#
+# GitHub schedule은 부하 시 지연·누락됨(2026-09-28: 08:35 1회짜리 cron이 통째로 누락,
+# update-data 매시 cron도 이틀간 약 48회 중 6회만 실행). 그래서 15분마다 예비 트리거를 둔다.
+# 늦게 시작해도 루프는 그 시각부터 이어서 돌고(오전 잡은 12:10 지나면 바로 끝남),
+# 이미 돌고 있는 루프가 있으면 calendar 잡의 중복 판정으로 새 실행은 바로 끝난다.
 on:
   schedule:
-    - cron: "35 23 * * 0-4"   # KST 월~금 08:35
+    - cron: "35,50 23 * * 0-4"      # KST 월~금 08:35, 08:50
+    - cron: "5,20,35,50 0-5 * * 1-5" # KST 월~금 09:05~14:50 (예비)
+    - cron: "5,20,35 6 * * 1-5"     # KST 월~금 15:05~15:35 (예비)
   workflow_dispatch:
     inputs:
       mode:
@@ -17,9 +24,8 @@ permissions:
   contents: write
   actions: write   # 푸시 후 pages.yml 호출
 
-concurrency:
-  group: intraday
-  cancel-in-progress: false
+# workflow concurrency는 쓰지 않음: 쓰면 예비 트리거가 진행 중 루프 뒤에 pending으로 쌓였다가
+# 15:40 이후에 빈 실행이 됨. 대신 calendar 잡이 먼저 시작된 실행이 있는지 보고 중복이면 건너뜀
 
 jobs:
   calendar:
@@ -27,6 +33,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       trading: ${{ steps.day.outputs.trading }}
+      dup: ${{ steps.dup.outputs.dup }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -36,11 +43,26 @@ jobs:
       - id: day
         name: 휴장일 판정 (update.yml과 공용)
         run: python -m fetch.market_day --github-output
+      - id: dup
+        name: 중복 실행 판정 (스케줄·loop만. 이 실행보다 먼저 시작해 아직 안 끝난 intraday 실행이 있으면 dup)
+        if: inputs.mode == '' || inputs.mode == 'loop'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          older=$(gh api "repos/${{ github.repository }}/actions/workflows/intraday.yml/runs?per_page=30" \
+            --jq '[.workflow_runs[] | select(.status != "completed" and .id < ${{ github.run_id }}) | .id] | join(",")') \
+            || { echo "::warning::실행 목록 조회 실패 → 중복 아님으로 진행"; older=""; }
+          if [ -n "$older" ]; then
+            echo "먼저 시작된 실행 진행 중($older) → 이번 실행은 건너뜀"
+            echo "dup=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dup=false" >> "$GITHUB_OUTPUT"
+          fi
 
   am:
     needs: calendar
     # 스케줄·loop: 거래일에만 / once·once-force: 달력 무관 1회
-    if: always() && ((needs.calendar.outputs.trading == 'true' && (inputs.mode == '' || inputs.mode == 'loop')) || inputs.mode == 'once' || inputs.mode == 'once-force')
+    if: always() && ((needs.calendar.outputs.trading == 'true' && needs.calendar.outputs.dup != 'true' && (inputs.mode == '' || inputs.mode == 'loop')) || inputs.mode == 'once' || inputs.mode == 'once-force')
     runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:
@@ -64,7 +86,7 @@ jobs:
   pm:
     needs: [calendar, am]
     # 오전 잡이 실패해도 오후는 돈다
-    if: always() && needs.calendar.outputs.trading == 'true' && (inputs.mode == '' || inputs.mode == 'loop')
+    if: always() && needs.calendar.outputs.trading == 'true' && needs.calendar.outputs.dup != 'true' && (inputs.mode == '' || inputs.mode == 'loop')
     runs-on: ubuntu-latest
     # 보통 12:10 시작 → 3.5h. 오전 잡이 일찍 실패하면 바로 시작해 오전분까지 이어받음 (6h 한도 내)
     timeout-minutes: 355

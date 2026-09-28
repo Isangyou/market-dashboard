@@ -1,7 +1,8 @@
 """장중 수집 → data/intraday/YYYY-MM-DD.json (+ data/intraday/index.json).
 
 네이버가 장중 이력을 직접 주는 항목(E24~E27, E14)은 매 실행 이력 전체를 갱신하고,
-실행 시각마다 주요 값 스냅샷을 snapshots[]에 누적한다(5분 간격 샘플 기록 겸 이력 API 실패 대비).
+실행 시각마다 주요 값 스냅샷을 snapshots[]에 누적한다(3분 간격 샘플 기록 겸 이력 API 실패 대비).
+2026-09-28 오전까지는 5분 간격. 스냅샷은 t(HH:MM) 키로 병합·정렬만 하므로 간격이 섞여도 무방.
 
 실행: python -m fetch.intraday [--force] [--data-dir DIR]
   - 거래일 + 08:50~15:40 KST 에만 동작. --force는 두 조건을 무시(검증용)
