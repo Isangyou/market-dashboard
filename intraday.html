@@ -7,16 +7,17 @@
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
   :root {
-    color-scheme: dark;   /* 장중 = 다크, 일별(index.html) = 라이트 */
-    --bg: #0d0e10; --panel: #15171a; --line: #25282d; --grid: #1e2125;
-    --text: #d5d7db; --muted: #8b9098; --faint: #5d626a;
-    --accent: #7b93c4;   /* 슬레이트 블루 — 유일한 포인트 색 */
-    --gray1: #b9bdc4; --gray2: #6f747c;
+    color-scheme: light;   /* 장중 = 웜 라이트(세이지 그린), 일별(index.html) = 쿨 라이트(슬레이트 블루) */
+    --bg: #f7f5f0; --panel: #ffffff; --line: #e6e0d4; --grid: #ebe6dc;
+    --text: #2f2b26; --muted: #5e584f; --faint: #8a8378;   /* faint = 소스·기준시각 */
+    --accent: #5f8f6e;   /* 세이지 그린 — 유일한 포인트 색 (차트 선·막대·현재값 강조) */
+    --link: #3f6b4e;     /* 링크 글자 (흰 배경 대비 확보) */
+    --gray1: #4a453e; --gray2: #a39c90;   /* 보조선: 회색 계열 */
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
          font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", "Segoe UI", sans-serif; }
-  a { color: var(--accent); text-decoration: none; }
+  a { color: var(--link); text-decoration: none; }
   a:hover { text-decoration: underline; }
   .wrap { max-width: 1400px; margin: 0 auto; padding: 20px 16px 48px; }
   header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
@@ -24,13 +25,13 @@
   nav { display: flex; gap: 14px; font-size: 13px; flex-wrap: wrap; }
   nav .here { color: var(--text); font-weight: 600; }
   nav .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
-  .sw-light { background: #ffffff; border: 1px solid #a2a7ae; }
-  .sw-dark { background: #15171a; border: 1px solid #8b9098; }
+  .sw-blue { background: #ffffff; border: 1px solid #7b93c4; }    /* 쿨 라이트 · 슬레이트 블루 */
+  .sw-green { background: #f7f5f0; border: 1px solid #5f8f6e; }   /* 웜 라이트 · 세이지 그린 */
   .meta, .src { color: var(--faint); font-size: 11px; }
   .meta b { color: var(--muted); font-weight: 500; }
   /* 자동 갱신으로 새 데이터가 들어오면 잠깐 강조 */
   #upd { border-radius: 3px; padding: 0 3px; transition: background-color 1.6s ease, color 1.6s ease; }
-  #upd.flash { background-color: rgba(123, 147, 196, 0.35); color: var(--text); transition: none; }
+  #upd.flash { background-color: rgba(95, 143, 110, 0.28); color: var(--text); transition: none; }   /* 세이지 그린 */
   .banner { border: 1px dashed var(--faint); color: var(--muted); border-radius: 8px; padding: 8px 12px; font-size: 12.5px; margin-bottom: 12px; }
 
   .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }   /* 8개 = 4×2 */
@@ -70,7 +71,7 @@
 <div class="wrap">
   <header>
     <h1>장중 모니터</h1>
-    <nav><a href="index.html"><i class="sw sw-light"></i>일별 · 라이트</a><span class="here"><i class="sw sw-dark"></i>장중 · 다크</span><a href="weekly.html"><i class="sw sw-light"></i>주간 포지셔닝 · 라이트</a></nav>
+    <nav><a href="index.html"><i class="sw sw-blue"></i>일별 · 라이트(블루)</a><span class="here"><i class="sw sw-green"></i>장중 · 라이트(그린)</span><a href="weekly.html"><i class="sw sw-blue"></i>주간 포지셔닝 · 라이트(블루)</a></nav>
   </header>
   <div class="meta" id="meta" style="margin-bottom:10px">불러오는 중…</div>
   <div class="banner" id="banner" hidden></div>

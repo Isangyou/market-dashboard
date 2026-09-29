@@ -7,7 +7,7 @@
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
   :root {
-    color-scheme: light;   /* 일별 = 라이트, 장중(intraday.html) = 다크 */
+    color-scheme: light;   /* 일별 = 쿨 라이트(슬레이트 블루), 장중(intraday.html) = 웜 라이트(세이지 그린) */
     --bg: #f6f7f8; --panel: #ffffff; --line: #dcdfe3; --grid: #eceef1;
     --text: #2a2d32; --muted: #5c6168; --faint: #868b93;
     --accent: #7b93c4;   /* 슬레이트 블루 — 유일한 포인트 색 (장중 페이지와 동일) */
@@ -25,8 +25,8 @@
   nav { display: flex; gap: 14px; font-size: 13px; flex-wrap: wrap; }
   nav .here { color: var(--text); font-weight: 600; }
   nav .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
-  .sw-light { background: #ffffff; border: 1px solid #a2a7ae; }
-  .sw-dark { background: #15171a; border: 1px solid #5d626a; }
+  .sw-blue { background: #ffffff; border: 1px solid #7b93c4; }    /* 쿨 라이트 · 슬레이트 블루 */
+  .sw-green { background: #f7f5f0; border: 1px solid #5f8f6e; }   /* 웜 라이트 · 세이지 그린 */
   .meta b { color: var(--muted); font-weight: 500; }
 
   /* 카드 */
@@ -104,7 +104,7 @@
 <div class="wrap">
   <header>
     <h1>시장 모니터</h1>
-    <nav><span class="here"><i class="sw sw-light"></i>일별 · 라이트</span><a href="intraday.html"><i class="sw sw-dark"></i>장중 · 다크</a><a href="weekly.html"><i class="sw sw-light"></i>주간 포지셔닝 · 라이트</a></nav>
+    <nav><span class="here"><i class="sw sw-blue"></i>일별 · 라이트(블루)</span><a href="intraday.html"><i class="sw sw-green"></i>장중 · 라이트(그린)</a><a href="weekly.html"><i class="sw sw-blue"></i>주간 포지셔닝 · 라이트(블루)</a></nav>
   </header>
   <div class="meta" id="meta" style="margin-bottom:10px">불러오는 중…</div>
 
