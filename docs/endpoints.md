@@ -244,6 +244,7 @@ E10 필드 + `openingPrice`, `highPriceOfDay`, `lowPriceOfDay`, `high/lowPriceOf
 | (추가) VKOSPI | 네이버 없음 → KRED E33 (2010-01-04~) | CC BY-NC-ND 4.0, 하루 ≤2회 |
 | (추가) 코스피·코스닥 일별 종가 | E34 (1997~) | 오늘 행은 15:40 이후만 |
 | (추가) 삼성전자·SK하이닉스 일별 종가 | E35 (10년 이상) | 오늘 행은 15:40 이후만 |
+| (추가) 코스피·코스닥 일별 거래대금 | E36 (최근 약 6거래일만) | 09-17부터 누적 |
 
 ---
 
@@ -365,3 +366,12 @@ E14 `/stockSecurity/exchange-rates/v2/USD/charts/round?bankType=hana` (하나은
 - `startIdx`는 **페이지 번호**(E3·E32와 같음): `startIdx=1,pageSize=50` → 20260713~20260429, `startIdx=50,pageSize=50` → 20160714~ (10년 이상 있음). `pageSize=100` 됨
 - 09-28 15:3x 수집: 100행×3페이지 = 300행, 2025-07-04 ~ 2026-09-23. 09-23 삼성전자 286,500원 / SK하이닉스 1,863,000원. 장중에도 오늘 행은 없었음(최신 09-23) — 그래도 오늘 행은 15:40 이후만 저장
 - 같은 화면의 다른 호출: `domestic/detail/{code}/siseTick`(체결), `…/hoga`(호가), `…/traderInfo`, `securityFe/api/fchart/domestic/stock/{code}`(차트) — 미사용
+
+### E36. 지수 시간별 시세 → 일별 거래대금 ★ 수집용
+`GET /domestic/indexSise/time?koreaIndexType={KOSPI|KOSDAQ}&thistime=YYYYMMDD&startIdx=0&pageSize={n}` → 배열, 최신 시각부터
+- 캡처: `/domestic/index/KOSPI/price` (지수 시세 화면의 시간별 표, `pageSize=20`)
+- 필드: `thistime`(YYYYMMDDHHMMSS), `nowVal`, `openVal`, `highVal`, `lowVal`, `changeVal`, `changeRate`, `quant`(누적 거래량, 천주), `amount`(**누적 거래대금, 원**)
+- `thistime`에 과거 날짜를 넣으면 그날 표가 옴 → **첫 행(마지막 시각 15:32)의 `amount` = 그날 거래대금**. `pageSize=1`로 날짜당 1요청. 휴장일은 빈 배열
+- **보관 기간 약 6거래일**: 09-29에 150거래일(2026-02-13~) 요청 → 09-17·18·21·22·23·28만 응답 → 과거 이력 불가, 09-17부터 누적
+- 확인값: 09-28 KOSPI 23,048,680,000,000원(23.05조, 15:32) · KOSDAQ 6.33조 / 09-23 KOSPI 22.62조 · KOSDAQ 8.09조
+- 일별 거래대금이 있는 다른 곳 없음: E34(일별 시세)·`api.stock.naver.com/chart/domestic/index/{code}/day`(일봉, `accumulatedTradingVolume`만)·E30 integration·polling(당일만) 확인

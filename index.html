@@ -48,6 +48,7 @@
   .main { margin-bottom: 14px; }
   .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
   .span2 { grid-column: 1 / -1; }
+  .grid[hidden] { display: none; }   /* .grid의 display:grid가 hidden 속성을 덮지 않게 */
   .chart { width: 100%; }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
   .seg button { background: transparent; color: var(--muted); border: 0; padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer; }
@@ -192,6 +193,20 @@
     </div>
   </section>
 
+  <!-- 거래대금: 비활성(TV_ENABLED=false). 네이버가 최근 약 6거래일만 줘서 09-17부터 누적 중 → 20거래일 쌓이면 켜기 -->
+  <section class="grid" id="tv-row" hidden>
+    <div class="panel">
+      <div class="row"><h2>코스피 거래대금 · 20일 평균</h2><span class="hval" id="tv_kospi-val"></span></div>
+      <div class="sub" id="tv_kospi-sub"></div>
+      <div id="tv_kospi-chart" class="chart" style="height:300px"></div>
+    </div>
+    <div class="panel">
+      <div class="row"><h2>코스닥 거래대금 · 20일 평균</h2><span class="hval" id="tv_kosdaq-val"></span></div>
+      <div class="sub" id="tv_kosdaq-sub"></div>
+      <div id="tv_kosdaq-chart" class="chart" style="height:300px"></div>
+    </div>
+  </section>
+
   <section class="panel funds">
     <div class="row">
       <div>
@@ -235,6 +250,9 @@ if (ADR_ENABLED) SERIES_KEYS.push('breadth_kospi', 'breadth_kosdaq', 'adr_kospi'
 // 코스피·코스닥 이격도 차트 스위치 (09-28 종목 차트로 교체). 데이터(kospi/kosdaq.json)는 계속 수집됨.
 // true면 삼성전자 | SK하이닉스 아래 줄에 코스피 | 코스닥 추가
 const INDEX_GAP_ENABLED = false;
+// 거래대금 차트 스위치. 수집(tv_kospi/tv_kosdaq.json)은 계속 — 20거래일 쌓이면(약 10-20) true로
+const TV_ENABLED = false;
+if (TV_ENABLED) SERIES_KEYS.push('tv_kospi', 'tv_kosdaq');
 if (INDEX_GAP_ENABLED) SERIES_KEYS.push('kospi', 'kosdaq');
 const TENORS = ['1M','2M','3M','6M','1Y','2Y','3Y','5Y','7Y','10Y','20Y','30Y'];
 // 항목별 1차 소스. 이 접두어가 아닌 레코드 = 폴백 → 점선
@@ -627,6 +645,38 @@ function renderGapChart(key, name, { fmt = ',.2f', d = 2, unit = '' } = {}) {
     ` · ${srcLine(lr.source, lr.asof)}`;
 }
 
+// ── 지수 거래대금 (조) 막대 + 20일 평균 (6개월 기본, range slider) ──
+// 거래대금 = 그날 장 마감(15:32) 누적(E36). 20거래일 미만이면 평균·배율 대신 '누적 중'
+const TV_N = 20;
+function renderTv(key, name) {
+  const v = recs(key), id = key + '-chart';
+  if (!v.length) return empty(id);
+  const x = v.map(r => r.date), jo = v.map(r => r.value / 1e4), last = x[x.length - 1];
+  const avg = jo.map((_, i) => i < TV_N - 1 ? null : jo.slice(i - TV_N + 1, i + 1).reduce((a, b) => a + b, 0) / TV_N);
+  const lay = baseLayout({ margin: { l: 44, r: 12, t: 30, b: 24 }, bargap: 0.25 });
+  lay.xaxis = { ...lay.xaxis, range: [shiftDate(last, 183), shiftDate(last, -2)],
+    rangeslider: { visible: true, thickness: 0.1, bgcolor: C.bg, bordercolor: C.line, borderwidth: 1 } };
+  // 막대라 아래는 0 고정, 위만 보이는 구간 최댓값에 맞춤
+  const yFit = ([a, b]) => {
+    const vals = x.flatMap((d, i) => d >= String(a).slice(0, 10) && d <= String(b).slice(0, 10) ? [jo[i], avg[i]] : []).filter(y => y != null);
+    return vals.length ? [0, Math.max(...vals) * 1.1] : null;
+  };
+  lay.yaxis = { ...lay.yaxis, tickformat: ',.0f', ticksuffix: '조', range: yFit(lay.xaxis.range) };
+  plot(id, [
+    { x, y: jo, type: 'bar', name: '일별 거래대금', marker: { color: C.accent, line: { width: 0 } },
+      customdata: v.map(r => [r.value, r.source]),
+      hovertemplate: `%{y:,.2f}조 (%{customdata[0]:,.0f}억) <span style="color:${C.faint}">%{customdata[1]}</span><extra>${name}</extra>` },
+    { x, y: avg, type: 'scatter', mode: 'lines', name: '20일 평균', line: { color: C.gray1, width: 1.4, dash: 'dot' },
+      connectgaps: false, hovertemplate: '%{y:,.2f}조<extra>20일 평균</extra>' },
+  ], lay);
+  keepYFit(id, yFit, [x[0], last]);
+  const a = avg[avg.length - 1], lr = v[v.length - 1];
+  document.getElementById(key + '-val').innerHTML = `${nf(lr.value / 1e4)}조` +
+    (a != null ? ` <span class="k">20일 평균 대비</span> ${nf(lr.value / 1e4 / a, 2)}×` : `<span class="tag" style="margin-left:8px">누적 중 (${v.length}/${TV_N}일)</span>`);
+  document.getElementById(key + '-sub').textContent = `6개월 기본 · 일별 거래대금(장 마감 누적) ${x[0]} ~ ${last}` +
+    (a != null ? ` · 20일 평균 ${nf(a)}조` : '') + ` · ${srcLine(lr.source, lr.asof)} · 네이버는 최근 약 6거래일만 제공 → 09-17부터 누적`;
+}
+
 // ── 증시자금동향 (고객예탁금·신용잔고·펀드, 억원) ──
 // 금투협 집계라 통상 2거래일 지연. 지연 = 기준일 이후 거래일 수(투자자 일별 시계열의 날짜로 셈)
 const FUND_ITEMS = [['deposit', '고객예탁금'], ['credit', '신용잔고'], ['fund_stock', '주식형펀드'],
@@ -711,6 +761,10 @@ async function main() {
   safe('cards', renderCards); safe('main', renderMain); 
   safe('stock_005930', () => renderGapChart('stock_005930', '삼성전자', { fmt: ',.0f', d: 0, unit: '원' }));
   safe('stock_000660', () => renderGapChart('stock_000660', 'SK하이닉스', { fmt: ',.0f', d: 0, unit: '원' }));
+  if (TV_ENABLED) {
+    document.getElementById('tv-row').hidden = false;
+    safe('tv_kospi', () => renderTv('tv_kospi', '코스피')); safe('tv_kosdaq', () => renderTv('tv_kosdaq', '코스닥'));
+  }
   if (INDEX_GAP_ENABLED) {
     document.querySelectorAll('.idx-gap').forEach(e => { e.hidden = false; });
     safe('kospi', () => renderGapChart('kospi', '코스피')); safe('kosdaq', () => renderGapChart('kosdaq', '코스닥'));

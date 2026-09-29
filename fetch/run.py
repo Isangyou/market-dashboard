@@ -247,6 +247,17 @@ def main():
         else:
             log.warning("%s: 모든 소스 실패, 이전 값도 없음", key)
 
+    # ── 지수 일별 거래대금 (E36, 억원) ── 네이버가 최근 약 6거래일만 보관 → 과거분 없음, 09-17부터 누적.
+    # 날짜당 요청 1회라 kospi.json 최근 10거래일 중 빠진 날만 받음(보통 장 마감 후 1건). 6거래일 넘게 못 받으면 그날은 영구 결측
+    kdates = [r["date"] for r in Series("kospi", "코스피", "pt").last(10)]
+    for m in MARKETS:
+        s = Series(f"tv_{m.lower()}", f"{m} 거래대금", "억원")
+        todo = [d for d in kdates if d not in s.by_date]
+        if todo:
+            n_new = s.merge(call("naver", naver.index_trading_value, m, todo))
+            if s.save():
+                changed.append(f"series/tv_{m.lower()}.json (+{n_new})")
+
     # ── VKOSPI (KRED 재공표) ── 요청 1회에 전체 이력. 요청 시각은 latest.json meta.kred_fetches에 기록해 하루 2회 제한
     s = Series("vkospi", "VKOSPI", "pt")
     fetches = [t for t in prev_latest.get("meta", {}).get("kred_fetches", []) if t[:10] == now.strftime("%Y-%m-%d")]

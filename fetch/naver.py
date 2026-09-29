@@ -231,6 +231,24 @@ def deposit_trend(max_pages: int = 1):
             break
     return pd.DataFrame(rows)
 
+@safe
+def index_trading_value(market: str, dates: list):
+    """E36. 지수 일별 거래대금 (억원). 시간별 시세표 API에 과거 날짜를 넣으면 그날 1분 단위 누적치가 오고,
+    첫 행(마지막 시각, 보통 15:32)의 amount = 그날 거래대금. 날짜 1개 = 요청 1회, 휴장일은 빈 배열.
+    **최근 약 6거래일만 보관**(09-29 확인: 150거래일 요청 → 09-17 이후 6일만 응답)."""
+    rows = []
+    for d in dates:
+        b = _get("/domestic/indexSise/time", {"koreaIndexType": market, "thistime": d.replace("-", ""),
+                                              "startIdx": 0, "pageSize": 1})
+        if b is None and _blocked:
+            break
+        if not b:
+            continue
+        t = b[0]["thistime"]
+        rows.append({"date": d, "value": round(int(b[0]["amount"]) / 1e8, 1), "source": "naver:index_sise_time",
+                     "asof": f"{d}T{t[8:10]}:{t[10:12]}:00+09:00"})
+    return pd.DataFrame(rows)
+
 # 이격도 차트용 개별 종목 (코드 → 이름)
 STOCKS = {"005930": "삼성전자", "000660": "SK하이닉스"}
 
