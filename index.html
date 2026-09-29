@@ -686,11 +686,11 @@ const eokJo = (v, d = 1) => v == null || isNaN(v) ? '–' : Math.abs(v) >= 1e4 ?
 function renderFunds() {
   const all = recs('deposit'), box = document.getElementById('fgrid');
   if (!all.length) { box.innerHTML = '<div class="empty">데이터 없음</div>'; return; }
-  const last = all[all.length - 1], win = lastN(all, 91), wk = valueAt(all, shiftDate(last.date, 7));
+  const last = all[all.length - 1], win = lastN(all, 365), wk = valueAt(all, shiftDate(last.date, 7));
   const lag = recs('investor_kospi').filter(r => r.date > last.date).length;
   const basis = `기준일 ${last.date.slice(5)}` + (lag ? ` · 데이터 지연 ${lag}거래일` : '');
   document.getElementById('fund-sub').textContent =
-    `3개월 · 일별 · 1만억 이상은 조 · 전주대비 = 7일 전(${wk ? wk.date.slice(5) : '–'}) 대비 · 이력 ${all[0].date}~ · ${basis}`;
+    `1년 · 일별 · 1만억 이상은 조 · 전주대비 = 7일 전(${wk ? wk.date.slice(5) : '–'}) 대비 · 이력 ${all[0].date}~ · ${basis}`;
   const items = FUND_ITEMS.filter(([k]) => fundOn.has(k));
   box.innerHTML = items.map(([k, name]) => `<div class="fcard"><div class="top"><span class="name">${name}</span>
       <span><span class="v">${eokJo(last[k])}</span> <span class="c" id="fc-${k}"></span></span></div>
@@ -704,7 +704,7 @@ function renderFunds() {
     const jo = Math.max(...win.map(r => Math.abs(r[k]))) >= 1e4, sc = jo ? 1e4 : 1;
     const lay = baseLayout({ margin: { l: 44, r: 8, t: 6, b: 22 }, showlegend: false });
     lay.xaxis = { ...lay.xaxis, tickformat: '%m/%d', nticks: 4, range: [win[0].date, last.date] };
-    lay.yaxis = { ...lay.yaxis, tickformat: ',.0f', ticksuffix: jo ? '조' : '억', nticks: 4 };
+    lay.yaxis = { ...lay.yaxis, tickformat: ',.0f', ticksuffix: jo ? '조' : '억', nticks: 6 };
     plot('fch-' + k, lineTraces(win, 'deposit', { name, color: C.accent, width: 1.6, val: r => r[k] / sc,
       fmt: jo ? ',.2f' : ',.0f', unit: jo ? '조' : '억', legend: false }), lay);
   }
