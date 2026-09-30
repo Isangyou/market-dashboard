@@ -11,7 +11,7 @@
  "futures": null,
  "futures_price": {
   "source": "naver:indicators",
-  "asof": "2026-10-01T08:30:10+09:00",
+  "asof": "2026-10-01T08:31:15+09:00",
   "value": 1091.5,
   "change": 0.0,
   "change_pct": 0.0,
@@ -48,7 +48,7 @@
    "symbol": "NQ=F",
    "name": "나스닥100 선물",
    "source": "yfinance:NQ=F 1m",
-   "asof": "2026-10-01T08:40:00+09:00",
+   "asof": "2026-10-01T08:41:00+09:00",
    "since": "2026-10-01T06:00:00+09:00",
    "prev_close": 30725.75,
    "prev_close_at": "2026-10-01T05:59:00+09:00",
@@ -456,7 +456,11 @@
     },
     {
      "t": "08:40",
-     "c": 30827.25
+     "c": 30826.75
+    },
+    {
+     "t": "08:41",
+     "c": 30828.25
     }
    ],
    "stale": false
@@ -465,7 +469,7 @@
    "symbol": "CL=F",
    "name": "WTI 선물",
    "source": "yfinance:CL=F 1m",
-   "asof": "2026-10-01T08:40:00+09:00",
+   "asof": "2026-10-01T08:41:00+09:00",
    "since": "2026-10-01T06:00:00+09:00",
    "prev_close": 90.34,
    "prev_close_at": "2026-10-01T05:59:00+09:00",
@@ -846,6 +850,10 @@
     {
      "t": "08:40",
      "c": 90.02
+    },
+    {
+     "t": "08:41",
+     "c": 89.99
     }
    ],
    "stale": false
@@ -862,9 +870,20 @@
    "fut_foreign": null,
    "program_kospi": null,
    "usdkrw": 1357.0
+  },
+  {
+   "t": "08:51",
+   "sampled_at": "2026-10-01T08:51:06+09:00",
+   "kospi": null,
+   "kospi_chg_pct": null,
+   "foreign_kospi": null,
+   "foreign_kosdaq": null,
+   "fut_foreign": null,
+   "program_kospi": null,
+   "usdkrw": 1357.0
   }
  ],
- "updated_at": "2026-10-01T08:50:01+09:00",
+ "updated_at": "2026-10-01T08:51:06+09:00",
  "market_day": {
   "date": "2026-10-01",
   "trading": true,
