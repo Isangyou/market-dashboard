@@ -528,9 +528,37 @@ function renderOptions() {
 }
 
 // ── 3. COT ──
+// 발표 = 기준일(화) + 3일(금) 15:30 ET. 미 연방 휴일이 낀 주는 CFTC가 늦춰 발표 → 날짜는 표준 규칙, 휴일 주는 '지연 가능' 표시
+const US_HOLIDAYS = ['2026-01-01', '2026-01-19', '2026-02-16', '2026-05-25', '2026-06-19', '2026-07-03', '2026-09-07', '2026-10-12', '2026-11-11', '2026-11-26', '2026-12-25',
+  '2027-01-01', '2027-01-18', '2027-02-15', '2027-05-31', '2027-06-18', '2027-07-05', '2027-09-06', '2027-10-11', '2027-11-11', '2027-11-25', '2027-12-24'];
+const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+// ET 벽시계 시각 → 실제 시각(서머타임 반영)
+function etToDate(iso, hh, mm) {
+  const guess = Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10), hh, mm);
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date(guess)).map(x => [x.type, x.value]));
+  const asEt = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute);
+  return new Date(guess + (guess - asEt));
+}
+const kstStr = d => { const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', hourCycle: 'h23', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+  .formatToParts(d).map(x => [x.type, x.value])); return `${p.month}-${p.day} ${p.hour}:${p.minute}`; };
+function cotRelease(reportDate) {
+  const fri = addDays(reportDate, 3);
+  const hol = US_HOLIDAYS.filter(h => h >= addDays(fri, -4) && h <= fri);
+  return { fri, hol, at: etToDate(fri, 15, 30) };
+}
+function cotDatesText(rd) {
+  if (!rd) return '기준일 –';
+  const cur = cotRelease(rd);
+  let n = cur, k = 0;
+  while (n.at <= new Date() && k++ < 60) n = cotRelease(addDays(n.fri, 4));
+  const holNote = r => r.hol.length ? ` — 연방 휴일(${r.hol.map(h => h.slice(5)).join(', ')}) 주라 지연 가능` : '';
+  return `기준일 ${rd}(화) · 발표일 ${cur.fri}(금) 15:30 ET${holNote(cur)} · ` +
+    `다음 발표 예정 ${n.fri}(금) 15:30 ET = KST ${kstStr(n.at)}${holNote(n)}`;
+}
 function renderCOT() {
   const M = W.cot?.markets || {};
-  document.getElementById('cot-sub').textContent = `기준일 ${W.cot?.report_date || '–'}(화) · 시장 ${Object.keys(M).length}개` + (W.cot?.failed?.length ? ` · 실패: ${W.cot.failed.join(', ')}` : '');
+  document.getElementById('cot-sub').textContent = cotDatesText(W.cot?.report_date) + ` · 시장 ${Object.keys(M).length}개` + (W.cot?.failed?.length ? ` · 실패: ${W.cot.failed.join(', ')}` : '');
   if (!Object.keys(M).length) { document.getElementById('cot-table').innerHTML = '<tr><td class="empty">COT 데이터 없음</td></tr>'; empty('cot-pct'); empty('cot-hist'); return; }
   if (!M[selCot]) selCot = Object.keys(M)[0];
   let h = `<thead><tr><th class="l">시장</th><th class="l">그룹</th><th>롱</th><th>숏</th><th>순포지션</th><th>Δ1주</th><th>Δ4주</th><th>주간 σ</th><th>순/OI %</th><th class="l">3년 백분위</th><th>z(3년)</th><th>OI (Δ1주)</th></tr></thead><tbody>`;
