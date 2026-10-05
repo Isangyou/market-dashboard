@@ -3,6 +3,7 @@
   python -m positioning.run                  # 전체 수집 → 이번 주 파일 갱신
   python -m positioning.run --only cot       # 일부만 (나머지는 이번 주 기존 값 유지)
   python -m positioning.run --data-dir /tmp/x
+  python -m positioning.run --rebuild-conclusion   # 수집 없이 저장된 전 주차의 결론만 오래된 주부터 다시 생성
 
 저장 (data/positioning/):
   options_daily.json      옵션 스칼라 지표 일별 누적 {날짜: {SPX: {...}}}  ← 매 실행 누적
@@ -25,7 +26,7 @@ from fetch.common import log, now_kst
 from . import cot as cot_mod
 from . import cta as cta_mod
 from . import options as opt_mod
-from . import interpret, report
+from . import brief, report
 
 ROOT = Path(__file__).resolve().parent.parent
 SECTIONS = ("cta", "options", "cot")
@@ -63,8 +64,11 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", default=",".join(SECTIONS))
     ap.add_argument("--data-dir", default=str(ROOT / "data" / "positioning"))
+    ap.add_argument("--rebuild-conclusion", action="store_true")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    if a.rebuild_conclusion:
+        return rebuild_conclusion(Path(a.data_dir))
     only = [s.strip() for s in a.only.split(",") if s.strip()]
     ddir = Path(a.data_dir)
 
@@ -134,7 +138,7 @@ def main(argv=None):
 
     snap["crowding"] = report.crowding(snap["cta"], snap["cot"])
     snap["conclusion"] = report.build_conclusion(snap, prev)
-    snap["summary"] = interpret.summary(snap)
+    snap["brief"] = brief.build(snap, prev)
     snap["markdown"] = report.to_markdown(snap)
 
     _dump(wk_path, snap)
@@ -151,7 +155,7 @@ def main(argv=None):
             pprev = _load(ddir / "weeks" / f"{pp[-1]}.json") if pp else None
             prev["crowding"] = report.crowding(prev["cta"], prev["cot"])
             prev["conclusion"] = report.build_conclusion(prev, pprev)
-            prev["summary"] = interpret.summary(prev)
+            prev["brief"] = brief.build(prev, pprev)
             prev["markdown"] = report.to_markdown(prev)
             prev["status"] = "확정" if prev["asof"].get("cta") == prev["week"] and not prev["stale"] else prev["status"]
             _dump(ddir / "weeks" / f"{prev['week']}.json", prev)
@@ -162,6 +166,25 @@ def main(argv=None):
     _dump(ddir / "index.json", {"weeks": sorted(weeks.values(), key=lambda w: w["week"], reverse=True)}, indent=1)
     log.info("저장: %s (%s) stale=%s", wk_path, snap["status"], snap["stale"])
     print(snap["markdown"])
+
+
+def rebuild_conclusion(ddir: Path):
+    """규칙 변경 후 기존 주차 결론 재생성. 전주 brief를 쓰므로 오래된 주부터 순서대로"""
+    idx = _load(ddir / "index.json", {"weeks": []})
+    prev = None
+    for w in sorted(x["week"] for x in idx["weeks"]):
+        p = ddir / "weeks" / f"{w}.json"
+        snap = _load(p)
+        if not snap:
+            continue
+        snap.pop("summary", None)
+        snap["conclusion"] = report.build_conclusion(snap, prev)
+        snap["brief"] = brief.build(snap, prev)
+        snap["markdown"] = report.to_markdown(snap)
+        _dump(p, snap)
+        log.info("결론 재생성: %s", w)
+        print(snap["markdown"] + "\n")
+        prev = snap
 
 
 if __name__ == "__main__":

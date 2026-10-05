@@ -1,6 +1,6 @@
-"""주간 스냅샷 → 결론 문장(규칙 기반) · Notion 붙여넣기용 마크다운.
+"""주간 스냅샷 → 블록별 근거 수치 · CTA×COT 교차 · Notion 붙여넣기용 마크다운.
 
-문장은 모두 수치에서 기계적으로 생성한다(해석·전망 문구 최소화). 임계값은 THRESH에서 조정.
+결론(요약·변화 포인트·리스크)은 brief.py. 여기 문장은 수치를 그대로 옮긴 근거 목록. 임계값은 THRESH에서 조정.
 """
 from __future__ import annotations
 
@@ -206,10 +206,6 @@ def build_conclusion(snap: dict, prev: dict | None) -> list[dict]:
     if flags:
         cb.append({"kind": "cross", "head": "교차 확인(CTA 모델 × COT)",
                    "subs": [f"{r['name']}: {r['flag']} (CTA {sg(r['cta_pos'], 0)}%/{r['cta_pctile']:.0f}p · COT {r['cot_pctile']:.0f}p)" for r in flags]})
-    from .interpret import VIEWS
-    for b in cb:
-        fn = VIEWS.get(b.get("kind"))
-        b["view"] = (fn(snap) or []) if fn else []
     return cb
 
 
@@ -219,19 +215,18 @@ def _dir(v):
 
 def to_markdown(snap: dict) -> str:
     """Notion 위클리 노트 [매크로] 섹션에 붙여넣는 형식: 굵은 헤드 + 중첩 불릿."""
+    from .brief import to_lines
     lines = [f"**[포지셔닝] {snap['week_label']}**"]
-    if snap.get("summary"):
-        lines.append("- **요약**")
-        for s in snap["summary"]:
-            lines.append(f"    - {s}")
+    if snap.get("brief"):
+        for title, items in to_lines(snap["brief"]):
+            lines.append(f"- **{title}**")
+            for s in items:
+                lines.append(f"    - {s}")
+    lines.append("- **근거 수치**")
     for b in snap.get("conclusion", []):
-        lines.append(f"- **{b['head']}**")
-        for v in b.get("view", []):
-            lines.append(f"    - {v}")
-        if b["subs"]:
-            lines.append("    - 근거")
-            for s in b["subs"]:
-                lines.append(f"        - {s}")
+        lines.append(f"    - {b['head']}")
+        for s in b["subs"]:
+            lines.append(f"        - {s}")
     src = snap.get("asof", {})
     lines.append(f"- 기준: CTA 모델 {src.get('cta', '–')} 종가 · 옵션 CBOE {src.get('options', '–')} · COT {src.get('cot', '–')}(화)")
     return "\n".join(lines)

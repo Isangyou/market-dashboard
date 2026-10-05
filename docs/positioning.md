@@ -8,6 +8,7 @@ cd ~/Documents/dash
 .venv/bin/python -m positioning.run                        # 전체 → data/positioning/ 갱신, 결론 마크다운 출력
 .venv/bin/python -m positioning.run --only cot             # 일부만 (나머지는 이번 주 기존 값 유지)
 .venv/bin/python -m positioning.run --data-dir /tmp/pos    # 저장소 밖에 테스트
+.venv/bin/python -m positioning.run --rebuild-conclusion   # 수집 없이 저장된 전 주차 결론만 재생성(규칙 바꾼 뒤)
 gh workflow run positioning-weekly -R Isangyou/market-dashboard   # Actions 수동 실행
 ```
 Actions: `.github/workflows/positioning.yml` — KST 화~토 07:10 (UTC 월~금 22:10). 푸시 후 pages.yml 호출.
@@ -18,7 +19,8 @@ Actions: `.github/workflows/positioning.yml` — KST 화~토 07:10 (UTC 월~금 
 | `positioning/cta.py` | 추세추종 복제 모델 (yfinance 연속 선물 17종) |
 | `positioning/options.py` | CBOE 지연 체인 → P/C, OI 벽, 25Δ 스큐, ATM IV, 딜러 GEX·zero-gamma |
 | `positioning/cot.py` | CFTC Socrata API — TFF(금융) · Disaggregated(원자재) |
-| `positioning/report.py` | 결론 문장(규칙 기반, 임계값 `THRESH`) · Notion 마크다운 · CTA×COT 교차 |
+| `positioning/brief.py` | 결론(수치 기반): 한 줄 요약 · 변화 포인트 · 리스크, 전주 저장 결론과 비교. 기준 단위 `UNIT` |
+| `positioning/report.py` | 블록별 근거 수치(임계값 `THRESH`) · Notion 마크다운 · CTA×COT 교차 |
 | `positioning/run.py` | 진입점. 주차 키·확정 판정·실패 섹션 보충·옵션 일별 누적 |
 | `data/positioning/weeks/YYYY-MM-DD.json` | 주간 스냅샷 (키 = 미국 기준 그 주 금요일) |
 | `data/positioning/options_daily.json` | 옵션 스칼라 지표 일별 누적 (최근 800일) |
@@ -29,6 +31,17 @@ Actions: `.github/workflows/positioning.yml` — KST 화~토 07:10 (UTC 월~금 
 - `확정` = CTA 기준일이 금요일 && COT 기준일이 그 주 화요일 && 실패 섹션 없음. 아니면 `진행 중`
 - 휴일로 COT가 다음 주 월요일 공표 → 월요일 실행이 전주 파일에 COT 반영 후 확정
 - 한 소스 실패 시: 이번 주 기존 값 → 없으면 전주 값을 쓰고 `stale`에 기록 (화면 상단 표시)
+
+## 결론 (brief.py, 2026-10-05~)
+수치만. 해석·전망 문장 없음. 주차 파일 `brief`에 저장 → 다음 주가 `prev.brief`와 비교.
+| 블록 | 내용 |
+|---|---|
+| 한 줄 요약 | ES CTA 방향·%·3년 백분위, 전주 스냅샷 대비 %p·백분위. |Δ| < 5%p이고 방향 같으면 "방향·규모 변화 없음" |
+| 변화 포인트 | 범주 3개 중 점수(= |변화| / 기준 단위) ≥ 1만, 점수 큰 순 최대 3개. 부호 전환(룩백 신호 매수↔매도, GEX ±)은 +10점. 없으면 "변화 없음" |
+| 리스크 | 넘으면 신호가 바뀌는 ES 룩백 전환가 · SPX zero-gamma 중 현재가에서 가장 가까운 1개. 전환가면 그걸 넘는 첫 1주 시나리오의 포지션 변화 병기. 전주와 같은 임계값이면 그 사실과 거리 변화 표기 |
+
+기준 단위 `UNIT`: 전환가 거리 0.5%p · SPX 35일 GEX 5$bn · zero-gamma 거리 0.5%p · 25Δ 스큐 1vp · ATM IV 1%p · P/C(OI) 0.10 · COT 주간 변화 1σ(새 공표 주만) · ES 포지션 5%p(요약)
+화면 상단 배지 "지난주 결론과 변화 없음" = 요약 변화 없음 && 변화 포인트 0개 && 리스크 임계값 같음
 
 ## 모델·가정 (요약 — 상세는 각 모듈 docstring)
 - CTA: 룩백 20/60/125/250일 위험조정 모멘텀 tanh 평균 × 변동성 레버리지(3년 중앙 σ/60일 σ, 상한 1.5). ±100% = 정상 변동성 풀 포지션.

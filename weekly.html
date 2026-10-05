@@ -53,8 +53,6 @@
   .concl > li { margin: 6px 0; font-weight: 600; }
   .concl ul { font-weight: 400; color: var(--gray1); padding-left: 18px; margin: 2px 0 0; }
   .concl ul li { margin: 1px 0; font-size: 13px; }
-  .concl ul.view { color: var(--text); }
-  .concl ul.view li { margin: 3px 0; font-size: 13.5px; line-height: 1.55; }
   details.basis { margin: 2px 0 4px 18px; font-weight: 400; }
   details.basis summary { cursor: pointer; color: var(--faint); font-size: 11.5px; }
   details.basis ul { color: var(--muted); padding-left: 16px; }
@@ -63,6 +61,15 @@
   .summary .lbl { font-size: 11.5px; color: var(--muted); font-weight: 600; }
   .summary ul { margin: 4px 0 2px; padding-left: 18px; }
   .summary li { margin: 4px 0; font-size: 14px; line-height: 1.55; color: var(--text); }
+  .summary .lbl + ul, .summary .lbl + ol { margin-top: 2px; }
+  .summary .blk + .blk { margin-top: 8px; }
+  .summary ol { margin: 4px 0 2px; padding-left: 20px; }
+  .summary .dim { color: var(--faint); font-weight: 400; }
+  .summary .note { color: var(--faint); font-size: 12px; margin: 2px 0 0 18px; }
+  .summary .same { display: inline-block; font-size: 11px; color: var(--accent); border: 1px solid var(--accent); border-radius: 10px; padding: 0 7px; margin-left: 6px; font-weight: 600; }
+  details.prevb { margin: 0 0 10px; }
+  details.prevb summary, details.allbasis > summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+  details.prevb ul { margin: 4px 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; }
   @media print { details.basis[open] summary, details.basis { display: block; } }
 
   /* 카드 */
@@ -127,9 +134,10 @@
 
   <section class="panel">
     <h2><span class="secno">0</span>결론</h2>
-    <div class="sub" id="concl-sub">수치 조건 → 해석 규칙으로 자동 생성 (positioning/interpret.py) · 전망·목표가 아님 · 근거 수치는 펼쳐서 확인</div>
-    <div class="summary" id="summary-box"><div class="lbl">한눈 요약</div><ul id="summary"></ul></div>
-    <ul class="concl" id="concl"></ul>
+    <div class="sub" id="concl-sub">수치만으로 자동 생성 (positioning/brief.py) · 변화 포인트는 전주 대비 기준 단위 이상 바뀐 항목만 · 전망·목표가 아님</div>
+    <div class="summary" id="brief"></div>
+    <details class="prevb" id="prevb"><summary></summary><ul></ul></details>
+    <details class="allbasis"><summary>블록별 근거 수치</summary><ul class="concl" id="concl"></ul></details>
     <pre class="md" id="md"></pre>
   </section>
 
@@ -336,16 +344,28 @@ function render() {
 
 // ── 0. 결론 ──
 function renderConclusion() {
-  const ul = document.getElementById('concl');
+  const b = W.brief, box = document.getElementById('brief');
+  if (!b) { box.innerHTML = '<div class="empty">결론 없음 (brief 미생성 주차)</div>'; }
+  else {
+    const vs = b.vs_prev || {};
+    const ch = (b.changes || []).map(c => `<li><b>${esc(c.label)}</b> ${esc(c.text)}</li>`).join('');
+    box.innerHTML =
+      `<div class="blk"><div class="lbl">요약${vs.unchanged ? '<span class="same">지난주 결론과 변화 없음</span>' : ''}</div><ul><li>${esc(b.line?.text)}</li></ul></div>` +
+      `<div class="blk"><div class="lbl">변화 포인트 <span class="dim">(전주 대비, 변화 큰 순 최대 3개)</span></div>` +
+        (ch ? `<ol>${ch}</ol>` : '') + (b.changes_note ? `<div class="note">${esc(b.changes_note)}</div>` : '') + '</div>' +
+      `<div class="blk"><div class="lbl">리스크 <span class="dim">(가장 가까운 임계값)</span></div><ul><li>${esc(b.risk?.text || '임계값 데이터 없음')}</li></ul>` +
+        (vs.risk ? `<div class="note">${esc(vs.risk)}</div>` : '') + '</div>';
+  }
+  const pb = b?.prev_brief, pe = document.getElementById('prevb');
+  pe.style.display = pb ? '' : 'none';
+  if (pb) {
+    pe.querySelector('summary').textContent = `지난주 결론 (${b.prev_week} 주, 저장본)`;
+    pe.querySelector('ul').innerHTML = [pb.line, ...(pb.changes || []), pb.changes_note, pb.risk].filter(Boolean).map(t => `<li>${esc(t)}</li>`).join('');
+  }
   const cb = W.conclusion || [];
-  const sm = W.summary || [];
-  document.getElementById('summary').innerHTML = sm.length ? sm.map(s => `<li>${esc(s)}</li>`).join('') : '';
-  document.getElementById('summary-box').style.display = sm.length ? '' : 'none';
-  ul.innerHTML = cb.length ? cb.map(b => `<li>${esc(b.head)}` +
-      ((b.view || []).length ? '<ul class="view">' + b.view.map(v => `<li>${esc(v)}</li>`).join('') + '</ul>' : '') +
-      (b.subs?.length ? '<details class="basis"><summary>근거 수치</summary><ul>' + b.subs.map(s => `<li>${esc(s)}</li>`).join('') + '</ul></details>' : '') +
-      '</li>').join('')
-    : '<li class="empty">결론 없음</li>';
+  document.getElementById('concl').innerHTML = cb.length ? cb.map(b => `<li>${esc(b.head)}` +
+      (b.subs?.length ? '<ul>' + b.subs.map(s => `<li>${esc(s)}</li>`).join('') + '</ul>' : '') + '</li>').join('')
+    : '<li class="empty">근거 없음</li>';
   document.getElementById('md').textContent = W.markdown || '';
 }
 document.getElementById('copy').onclick = async e => {
