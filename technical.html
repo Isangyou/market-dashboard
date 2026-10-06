@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>기술적 지표</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root {
+    color-scheme: light;   /* 기술적 = 일별과 같은 쿨 라이트(슬레이트 블루) */
+    --bg: #f6f7f8; --panel: #ffffff; --line: #dcdfe3; --grid: #eceef1;
+    --text: #2a2d32; --muted: #5c6168; --faint: #868b93;
+    --accent: #7b93c4;   /* 슬레이트 블루 — 유일한 포인트 색 */
+    --gray1: #4b5058; --gray2: #a2a7ae;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", "Segoe UI", sans-serif; }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 20px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .meta, .src { color: var(--faint); font-size: 11px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  nav { display: flex; gap: 14px; font-size: 13px; flex-wrap: wrap; }
+  nav .here { color: var(--text); font-weight: 600; }
+  nav .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
+  .sw-blue { background: #ffffff; border: 1px solid #7b93c4; }    /* 쿨 라이트 · 슬레이트 블루 */
+  .sw-green { background: #f7f5f0; border: 1px solid #5f8f6e; }   /* 웜 라이트 · 세이지 그린 */
+  .meta b { color: var(--muted); font-weight: 500; }
+
+  /* 요약 카드 4개 */
+  .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+  .card .lbl { color: var(--muted); font-size: 12px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .tag { border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 10.5px; color: var(--muted); }
+  .card .val { font-size: 22px; font-weight: 600; margin: 4px 0 2px; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+  .card .chg { font-size: 12.5px; color: var(--gray1); font-variant-numeric: tabular-nums; }
+  .card .ind { font-size: 12.5px; color: var(--text); font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .card .ind .k { color: var(--muted); }
+  .card .src { margin-top: 6px; overflow-wrap: anywhere; }
+
+  /* 패널 2×2 */
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 14px 8px; min-width: 0; }
+  .panel h2 { font-size: 13.5px; font-weight: 600; margin: 0 0 2px; }
+  .panel .sub { color: var(--faint); font-size: 11px; margin-bottom: 4px; }
+  .row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+  .hval { font-size: 12.5px; color: var(--text); font-variant-numeric: tabular-nums; }
+  .hval .k { color: var(--muted); margin-left: 8px; }
+  .chart { width: 100%; height: 560px; }
+  .empty { color: var(--faint); font-size: 12px; padding: 24px 0; text-align: center; }
+  footer { color: var(--faint); font-size: 11px; margin-top: 18px; line-height: 1.7; }
+
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  @media (max-width: 720px) {
+    .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .card .val { font-size: 19px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>기술적 지표 · 과열/과매도 위치</h1>
+    <nav><a href="index.html"><i class="sw sw-blue"></i>일별 · 라이트(블루)</a><a href="intraday.html"><i class="sw sw-green"></i>장중 · 라이트(그린)</a><a href="weekly.html"><i class="sw sw-blue"></i>주간 포지셔닝 · 라이트(블루)</a><span class="here"><i class="sw sw-blue"></i>기술적 · 라이트(블루)</span></nav>
+    <div class="meta" id="meta"></div>
+  </header>
+
+  <section class="cards" id="cards"></section>
+
+  <section class="grid" id="grid"></section>
+
+  <footer>
+    50일 이동평균·이격도(종가 ÷ 50일 이평 × 100)·RSI(20일, Wilder 평활)는 이 대시보드가 일별 종가로 직접 계산. 50·21거래일 미만 구간은 비움.<br>
+    미국 지수(S&amp;P500 ^GSPC, 나스닥 종합 ^IXIC) = yfinance 일봉, 미국장 마감(16:00 ET) 뒤 확정 종가만 저장. 한국 지수 = 네이버 일별 시세, 한국장 마감(15:40 KST 이후) 값만 저장 → 미국·한국 기준일이 다를 수 있음.<br>
+    점선(가격 선) = 1차 소스 대신 폴백 소스 값이 들어간 구간. ▲/▼ 는 전일 대비 부호. 기준시각은 KST.
+  </footer>
+</div>
+
+<script>
+const CSS = getComputedStyle(document.documentElement);
+const C = Object.fromEntries(['bg','panel','line','grid','text','muted','faint','accent','gray1','gray2']
+  .map(k => [k, CSS.getPropertyValue('--' + k).trim()]));
+
+// 지수 정의: key = data/series/{key}.json, primary = 1차 소스 접두어(아니면 점선), close = 기준일 설명
+const IDX = [
+  { key: 'spx',    name: 'S&P500',      primary: 'yfinance', close: '미국장 마감' },
+  { key: 'ixic',   name: '나스닥 종합', primary: 'yfinance', close: '미국장 마감' },
+  { key: 'kospi',  name: '코스피',      primary: 'naver',    close: '한국장 마감' },
+  { key: 'kosdaq', name: '코스닥',      primary: 'naver',    close: '한국장 마감' },
+];
+const MA_N = 50, RSI_N = 20;
+const S = {};
+
+// ── 포맷 ──
+const nf = (v, d = 2) => v == null || isNaN(v) ? '–' :
+  Number(v).toLocaleString('ko-KR', { minimumFractionDigits: d, maximumFractionDigits: d });
+const arrow = v => v == null || isNaN(v) ? '' : v > 0 ? '▲' : v < 0 ? '▼' : '–';
+const signed = (v, d = 2) => v == null || isNaN(v) ? '–' : (v > 0 ? '+' : '') + nf(v, d);
+function fmtAsof(s) {
+  if (!s) return '';
+  if (s.length <= 10) return s.slice(5);
+  const m = s.match(/^\d{4}-(\d\d-\d\d)T(\d\d:\d\d)/);
+  return m ? `${m[1]} ${m[2]}` : s;
+}
+const shiftDate = (d, days) => { const t = new Date(d); t.setDate(t.getDate() - days); return t.toISOString().slice(0, 10); };
+
+// ── 지표 계산 ──
+// 50일 단순이동평균, 이격도 = 종가 ÷ 이평 × 100
+function sma(v, n) { return v.map((_, i) => i < n - 1 ? null : v.slice(i - n + 1, i + 1).reduce((a, b) => a + b, 0) / n); }
+// RSI(n, Wilder): 첫 평균 = 최초 n개 변화의 단순평균, 이후 avg = (avg×(n−1) + 오늘값) ÷ n. 손실 평균 0이면 100
+function rsiWilder(v, n) {
+  const out = v.map(() => null);
+  if (v.length <= n) return out;
+  let g = 0, l = 0;
+  for (let i = 1; i <= n; i++) { const d = v[i] - v[i - 1]; if (d > 0) g += d; else l -= d; }
+  g /= n; l /= n;
+  const val = () => l === 0 ? 100 : 100 - 100 / (1 + g / l);
+  out[n] = val();
+  for (let i = n + 1; i < v.length; i++) {
+    const d = v[i] - v[i - 1];
+    g = (g * (n - 1) + Math.max(d, 0)) / n;
+    l = (l * (n - 1) + Math.max(-d, 0)) / n;
+    out[i] = val();
+  }
+  return out;
+}
+function calc(o) {
+  const rs = (S[o.key] && S[o.key].records || []).filter(r => r.value != null).sort((a, b) => a.date < b.date ? -1 : 1);
+  const v = rs.map(r => r.value), ma = sma(v, MA_N);
+  return { rs, x: rs.map(r => r.date), v, ma, gap: v.map((c, i) => ma[i] == null ? null : c / ma[i] * 100), rsi: rsiWilder(v, RSI_N) };
+}
+
+// ── Plotly 공통 ──
+const CONFIG = { displayModeBar: false, responsive: true };
+function baseLayout(extra = {}) {
+  const ax = { gridcolor: C.grid, linecolor: C.line, zerolinecolor: C.line, tickfont: { size: 10.5, color: C.muted },
+               showspikes: true, spikemode: 'across', spikethickness: 1, spikecolor: C.faint, spikedash: 'solid' };
+  return Object.assign({
+    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { color: C.muted, size: 11, family: getComputedStyle(document.body).fontFamily },
+    margin: { l: 52, r: 12, t: 30, b: 24 }, hovermode: 'x unified',
+    hoverlabel: { bgcolor: C.panel, bordercolor: C.line, font: { color: C.text, size: 11.5 } },
+    legend: { orientation: 'h', x: 0, y: 1.07, font: { size: 11, color: C.muted }, bgcolor: 'rgba(0,0,0,0)' },
+    xaxis: { ...ax, type: 'date', hoverformat: '%Y-%m-%d' }, yaxis: { ...ax, showspikes: false },
+    _ax: ax,
+  }, extra);
+}
+function yFitter(x, ys, { fixed = [], minPad = 0.5, clamp = null } = {}) {
+  return ([x0, x1]) => {
+    const a = String(x0).slice(0, 10), b = String(x1).slice(0, 10);
+    const vals = x.flatMap((d, i) => d >= a && d <= b ? ys.map(s => s[i]) : []).filter(y => y != null);
+    if (!vals.length) return null;
+    vals.push(...fixed);
+    const lo = Math.min(...vals), hi = Math.max(...vals), pad = Math.max((hi - lo) * 0.08, minPad);
+    return clamp ? [Math.max(lo - pad, clamp[0]), Math.min(hi + pad, clamp[1])] : [lo - pad, hi + pad];
+  };
+}
+// x 범위(드래그·range slider)가 바뀌면 세 패널 y축을 보이는 구간에 맞춤
+function keepYFit(id, fits, full) {
+  const el = document.getElementById(id);
+  el.on('plotly_relayout', e => {
+    const r = e['xaxis.range'] || (e['xaxis.range[0]'] && [e['xaxis.range[0]'], e['xaxis.range[1]']]);
+    const x = r || (e['xaxis.autorange'] ? full : null);
+    if (!x) return;
+    const upd = {};
+    for (const [ax, fit] of Object.entries(fits)) { const y = fit(x.map(String)); if (y) upd[ax + '.range'] = y; }
+    if (Object.keys(upd).length) Plotly.relayout(el, upd);
+  });
+}
+// 가격 선: 1차 소스 = 실선, 폴백 = 점선(앞뒤 1차 점까지 이어 그림)
+function lineTraces(recs, primary, { name, color, width = 2, fmt = ',.2f' }) {
+  const x = recs.map(r => r.date), y = recs.map(r => r.value);
+  const fb = recs.map(r => !String(r.source).startsWith(primary));
+  const out = [{ x, y: y.map((v, i) => fb[i] ? null : v), name, type: 'scatter', mode: 'lines', line: { color, width },
+                 connectgaps: false, hoverinfo: 'skip', legendgroup: 'px' }];
+  if (fb.some(Boolean)) out.push({ x, y: y.map((v, i) => (fb[i] || fb[i - 1] || fb[i + 1]) ? v : null), name: name + ' · 폴백 구간',
+    type: 'scatter', mode: 'lines', line: { color, width, dash: 'dot' }, connectgaps: false, hoverinfo: 'skip', legendgroup: 'px' });
+  out.push({ x, y, name, type: 'scatter', mode: 'markers', marker: { size: 8, opacity: 0 }, showlegend: false,
+    customdata: recs.map((r, i) => r.source + (fb[i] ? ' · 폴백' : '')),
+    hovertemplate: `%{y:${fmt}} <span style="color:${C.faint}">%{customdata}</span><extra>${name}</extra>` });
+  return out;
+}
+
+// ── 카드 ──
+function renderCards(D) {
+  document.getElementById('cards').innerHTML = IDX.map((o, k) => {
+    const d = D[k], n = d.rs.length;
+    if (!n) return `<div class="card"><div class="lbl">${o.name}</div><div class="val">–</div><div class="src">데이터 없음</div></div>`;
+    const r = d.rs[n - 1], prev = n > 1 ? d.v[n - 2] : null, pct = prev ? (r.value / prev - 1) * 100 : null;
+    const g = d.gap[n - 1], rsi = d.rsi[n - 1];
+    return `<div class="card">
+      <div class="lbl">${o.name}<span class="tag">기준일 ${r.date.slice(5)} · ${o.close}</span></div>
+      <div class="val">${nf(r.value)}</div>
+      <div class="chg">${pct == null ? '전일대비 없음' : `${arrow(pct)} ${signed(pct)}%`}</div>
+      <div class="ind"><span class="k">이격도</span> ${nf(g, 1)} <span class="k">· RSI</span> ${nf(rsi, 1)}</div>
+      <div class="src">${r.source} · ${fmtAsof(r.asof)} KST</div></div>`;
+  }).join('');
+}
+
+// ── 지수별 3단 패널 (x축 공유, 6개월 기본, range slider) ──
+// 위: 종가 + 50일 이평 / 중: 50일 이격도 + 100·105·95 / 아래: RSI(20) + 70·50·30
+function renderIndex(o, d) {
+  const id = o.key + '-chart', n = d.rs.length;
+  if (!n) { document.getElementById(id).innerHTML = '<div class="empty">데이터 없음</div>'; return; }
+  const { x, v, ma, gap, rsi } = d, last = x[n - 1];
+  const lay = baseLayout();
+  const x0 = shiftDate(last, 183) > x[0] ? shiftDate(last, 183) : x[0];
+  lay.xaxis = { ...lay.xaxis, anchor: 'y3', range: [x0, shiftDate(last, -2)],
+    rangeslider: { visible: true, thickness: 0.06, bgcolor: C.bg, bordercolor: C.line, borderwidth: 1 } };
+  const fitTop = yFitter(x, [v, ma], { minPad: 1 });
+  const fitGap = yFitter(x, [gap], { fixed: [95, 105], minPad: 0.5 });
+  const fitRsi = yFitter(x, [rsi], { fixed: [30, 70], minPad: 2, clamp: [0, 100] });
+  const xr = lay.xaxis.range;
+  lay.yaxis = { ...lay.yaxis, domain: [0.56, 1], tickformat: ',.0f', range: fitTop(xr) };
+  lay.yaxis2 = { ...lay._ax, showspikes: false, domain: [0.29, 0.5], tickformat: '.0f', range: fitGap(xr) };
+  lay.yaxis3 = { ...lay._ax, showspikes: false, domain: [0, 0.23], tickformat: '.0f', range: fitRsi(xr) };
+  // 기준선: 중심(100·50) = 연회색 실선, 참고선(105·95·70·30) = 연회색 점선
+  const ref = [['y2', 100, 'solid'], ['y2', 105, 'dot'], ['y2', 95, 'dot'], ['y3', 50, 'solid'], ['y3', 70, 'dot'], ['y3', 30, 'dot']];
+  lay.shapes = ref.map(([yref, y, dash]) => ({ type: 'line', xref: 'paper', x0: 0, x1: 1, yref, y0: y, y1: y,
+    line: { color: C.gray2, width: 1, dash }, layer: 'below' }));
+  // 이격도 패널 높이 약 100px: 5포인트 간격이 12px 미만이면 105·95 라벨은 생략(선은 유지) — 일별 페이지와 같은 규칙
+  const gr = lay.yaxis2.range, tight = gr && 5 / (gr[1] - gr[0]) * 100 < 12;
+  lay.annotations = [
+    ...ref.filter(([yref, y]) => !(tight && yref === 'y2' && y !== 100)).map(([yref, y]) => ({ xref: 'paper', x: 1, yref, y, text: String(y), showarrow: false,
+      xanchor: 'right', yanchor: 'bottom', font: { size: 9.5, color: C.faint } })),
+    ...[[1, '종가 · 50일 이평'], [0.5, '50일 이격도'], [0.23, `RSI ${RSI_N}`]].map(([y, t]) => ({ xref: 'paper', yref: 'paper', x: 0, y,
+      text: t, showarrow: false, xanchor: 'left', yanchor: 'bottom', font: { size: 10, color: C.muted } })),
+  ];
+  lay.legend = { ...lay.legend, y: 1.09 };
+  Plotly.react(id, [
+    ...lineTraces(d.rs, o.primary, { name: `${o.name} 종가`, color: C.accent }),
+    { x, y: ma, name: '50일 이동평균', type: 'scatter', mode: 'lines', line: { color: C.gray1, width: 1.4, dash: 'dash' },
+      connectgaps: false, hovertemplate: '%{y:,.2f}<extra>50일 이평</extra>' },
+    { x, y: gap, name: '이격도', type: 'scatter', mode: 'lines', yaxis: 'y2', line: { color: C.accent, width: 1.6 },
+      connectgaps: false, showlegend: false, hovertemplate: '%{y:.1f}<extra>이격도</extra>' },
+    { x, y: rsi, name: 'RSI', type: 'scatter', mode: 'lines', yaxis: 'y3', line: { color: C.accent, width: 1.6 },
+      connectgaps: false, showlegend: false, hovertemplate: '%{y:.1f}<extra>RSI 20</extra>' },
+  ], (delete lay._ax, lay), CONFIG);
+  keepYFit(id, { yaxis: fitTop, yaxis2: fitGap, yaxis3: fitRsi }, [x[0], last]);
+  const g = gap[n - 1], r = rsi[n - 1], lr = d.rs[n - 1];
+  document.getElementById(o.key + '-val').innerHTML = `<span class="k">이격도</span> ${nf(g, 1)}<span class="k">RSI</span> ${nf(r, 1)}`;
+  document.getElementById(o.key + '-sub').textContent =
+    `6개월 기본 · 기준일 ${lr.date} (${o.close}) · 종가 ${nf(lr.value)} / 50일 이평 ${nf(ma[n - 1])} · ${lr.source} · ${x[0]} ~ ${last} (${n}거래일)`;
+}
+
+// ── 로드 ──
+async function getJSON(path) {
+  const r = await fetch(path, { cache: 'no-store' });
+  if (!r.ok) throw new Error(`${path} ${r.status}`);
+  return r.json();
+}
+async function main() {
+  document.getElementById('grid').innerHTML = IDX.map(o => `<div class="panel">
+      <div class="row"><h2>${o.name}</h2><span class="hval" id="${o.key}-val"></span></div>
+      <div class="sub" id="${o.key}-sub"></div>
+      <div id="${o.key}-chart" class="chart"></div></div>`).join('');
+  const res = await Promise.allSettled(IDX.map(o => getJSON(`data/series/${o.key}.json`)));
+  res.forEach((r, i) => { if (r.status === 'fulfilled') S[IDX[i].key] = r.value; });
+  const miss = res.filter(r => r.status !== 'fulfilled').length;
+  let gen = '';
+  try { gen = (await getJSON('data/latest.json')).generated_at; } catch (e) { /* 메타 줄만 생략 */ }
+  document.getElementById('meta').innerHTML = (gen ? `갱신 <b>${fmtAsof(gen)}</b> KST` : '') + (miss ? ` · 시계열 누락 ${miss}건` : '');
+  const D = IDX.map(calc);
+  const safe = (name, fn) => { try { fn(); } catch (e) { console.error(name, e); } };
+  safe('cards', () => renderCards(D));
+  IDX.forEach((o, k) => safe(o.key, () => renderIndex(o, D[k])));
+}
+main();
+</script>
+</body>
+</html>

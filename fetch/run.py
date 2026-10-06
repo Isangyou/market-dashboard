@@ -255,6 +255,16 @@ def main():
         else:
             log.warning("%s: 모든 소스 실패, 이전 값도 없음", key)
 
+    # ── 미국 지수 일봉 (technical.html: S&P500·나스닥 종합) ── 첫 실행 1년, 이후 1개월. 미국장 마감 전 오늘 봉은 제외
+    for key, (label, _) in yf.INDEX.items():
+        s = Series(key, label, "pt")
+        n_new = s.merge(call("yfinance", yf.index_daily, key, "1y" if args.backfill or len(s) < 200 else "1mo", now))
+        if s.save():
+            changed.append(f"series/{key}.json (+{n_new})")
+        if len(s):
+            r = s.last()[0]
+            print(f"index {key:5} {r['date']} {r['value']:,} [{r['source']} {r['asof']}] {len(s)}행")
+
     # ── 지수 일별 거래대금 (E36, 억원) ── 네이버가 최근 약 6거래일만 보관 → 과거분 없음, 09-17부터 누적.
     # 날짜당 요청 1회라 kospi.json 최근 10거래일 중 빠진 날만 받음(보통 장 마감 후 1건). 6거래일 넘게 못 받으면 그날은 영구 결측
     kdates = [r["date"] for r in Series("kospi", "코스피", "pt").last(10)]
