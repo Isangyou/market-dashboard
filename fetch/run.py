@@ -375,9 +375,17 @@ def main():
     deposit_last = s.last()[0] if len(s) else None
 
     # ── 외국인 상위 10 ──
+    # E5는 장중~저녁(estimated=true)엔 금액(accTradeAmount)이 전부 "0"이고 순위도 수량순 → 쓸 수 없는 값.
+    # 금액이 전부 0이면 실패로 보고 이전 유효값(금액 있는 것) 유지 + stale. 확정치(estimated=false)는 대략 20~23시 KST에 나옴
     top, prev_top = {}, prev_latest.get("foreign_top", {})
+    valid = lambda t: any(x["net_amount"] for x in t.get("buy", []) + t.get("sell", []))  # noqa: E731
     for m in MARKETS:
         df = call("naver", naver.foreign_top, m, "DAY", 10)
+        zero = df is not None and not df["net_amount"].astype(float).any()
+        if zero:
+            log.warning("foreign_top %s: 금액 전부 0 (estimated=%s, %s) → 이전 유효값 유지",
+                        m, bool(df["estimated"].any()), df["asof"].iloc[0])
+            df = None
         if df is None and m in investor:
             df = call("pykrx", krx.foreign_top, m, investor[m]["date"].replace("-", ""), 10)
         if df is not None:
@@ -386,9 +394,11 @@ def main():
                       "date_from": r[0]["date_from"], "date_to": r[0]["date_to"],
                       "buy": [x for x in r if x["side"] == "buy"],
                       "sell": [x for x in r if x["side"] == "sell"], "stale": False}
-        elif m in prev_top:
-            top[m] = {**prev_top[m], "stale": True}
-            log.warning("foreign_top %s: 실패 → stale", m)
+        elif m in prev_top and valid(prev_top[m]):
+            top[m] = {**prev_top[m], "stale": True, "stale_reason": "장중 잠정 · 금액 0" if zero else "수집 실패"}
+            log.warning("foreign_top %s: %s → stale", m, top[m]["stale_reason"])
+        else:
+            log.warning("foreign_top %s: 이전 유효값도 없음 → 표시 안 함", m)
 
     inv_sources = ["naver"] + ([] if "pykrx" in disabled else ["pykrx"])
     latest = {"generated_at": now.isoformat(), "items": items,

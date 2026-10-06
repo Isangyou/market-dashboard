@@ -725,7 +725,7 @@ function renderTables() {
     const t = T[m];
     const head = `<div class="row"><h2>${m === 'KOSPI' ? '코스피' : '코스닥'}</h2>
       <span class="src">${t ? esc(srcLine(t.source, t.asof)) + ` · ${t.date_from === t.date_to ? t.date_to : t.date_from + '~' + t.date_to}` +
-        (t.stale ? ' · <span class="stale-note">stale · 이전 값</span>' : '') : ''}</span></div>`;
+        (t.stale ? ` · <span class="stale-note">stale · 이전 값${t.stale_reason ? ' (' + esc(t.stale_reason) + ')' : ''}</span>` : '') : ''}</span></div>`;
     return `<div>${head}<div class="tpair">${table(t && t.buy, '순매수 상위')}${table(t && t.sell, '순매도 상위')}</div></div>`;
   }).join('');
   const any = T.KOSPI || T.KOSDAQ;
