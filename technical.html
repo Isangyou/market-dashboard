@@ -200,7 +200,7 @@ function renderCards(D) {
 }
 
 // ── 지수별 3단 패널 (x축 공유, 6개월 기본, range slider) ──
-// 위: 종가 + 50일 이평 / 중: 50일 이격도 + 100·105·95 / 아래: RSI(20) + 70·50·30
+// 위: 종가 + 50일 이평 / 중: 50일 이격도 + 110·90 / 아래: RSI(20) + 70·30
 function renderIndex(o, d) {
   const id = o.key + '-chart', n = d.rs.length;
   if (!n) { document.getElementById(id).innerHTML = '<div class="empty">데이터 없음</div>'; return; }
@@ -210,20 +210,18 @@ function renderIndex(o, d) {
   lay.xaxis = { ...lay.xaxis, anchor: 'y3', range: [x0, shiftDate(last, -2)],
     rangeslider: { visible: true, thickness: 0.06, bgcolor: C.bg, bordercolor: C.line, borderwidth: 1 } };
   const fitTop = yFitter(x, [v, ma], { minPad: 1 });
-  const fitGap = yFitter(x, [gap], { fixed: [95, 105], minPad: 0.5 });
+  const fitGap = yFitter(x, [gap], { fixed: [90, 110], minPad: 0.5 });
   const fitRsi = yFitter(x, [rsi], { fixed: [30, 70], minPad: 2, clamp: [0, 100] });
   const xr = lay.xaxis.range;
   lay.yaxis = { ...lay.yaxis, domain: [0.56, 1], tickformat: ',.0f', range: fitTop(xr) };
-  lay.yaxis2 = { ...lay._ax, showspikes: false, domain: [0.29, 0.5], tickformat: '.0f', range: fitGap(xr) };
-  lay.yaxis3 = { ...lay._ax, showspikes: false, domain: [0, 0.23], tickformat: '.0f', range: fitRsi(xr) };
-  // 기준선: 중심(100·50) = 연회색 실선, 참고선(105·95·70·30) = 연회색 점선
-  const ref = [['y2', 100, 'solid'], ['y2', 105, 'dot'], ['y2', 95, 'dot'], ['y3', 50, 'solid'], ['y3', 70, 'dot'], ['y3', 30, 'dot']];
-  lay.shapes = ref.map(([yref, y, dash]) => ({ type: 'line', xref: 'paper', x0: 0, x1: 1, yref, y0: y, y1: y,
+  lay.yaxis2 = { ...lay._ax, showspikes: false, showgrid: false, zeroline: false, domain: [0.29, 0.5], tickformat: '.0f', range: fitGap(xr) };
+  lay.yaxis3 = { ...lay._ax, showspikes: false, showgrid: false, zeroline: false, domain: [0, 0.23], tickformat: '.0f', range: fitRsi(xr) };
+  // 가로선은 참고선 4줄뿐 (네 지수 동일): 이격도 110·90, RSI 70·30 — 연한 회색 점선. 격자선·중심선 없음
+  const ref = [['y2', 110], ['y2', 90], ['y3', 70], ['y3', 30]], dash = 'dot';
+  lay.shapes = ref.map(([yref, y]) => ({ type: 'line', xref: 'paper', x0: 0, x1: 1, yref, y0: y, y1: y,
     line: { color: C.gray2, width: 1, dash }, layer: 'below' }));
-  // 이격도 패널 높이 약 100px: 5포인트 간격이 12px 미만이면 105·95 라벨은 생략(선은 유지) — 일별 페이지와 같은 규칙
-  const gr = lay.yaxis2.range, tight = gr && 5 / (gr[1] - gr[0]) * 100 < 12;
   lay.annotations = [
-    ...ref.filter(([yref, y]) => !(tight && yref === 'y2' && y !== 100)).map(([yref, y]) => ({ xref: 'paper', x: 1, yref, y, text: String(y), showarrow: false,
+    ...ref.map(([yref, y]) => ({ xref: 'paper', x: 1, yref, y, text: String(y), showarrow: false,
       xanchor: 'right', yanchor: 'bottom', font: { size: 9.5, color: C.faint } })),
     ...[[1, '종가 · 50일 이평'], [0.5, '50일 이격도'], [0.23, `RSI ${RSI_N}`]].map(([y, t]) => ({ xref: 'paper', yref: 'paper', x: 0, y,
       text: t, showarrow: false, xanchor: 'left', yanchor: 'bottom', font: { size: 10, color: C.muted } })),
