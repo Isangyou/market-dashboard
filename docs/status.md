@@ -1,4 +1,4 @@
-# 현재 상태 (2026-09-28 월요일 14:40 KST 기준)
+# 현재 상태 (2026-10-06 화요일 16:30 KST 기준)
 
 다음 세션에서 이어가기 위한 요약. 수치는 모두 실제 실행 결과.
 
@@ -23,13 +23,30 @@
 | 코스피·코스닥 일별 | `naver.prices_history`(E34) → `data/series/kospi.json`·`kosdaq.json` (source=naver:index_price) | 첫 실행 5페이지(299행, 2025-07-07~), 이후 매 실행 1페이지. 오늘 행은 15:40 KST 이후만 저장(장중 실시간값 제외), asof=그날 15:30. latest.json items에도 들어가나 상단 카드는 추가 안 함 |
 | VKOSPI | `fetch/kred.py`(E33) → `data/series/vkospi.json` (source=kred:KRVKOSPI, 2010-01-04~, 4,118행) | 요청 1회 = 전체 이력. update.yml 안에서 `kred_due`로 하루 ≤2회(16:30 이후 1회 + 당일값 없으면 20:00 이후 1회). 실패 시 카드 stale. 09-28은 로컬 확인 2회로 소진 → Actions 첫 요청은 09-29 16:30 이후 |
 | 증시자금동향 | `fetch/naver.py deposit_trend`(E32) → `data/series/deposit.json` (고객예탁금·신용잔고·주식형/혼합형/채권형 펀드, 억원) | 2002-05-03~2026-09-22 6,006일 백필(로컬 1회). update.yml 매 실행 최신 1페이지, `asof`=기준일이라 값이 같으면 파일 안 씀(재실행 0건 변경 확인). 2거래일 지연. 파일 1.26MB(gzip 약 170KB) — 화면이 전체를 읽음 |
-| ADR | `fetch/naver.py breadth`(E29) → `data/series/breadth_*.json` → `fetch/run.py adr_from_breadth` → `data/series/adr_*.json` | 네이버는 당일 스냅샷만 → **09-28 장 마감분부터 누적**. 첫 ADR = 20거래일째(약 10-27). **과거분 없음**(adrinfo 403, 아래). **ADR 차트 비활성 — 20일 누적 후 활성화 가능** (수집은 계속) |
+| ADR | 1차 `fetch/adrinfo.py`(E37) → `data/series/adr_kospi.json`·`adr_kosdaq.json` (source=adrinfo, 2019-10-07~, 1,718·1,717행). 폴백 `fetch/naver.py breadth`(E29) → `breadth_*.json` → `run.py adr_from_breadth` → `adr_naver_*.json` | **2026-10-06 adrinfo 이력 등록**: 사용자 제공 `adr_history_adrinfo.json`으로 시드(파일은 원본 그대로 보존). update-data가 평일 16:00 KST 이후 첫 실행에서 하루 1회 요청(`meta.adrinfo_fetches`), 새 날짜만 이어 붙임. 403이면 그날은 네이버 계산값을 넣고(화면 점선) 다음 날 adrinfo 값으로 교체. 네이버 계산값은 20거래일째(약 10-27)부터 생김 → 그전엔 폴백할 값이 없음. **일별 차트 활성**(유가 전체 폭 → VIX \| ADR → VKOSPI 전체 폭, 1년 기본·range slider·120·75 연회색 점선·adrinfo 실선/네이버 점선·출처 adrinfo.kr) |
+
+## 2026-10-06 (화) ADR — adrinfo.kr 소스 등록
+- 이력: `data/series/adr_history_adrinfo.json`(사용자 제공, source=adrinfo) → `adr_kospi.json` 1,718행 · `adr_kosdaq.json` 1,717행(2019-10-07~2026-10-06), asof = 그날 15:30 KST. 10-06 코스피 **84.31** · 코스닥 **101.76**
+- 파서 검증: 16:07:42 `requests` 1회(일반 브라우저 UA) → 200, 98KB. 파싱 결과가 사용자 파일과 날짜·값 **차이 0건**. 이 요청을 `latest.json meta.adrinfo_fetches`에 기록 → 오늘 Actions는 다시 요청하지 않음
+- 기존 네이버 계산값 파일 `adr_kospi/kosdaq.json`(빈 파일) → **`adr_naver_kospi/kosdaq.json`으로 이름 변경**. `adr_*.json`은 이제 화면용(adrinfo + 폴백)
+- **오차 대조: 겹치는 날짜 0일 → 판단 불가, 집계 기준 변경 안 함.** 네이버 등락 종목 수는 09-28~10-06 **6거래일**만 있고 ADR은 20거래일 합이라 첫 계산값이 약 10-27. 등락 종목 수 일별값으로 adrinfo ADR을 역산하는 것도 불가(20일 창 앞쪽 값 미지)
+  - 참고(일별 원값, 대조 아님): 10-06 네이버 KOSPI 상승 425 · 하락 461 · 보합 32(합 918) / KOSDAQ 1,012 · 645 · 81(합 1,738). KOSPI 합 918은 ETF(수백 종목)를 포함한 수치보다 작음 → ETF 제외로 추정(미확인). 우선주·보합 처리는 미확인
+  - adrinfo 산식(보합 제외 여부 등)은 받은 HTML에서 설명 못 찾음
+- 폴백 시뮬레이션(임시 폴더, 가짜 등락 수 25일 + adrinfo None, 시각 10-07 17:00): 10-07 행이 `naver:indicators_breadth`로 채워짐, adrinfo 호출 1회, `adrinfo_due` 15:59 False · 16:00 True · 같은 날 2번째 False · 토요일 False
+- 화면: 데스크톱 1440·모바일 390 콘솔 오류 0, 가로 넘침 없음. 1년 기본 범위 2025-10-06~2026-10-08
+
+### 10-07 이후 확인할 점
+1. 10-07 16:00 이후 첫 update-data 실행: `adrinfo 요청: 성공`, `adr_*.json`에 10-07 1행씩 추가, `meta.adrinfo_fetches` 1건. 403이면 로그 `adrinfo → HTTP 403`
+2. adrinfo **당일 값 확정 시각 미검증**: 10-06 값(16:07 수집)이 다음 날 배열에서 바뀌면 경고 로그 `기존 날짜 값 변경 N건 (덮지 않음)` → 나오면 요청 시각을 늦추거나 직전 1일 덮어쓰기 검토
+3. GitHub 매시 cron 누락이 잦음(09-28 기록) → 16시대 실행이 빠지면 그날 첫 실행(17·18시…)에서 요청. 하루 종일 안 돌면 다음 날 실행이 빠진 날까지 함께 이어 붙임
+4. 공휴일(평일)엔 1회 헛요청(새 날짜 없음) — 하루 1회 범위 안
 
 ## 소스 상태
 | 소스 | 상태 |
 |---|---|
 | 네이버 | 1차. 로컬·Actions(미국 IP) 모두 403/429 없음 |
 | yfinance | 폴백 동작. 단 `CNH=X` 이력이 1행뿐 → usdcnh는 매 실행 누적 중(전일대비는 2일치 쌓인 뒤) |
+| adrinfo.kr | ADR 1차. 10-06 16:07 로컬 200. 09-28 장중 Playwright는 403(장중 크롤링 차단 문구) → 16:00 이후 하루 1회만 |
 | FRED | `FRED_API_KEY` 없음 → 꺼짐. 키 없는 fredgraph.csv는 봇 차단 |
 | pykrx | 기본 비활성(`run.py DEFAULT_DISABLED`). Actions의 새 pykrx가 `KRX_ID/KRX_PW` 환경변수 로그인 요구 메시지를 냄 → Secrets로 되살릴 수 있을지 미검증 |
 
@@ -102,8 +119,7 @@
 ## 열린 이슈 / 다음 할 일 후보
 - **거래대금 차트 비활성 (09-29)**: `tv_*.json`이 20행 이상(약 10-20)이면 `index.html` `TV_ENABLED = true`. 6개월 차트가 채워지는 건 약 2027-03
 - 증시자금동향: `totalElements` 6,007 vs 저장 6,006(날짜 중복 1건 추정, 미확인). 카드 차트는 3개월 고정(줌·range slider 없음)
-- **ADR 차트 비활성 — 20일 누적 후 활성화 가능** (2026-09-28): `breadth_*.json`이 20행 이상이면 `index.html`의 `ADR_ENABLED = true`로 켜기. 코드(renderAdr·패널 HTML)는 그대로 있음
-- **ADR 계산 기준 미확인**: `risingCount`에 상한가 포함 여부, ETF·우선주 포함 여부. 외부 대조 소스 없음(adrinfo 403) → 공개 시황 기사 등의 등락 종목 수와 수기 대조가 필요할 수 있음
+- **ADR 네이버 계산값 ↔ adrinfo 대조 (미완)**: 겹치는 날짜 0일 — 위 10-06 항목. 약 10-27 첫 네이버 ADR이 나오면 `python -m fetch.run` 요약 줄 `adr KOSPI … 네이버 계산값과 겹침 N일 평균차 … 최대|차| …`로 확인 → 차이가 크면 집계 기준(ETF·우선주·보합) 조정
 - **ADR 누락일**: 마감 후 update-data가 한 번도 안 돈 날은 breadth가 빠지고, ADR 창이 20거래일보다 길어짐(미보정)
 - **VKOSPI 해결 (2026-09-28)**: 네이버·KRX 대신 KRED(kred.dev) 재공표 계열 사용(E33). 이전 보류 사유: 네이버 미제공(VKOSPI 코드 빈 배열·409), KRX는 로그인·인증키 필요 (상세는 git 이력의 이 파일 09-27판)
   - 라이선스 CC BY-NC-ND 4.0: 출처 표기함(일별 차트 아래·장중 카드). ND 조항 때문에 일별 차트의 20일 이평선은 제거(09-28), **원값만** 표시. 장중 카드의 60일 분위(파생 수치)는 남아 있음. 공개 저장소에 전체 이력(vkospi.json)을 원형 그대로 재배포 중

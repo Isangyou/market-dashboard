@@ -179,17 +179,18 @@
       <div class="sub" id="vix-sub"></div>
       <div id="vix-chart" class="chart" style="height:320px"></div>
     </div>
-    <div class="panel">
-      <h2>VKOSPI</h2>
-      <div class="sub" id="vkospi-sub"></div>
-      <div id="vkospi-chart" class="chart" style="height:320px"></div>
-      <div class="note">출처: <a href="https://kred.dev/ko/series/KRVKOSPI" target="_blank" rel="noopener">KRED (kred.dev)</a>, <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank" rel="noopener">CC BY-NC-ND 4.0</a> · 원값 그대로 표시</div>
-    </div>
-    <!-- ADR: 비활성(ADR_ENABLED=false). hidden이라 그리드 칸을 차지하지 않음 -->
+    <!-- ADR: VIX 옆. ADR_ENABLED=false면 hidden(그리드 칸 차지 안 함) + VKOSPI가 VIX 옆으로 -->
     <div class="panel" id="adr-panel" hidden>
       <div class="row"><h2>ADR 20일 등락비율</h2><span class="hval" id="adr-val"></span></div>
       <div class="sub" id="adr-sub"></div>
       <div id="adr-chart" class="chart" style="height:320px"></div>
+      <div class="note">출처: <a href="http://adrinfo.kr/chart" target="_blank" rel="noopener">adrinfo.kr</a> · 점선 = adrinfo 미수신일의 네이버 등락 종목 수 자체 계산값</div>
+    </div>
+    <div class="panel" id="vkospi-panel">
+      <h2>VKOSPI</h2>
+      <div class="sub" id="vkospi-sub"></div>
+      <div id="vkospi-chart" class="chart" style="height:320px"></div>
+      <div class="note">출처: <a href="https://kred.dev/ko/series/KRVKOSPI" target="_blank" rel="noopener">KRED (kred.dev)</a>, <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank" rel="noopener">CC BY-NC-ND 4.0</a> · 원값 그대로 표시</div>
     </div>
   </section>
 
@@ -243,10 +244,9 @@ const C = Object.fromEntries(['bg','panel','line','grid','text','muted','faint',
 const SERIES_KEYS = ['investor_kospi','investor_kosdaq','usdkrw','usdjpy','usdcnh','eurusd','dxy',
   'ust_1m','ust_2m','ust_3m','ust_6m','ust_1y','ust_2y','ust_3y','ust_5y','ust_7y','ust_10y','ust_20y','ust_30y',
   'ktb_3y','ktb_10y','wti','brent','vix','vkospi','deposit','stock_005930','stock_000660'];
-// ADR 차트 스위치. 데이터 누적(update.yml → breadth_*/adr_*.json)은 항상 돌고, 화면만 끔.
-// true로 바꾸면 ADR 칸 표시 + 유가를 한 칸으로 줄여 유가 | VIX, VKOSPI | ADR 배치
-const ADR_ENABLED = false;
-if (ADR_ENABLED) SERIES_KEYS.push('breadth_kospi', 'breadth_kosdaq', 'adr_kospi', 'adr_kosdaq');
+// ADR 차트 스위치. true면 유가(전체 폭) → VIX | ADR → VKOSPI(전체 폭). false면 VIX | VKOSPI
+const ADR_ENABLED = true;
+if (ADR_ENABLED) SERIES_KEYS.push('adr_kospi', 'adr_kosdaq');
 // 코스피·코스닥 이격도 차트 스위치 (09-28 종목 차트로 교체). 데이터(kospi/kosdaq.json)는 계속 수집됨.
 // true면 삼성전자 | SK하이닉스 아래 줄에 코스피 | 코스닥 추가
 const INDEX_GAP_ENABLED = false;
@@ -256,7 +256,7 @@ if (TV_ENABLED) SERIES_KEYS.push('tv_kospi', 'tv_kosdaq');
 if (INDEX_GAP_ENABLED) SERIES_KEYS.push('kospi', 'kosdaq');
 const TENORS = ['1M','2M','3M','6M','1Y','2Y','3Y','5Y','7Y','10Y','20Y','30Y'];
 // 항목별 1차 소스. 이 접두어가 아닌 레코드 = 폴백 → 점선
-const PRIMARY = { usdcnh: 'yfinance', vkospi: 'kred' };
+const PRIMARY = { usdcnh: 'yfinance', vkospi: 'kred', adr_kospi: 'adrinfo', adr_kosdaq: 'adrinfo' };
 const primaryOf = k => PRIMARY[k] || 'naver';
 
 let L = null, S = {}, market = 'KOSPI';
@@ -570,28 +570,20 @@ function renderVolChart(key, name, withMa = true) {
 const renderVix = () => renderVolChart('vix', 'VIX');
 const renderVkospi = () => renderVolChart('vkospi', 'VKOSPI', false);
 
-// ── ADR 20일 등락비율 (코스피·코스닥, 3개월 기본, range slider) ──
-// ADR = 최근 20거래일 상승 종목 수 합 ÷ 하락 종목 수 합 × 100 (fetch/run.py adr_from_breadth).
-// 네이버에 이력이 없어 09-28 장 마감분부터 직접 누적(과거분 없음). 20거래일 쌓이기 전엔 '누적 중' 표시
-const ADR_N = 20;
+// ── ADR 20일 등락비율 (코스피·코스닥, 1년 기본, range slider) ──
+// 1차 adrinfo.kr(2019-10~, update.yml 하루 1회 갱신) = 실선, adrinfo 미수신일의 네이버 자체 계산값 = 점선(lineTraces 폴백)
 function renderAdr() {
-  const mk = [['adr_kospi', 'breadth_kospi', '코스피', C.accent], ['adr_kosdaq', 'breadth_kosdaq', '코스닥', C.gray1]]
-    .map(([k, bk, name, color]) => ({ k, name, color, rs: recs(k), n: recs(bk).length }));
-  const n = Math.min(...mk.map(o => o.n));
-  const acc = n < ADR_N ? `누적 중 (${n}/${ADR_N}일)` : '';
-  const cur = mk.map(o => { const r = o.rs[o.rs.length - 1]; return r ? `<span class="k">${o.name}</span> ${nf(r.value, 1)}` : ''; }).join('');
-  document.getElementById('adr-val').innerHTML = cur + (acc ? `<span class="tag" style="margin-left:8px">${acc}</span>` : '');
+  const mk = [['adr_kospi', '코스피', C.accent], ['adr_kosdaq', '코스닥', C.gray1]]
+    .map(([k, name, color]) => ({ k, name, color, rs: recs(k) }));
+  document.getElementById('adr-val').innerHTML = mk.map(o => { const r = o.rs[o.rs.length - 1]; return r ? `<span class="k">${o.name}</span> ${nf(r.value, 1)}` : ''; }).join('');
   const lastR = mk.map(o => o.rs[o.rs.length - 1]).filter(Boolean)[0];
-  document.getElementById('adr-sub').textContent = '3개월 기본 · 최근 20거래일 상승 합 ÷ 하락 합 × 100 · 120·75 기준선 · 09-28부터 장 마감 후 등락 종목 수 누적' +
+  document.getElementById('adr-sub').textContent = '1년 기본 · 20거래일 상승 종목 수 합 ÷ 하락 합 × 100 · 120·75 기준선' +
     (lastR ? ` · ${srcLine(lastR.source, lastR.asof)}` : '');
-  if (!mk.some(o => o.rs.length)) {
-    document.getElementById('adr-chart').innerHTML = `<div class="empty">${acc || '데이터 없음'} · ADR은 ${ADR_N}거래일째부터 표시</div>`;
-    return;
-  }
+  if (!mk.some(o => o.rs.length)) return empty('adr-chart');
   const dates = [...new Set(mk.flatMap(o => o.rs.map(r => r.date)))].sort();
   const first = dates[0], last = dates[dates.length - 1];
   const lay = baseLayout({ margin: { l: 40, r: 12, t: 30, b: 24 } });
-  lay.xaxis = { ...lay.xaxis, range: [shiftDate(last, 91) > first ? shiftDate(last, 91) : first, shiftDate(last, -2)],
+  lay.xaxis = { ...lay.xaxis, range: [shiftDate(last, 365) > first ? shiftDate(last, 365) : first, shiftDate(last, -2)],
     rangeslider: { visible: true, thickness: 0.1, bgcolor: C.bg, bordercolor: C.line, borderwidth: 1 } };
   // 기준선은 shape(연한 회색 점선) — 범례·호버에 안 섞임
   lay.shapes = [120, 75].map(y => ({ type: 'line', xref: 'paper', x0: 0, x1: 1, y0: y, y1: y,
@@ -772,7 +764,7 @@ async function main() {
   safe('ktb', renderKtb); safe('sparks', renderSparks); safe('oil', renderOil); safe('vix', renderVix); safe('vkospi', renderVkospi); safe('funds', renderFunds); safe('tables', renderTables);
   if (ADR_ENABLED) {
     document.getElementById('adr-panel').hidden = false;
-    document.getElementById('oil-panel').classList.remove('span2');
+    document.getElementById('vkospi-panel').classList.add('span2');
     safe('adr', renderAdr);
   }
 

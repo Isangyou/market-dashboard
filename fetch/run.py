@@ -24,13 +24,13 @@ if __package__ in (None, ""):  # python fetch/run.py 로 직접 실행한 경우
 
 import pandas as pd  # noqa: E402
 
-from . import fred, krx, kred, naver, yf  # noqa: E402
+from . import adrinfo, fred, krx, kred, naver, yf  # noqa: E402
 from .common import log, now_kst  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 SERIES_DIR = DATA / "series"
-PRIORITY = {"naver": 0, "kred": 0, "pykrx": 1, "fred": 1, "yfinance": 2}
+PRIORITY = {"naver": 0, "kred": 0, "adrinfo": 0, "pykrx": 1, "fred": 1, "yfinance": 2}
 MARKETS = ["KOSPI", "KOSDAQ"]
 UST_TENORS = ["1M", "2M", "3M", "6M", "1Y", "2Y", "3Y", "5Y", "7Y", "10Y", "20Y", "30Y"]
 
@@ -139,6 +139,14 @@ def kred_due(now, fetches: list, last_date: str) -> bool:
     if len(mine) >= KRED_MAX_PER_DAY or hm < "16:30":
         return False
     return not mine or (hm >= "20:00" and max(mine)[11:16] < "20:00" and (last_date or "") < today)
+
+
+def adrinfo_due(now, fetches: list, last_date: str) -> bool:
+    """adrinfo.kr 요청 여부. 하루 1회 엄수: 평일 16:00 KST 이후, 오늘 요청 기록이 없고, 오늘 값이 아직 없을 때.
+    fetches = latest.json meta.adrinfo_fetches (성공·실패 무관 요청 시각). 공휴일엔 1회 헛요청할 수 있음."""
+    today = now.strftime("%Y-%m-%d")
+    return (now.weekday() < 5 and now.strftime("%H:%M") >= "16:00"
+            and not any(t.startswith(today) for t in fetches) and (last_date or "") < today)
 
 
 def adr_from_breadth(recs):
@@ -305,19 +313,57 @@ def main():
         if s.save():
             changed.append(f"series/stock_{code}.json (+{n_new})")
 
-    # ── 등락 종목 수 → ADR ── 네이버에 이력이 없어 장 마감 후 스냅샷을 날짜별로 직접 누적하고
-    # 20일 ADR을 계산해 adr_*.json에 source=naver로 이어 붙임. 장중엔 breadth()가 None → 아무것도 안 함
-    bdf, breadth = call("naver", naver.breadth), {}
+    # ── 등락 종목 수 → ADR ──
+    # 화면용 adr_*.json = 1차 adrinfo.kr(E37, 2019-10~ 이력 + 하루 1회 갱신) + 폴백 네이버 계산값.
+    # 네이버 계산값(장 마감 후 등락 종목 수를 직접 누적 → 20일 ADR)은 adr_naver_*.json에 따로 쌓아 adrinfo와 대조
+    bdf, breadth, adr = call("naver", naver.breadth), {}, {}
     for m in MARKETS:
         s = breadth[m] = Series(f"breadth_{m.lower()}", f"{m} 상승·하락 종목 수", "종목")
         rows = None if bdf is None else bdf[bdf["market"] == m].drop(columns="market")
         n_new = s.merge(rows if rows is not None and len(rows) else None)
         if s.save():
             changed.append(f"series/breadth_{m.lower()}.json (+{n_new})")
-        a = Series(f"adr_{m.lower()}", f"{m} ADR 20일", "%")
+        a = Series(f"adr_naver_{m.lower()}", f"{m} ADR 20일 (네이버 등락 종목 수로 계산)", "%")
         n_new = a.merge(adr_from_breadth(s.last(len(s))))
         if a.save():
-            changed.append(f"series/adr_{m.lower()}.json (+{n_new})")
+            changed.append(f"series/adr_naver_{m.lower()}.json (+{n_new})")
+        adr[m] = (Series(f"adr_{m.lower()}", f"{m} ADR 20일", "%"), a)
+
+    # 이력 등록: adr_*.json에 adrinfo 레코드가 없으면 data/series/adr_history_adrinfo.json(사용자 제공)으로 채움
+    hist_file = SERIES_DIR / "adr_history_adrinfo.json"
+    if hist_file.exists() and not all(any(r["source"] == "adrinfo" for r in t.by_date.values()) for t, _ in adr.values()):
+        h = json.loads(hist_file.read_text())
+        for m, (t, _) in adr.items():
+            for r in h.get(m.lower(), []):
+                t.by_date[r["date"]] = {"date": r["date"], "value": r["value"], "source": "adrinfo",
+                                        "asof": f"{r['date']}T15:30:00+09:00"}
+    adr_last = lambda t: max((d for d, r in t.by_date.items() if r["source"] == "adrinfo"), default="")  # noqa: E731
+    today = now.strftime("%Y-%m-%d")
+    adr_fetches = [t for t in prev_latest.get("meta", {}).get("adrinfo_fetches", []) if t[:10] == today]
+    adr_status = "안 부름"
+    if "adrinfo" not in disabled and adrinfo_due(now, adr_fetches, min(adr_last(t) for t, _ in adr.values())):
+        adr_fetches.append(now.isoformat(timespec="seconds"))
+        df = adrinfo.adr_history()
+        adr_status = "실패 → 네이버 폴백" if df is None else "성공"
+        for m, (t, _) in ([] if df is None else adr.items()):
+            last, add, rev = adr_last(t), 0, []
+            for r in records(df[df["market"] == m].drop(columns="market")):
+                if r["date"] > last:            # 최신 날짜만 이어 붙임 (폴백으로 들어간 네이버 값은 덮음)
+                    t.by_date[r["date"]], add = r, add + 1
+                elif r["date"] in t.by_date and t.by_date[r["date"]]["source"] == "adrinfo" \
+                        and abs(t.by_date[r["date"]]["value"] - r["value"]) > 0.005:
+                    rev.append((r["date"], t.by_date[r["date"]]["value"], r["value"]))
+            log.info("adrinfo %s: +%d행 (마지막 %s)", m, add, adr_last(t))
+            if rev:  # 이미 저장한 날의 값이 바뀐 경우 — 덮지 않고 기록만 (당일 값 확정 시각 미검증)
+                log.warning("adrinfo %s: 기존 날짜 값 변경 %d건 (덮지 않음) %s", m, len(rev), rev[-5:])
+    for m, (t, a) in adr.items():
+        last = adr_last(t)
+        for d, r in a.by_date.items():
+            # 폴백: adrinfo에 아직 없는 날짜만. 오늘 값은 오늘 adrinfo 요청을 한 뒤에만 채움
+            if d > last and (d < today or adr_fetches) and t.by_date.get(d, {}).get("source") != "adrinfo":
+                t.by_date[d] = r
+        if t.save():
+            changed.append(f"series/adr_{m.lower()}.json")
 
     # ── 증시자금동향 (하루 1회 갱신, 2거래일 지연) ── 첫 실행·--backfill은 전체 이력(약 61페이지),
     # 이후엔 최신 100행만. asof=기준일이라 값이 같으면 write_if_changed가 파일을 안 씀
@@ -348,7 +394,7 @@ def main():
     latest = {"generated_at": now.isoformat(), "items": items,
               "investor": investor, "foreign_top": top,
               "meta": {"investor_sources": inv_sources, "pykrx_enabled": "pykrx" not in disabled,
-                       "kred_fetches": fetches}}
+                       "kred_fetches": fetches, "adrinfo_fetches": adr_fetches}}
     if write_if_changed(DATA / "latest.json", latest):
         changed.append("latest.json")
 
@@ -369,6 +415,15 @@ def main():
             r = bs.last()[0]
             print(f"breadth {m:7} {r['date']} 상승 {r['rise']} 하락 {r['fall']} 보합 {r['steady']} "
                   f"[{r['source']} {r['asof']}] 누적 {len(bs)}일")
+    print(f"adrinfo 요청: {adr_status} (오늘 {len(adr_fetches)}회)")
+    for m, (t, a) in adr.items():
+        r = t.last()[0] if len(t) else None
+        both = [(t.by_date[d]["value"], a.by_date[d]["value"]) for d in a.by_date
+                if t.by_date.get(d, {}).get("source") == "adrinfo"]
+        cmp = (f"네이버 계산값과 겹침 {len(both)}일 평균차 {sum(x - y for x, y in both) / len(both):+.2f} "
+               f"최대|차| {max(abs(x - y) for x, y in both):.2f}") if both else f"네이버 계산값 {len(a)}일 (겹침 없음)"
+        if r:
+            print(f"adr {m:7} {r['date']} {r['value']} [{r['source']}] · {cmp}")
     for m, v in top.items():
         b, s_ = v["buy"][0], v["sell"][0]
         print(f"top {m:7} 매수1 {b['name']} {b['net_amount']:,}억 / 매도1 {s_['name']} {s_['net_amount']:,}억 "

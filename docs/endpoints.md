@@ -239,7 +239,7 @@ E10 필드 + `openingPrice`, `highPriceOfDay`, `lowPriceOfDay`, `high/lowPriceOf
 | DXY | E16, 이력 E17 | |
 | WTI, Brent | E19, 이력 E20 | |
 | VIX | E21, 이력 E22 | |
-| (추가) 등락 종목 수 → ADR | E29 (당일만) | 이력 없음 → 장 마감 후 직접 누적 |
+| (추가) 등락 종목 수 → ADR | E37 adrinfo.kr (2019-10~, 하루 1회) | E29 (당일만) 장 마감 후 직접 누적 → 20일 ADR 계산 |
 | (추가) 증시자금동향 5항목 | E32 (2002-05-03~) | E31은 40행 고정 |
 | (추가) VKOSPI | 네이버 없음 → KRED E33 (2010-01-04~) | CC BY-NC-ND 4.0, 하루 ≤2회 |
 | (추가) 코스피·코스닥 일별 종가 | E34 (1997~) | 오늘 행은 15:40 이후만 |
@@ -309,10 +309,15 @@ E14 `/stockSecurity/exchange-rates/v2/USD/charts/round?bankType=hana` (하나은
 - `risingCount`에 상한가(`upperLimitCount`)가 포함되는지. 현재 ADR 계산은 `risingCount`/`fallingCount` 그대로 사용
 - 집계 대상(ETF·ETN·우선주·스팩 포함 여부). KOSPI 합계 911(09-28 09:39)
 
-### 외부 (과거분 후보였음 — 사용 안 함)
-- `http://adrinfo.kr/chart`: 2026-09-28 Playwright 접속 2회(09:5x, 10:10:37 KST, 사용자 지시로 1회 재시도) 모두 **403** `text/html` 94B:
-  `<html><head></head><body>Blocked due to excessive traffic. Please avoid crawling or frequent access during market hours</body></html>`
-  robots.txt는 curl에 "who are you?" 응답. 데이터 엔드포인트 미확인. **결론: 과거분 없이 네이버 누적만 사용, 이 사이트는 다시 호출하지 않음**
+### E37. adrinfo.kr ADR 차트 HTML ★ 수집용 (2026-10-06, ADR 1차 소스)
+`GET http://adrinfo.kr/chart` (requests, 일반 브라우저 User-Agent, Playwright 아님) → `text/html` 약 98KB
+- 데이터 API 없음. 인라인 스크립트에 `const kospi_adr=[[epoch_ms, 값], …];`, `const kosdaq_adr=[…];` (Highcharts용)
+  - `epoch_ms` = 그 거래일 00:00 KST (예: `1570374000000` = 2019-10-07). 값 = ADR 20일(%) 소수 2자리
+  - 미래 날짜는 `null`로 미리 채워져 있고 배열 끝에 쉼표 → JSON 아님. 파서(`fetch/adrinfo.py parse`)는 `name=[ … ];` 구간에서 `[ms, 값|null]` 쌍만 정규식으로 뽑고 null은 버림
+- 2026-10-06 16:07:42 KST 요청 1회 → **200**, 코스피 1,718행 · 코스닥 1,717행(2019-10-07~2026-10-06). 사용자 제공 `data/series/adr_history_adrinfo.json`과 날짜·값 **차이 0건**. 10-06 코스피 84.31 · 코스닥 101.76
+- 산식·집계 대상(ETF·우선주·보합 처리)은 받은 HTML 본문에서 설명을 찾지 못함 (미확인)
+- 이전 이력: 2026-09-28 Playwright 2회(09:5x, 10:10 KST, 장중) 모두 **403** 94B `Blocked due to excessive traffic. Please avoid crawling or frequent access during market hours` → 장중 접근 차단으로 보임. 그래서 **평일 16:00 KST 이후 하루 1회만** 요청
+- 수집 규칙(`fetch/run.py adrinfo_due`): 평일 16:00 이후 첫 update-data 실행에서 1회, `latest.json meta.adrinfo_fetches`에 요청 시각 기록(성공·실패 무관) → 그날은 다시 안 부름. 저장된 마지막 adrinfo 날짜보다 새 날짜만 `adr_*.json`에 이어 붙임(이미 저장한 날의 값이 바뀌면 덮지 않고 경고 로그). 403·구조 변경이면 그날은 건너뛰고 네이버 계산값(E29 누적 → `adr_naver_*.json`)으로 폴백, 다음 날 요청이 성공하면 adrinfo 값으로 교체
 
 ---
 

@@ -53,6 +53,7 @@ jobs:
             echo "run=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # ADR(adrinfo.kr)은 run.py가 평일 16:00 KST 이후 첫 실행에서만 하루 1회 요청 (meta.adrinfo_fetches로 제한)
       - name: Fetch
         if: steps.gate.outputs.run == 'true'
         env:

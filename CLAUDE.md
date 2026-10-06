@@ -16,6 +16,7 @@
     yf.py           # yfinance 폴백 (금리·환율·유가·VIX)
     krx.py          # pykrx 폴백 (투자자별 확정치)
     fred.py         # FRED 확정치 (미 국채)
+    adrinfo.py      # adrinfo.kr ADR 이력 (HTML 내 배열 정규식, 하루 1회·16:00 이후)
     run.py          # 전체 수집 → data/*.json 갱신 (진입점)
     intraday.py     # 장중 수집 → data/intraday/YYYY-MM-DD.json (평일 08:50~15:40만)
     market_day.py   # 거래일(휴장일) 판정 — update.yml·intraday.yml 공용
