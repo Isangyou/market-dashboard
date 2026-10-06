@@ -169,7 +169,7 @@
       <div class="sub">최근 3개월 · 일별 종가</div>
       <div class="sparks" id="sparks"></div>
     </div>
-    <div class="panel span2" id="oil-panel">
+    <div class="panel" id="oil-panel">
       <h2>유가 WTI · Brent</h2>
       <div class="sub" id="oil-sub"></div>
       <div id="oil-chart" class="chart" style="height:320px"></div>
@@ -179,18 +179,18 @@
       <div class="sub" id="vix-sub"></div>
       <div id="vix-chart" class="chart" style="height:320px"></div>
     </div>
-    <!-- ADR: VIX 옆. ADR_ENABLED=false면 hidden(그리드 칸 차지 안 함) + VKOSPI가 VIX 옆으로 -->
-    <div class="panel" id="adr-panel" hidden>
-      <div class="row"><h2>ADR 20일 등락비율</h2><span class="hval" id="adr-val"></span></div>
-      <div class="sub" id="adr-sub"></div>
-      <div id="adr-chart" class="chart" style="height:320px"></div>
-      <div class="note">출처: <a href="http://adrinfo.kr/chart" target="_blank" rel="noopener">adrinfo.kr</a> · 점선 = adrinfo 미수신일의 네이버 등락 종목 수 자체 계산값</div>
-    </div>
     <div class="panel" id="vkospi-panel">
       <h2>VKOSPI</h2>
       <div class="sub" id="vkospi-sub"></div>
       <div id="vkospi-chart" class="chart" style="height:320px"></div>
       <div class="note">출처: <a href="https://kred.dev/ko/series/KRVKOSPI" target="_blank" rel="noopener">KRED (kred.dev)</a>, <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank" rel="noopener">CC BY-NC-ND 4.0</a> · 원값 그대로 표시</div>
+    </div>
+    <!-- ADR: VKOSPI 옆. ADR_ENABLED=false면 hidden(그리드 칸 차지 안 함) + VKOSPI가 한 줄 전체 폭 -->
+    <div class="panel" id="adr-panel" hidden>
+      <div class="row"><h2>ADR 20일 등락비율</h2><span class="hval" id="adr-val"></span></div>
+      <div class="sub" id="adr-sub"></div>
+      <div id="adr-chart" class="chart" style="height:320px"></div>
+      <div class="note">출처: <a href="http://adrinfo.kr/chart" target="_blank" rel="noopener">adrinfo.kr</a> · 점선 = adrinfo 미수신일의 네이버 등락 종목 수 자체 계산값</div>
     </div>
   </section>
 
@@ -244,7 +244,7 @@ const C = Object.fromEntries(['bg','panel','line','grid','text','muted','faint',
 const SERIES_KEYS = ['investor_kospi','investor_kosdaq','usdkrw','usdjpy','usdcnh','eurusd','dxy',
   'ust_1m','ust_2m','ust_3m','ust_6m','ust_1y','ust_2y','ust_3y','ust_5y','ust_7y','ust_10y','ust_20y','ust_30y',
   'ktb_3y','ktb_10y','wti','brent','vix','vkospi','deposit','stock_005930','stock_000660'];
-// ADR 차트 스위치. true면 유가(전체 폭) → VIX | ADR → VKOSPI(전체 폭). false면 VIX | VKOSPI
+// ADR 차트 스위치. true면 유가 | VIX → VKOSPI | ADR. false면 유가 | VIX → VKOSPI(전체 폭)
 const ADR_ENABLED = true;
 if (ADR_ENABLED) SERIES_KEYS.push('adr_kospi', 'adr_kosdaq');
 // 코스피·코스닥 이격도 차트 스위치 (09-28 종목 차트로 교체). 데이터(kospi/kosdaq.json)는 계속 수집됨.
@@ -762,9 +762,9 @@ async function main() {
     safe('kospi', () => renderGapChart('kospi', '코스피')); safe('kosdaq', () => renderGapChart('kosdaq', '코스닥'));
   } safe('curve', renderCurve); safe('ust', renderUst);
   safe('ktb', renderKtb); safe('sparks', renderSparks); safe('oil', renderOil); safe('vix', renderVix); safe('vkospi', renderVkospi); safe('funds', renderFunds); safe('tables', renderTables);
+  if (!ADR_ENABLED) document.getElementById('vkospi-panel').classList.add('span2');
   if (ADR_ENABLED) {
     document.getElementById('adr-panel').hidden = false;
-    document.getElementById('vkospi-panel').classList.add('span2');
     safe('adr', renderAdr);
   }
 
