@@ -221,7 +221,9 @@ def to_markdown(snap: dict) -> str:
         for title, items in to_lines(snap["brief"]):
             lines.append(f"- **{title}**")
             for s in items:
-                lines.append(f"    - {s}")
+                text, subs = s if isinstance(s, tuple) else (s, [])
+                lines.append(f"    - {text}")
+                lines += [f"        - {x}" for x in subs]
     lines.append("- **근거 수치**")
     for b in snap.get("conclusion", []):
         lines.append(f"    - {b['head']}")

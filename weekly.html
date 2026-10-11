@@ -67,6 +67,11 @@
   .summary ol { margin: 4px 0 2px; padding-left: 20px; }
   .summary .dim { color: var(--faint); font-weight: 400; }
   .summary .note { color: var(--faint); font-size: 12px; margin: 2px 0 0 18px; }
+  .summary .easy { font-size: 12.5px; line-height: 1.6; color: var(--muted); background: var(--panel); border: 1px solid var(--grid);
+    border-radius: 6px; padding: 5px 9px; margin: 4px 0 6px; }
+  .summary .easy b { color: var(--gray1); font-weight: 600; margin-right: 4px; }
+  .summary .easy.lone { margin-left: 18px; }
+  .summary .overall { font-size: 13.5px; line-height: 1.6; color: var(--text); }
   .summary .same { display: inline-block; font-size: 11px; color: var(--accent); border: 1px solid var(--accent); border-radius: 10px; padding: 0 7px; margin-left: 6px; font-weight: 600; }
   details.prevb { margin: 0 0 10px; }
   details.prevb summary, details.allbasis > summary { cursor: pointer; color: var(--muted); font-size: 12px; }
@@ -136,7 +141,7 @@
 
   <section class="panel">
     <h2><span class="secno">0</span>결론</h2>
-    <div class="sub" id="concl-sub">수치만으로 자동 생성 (positioning/brief.py) · 변화 포인트는 전주 대비 기준 단위 이상 바뀐 항목만 · 전망·목표가 아님</div>
+    <div class="sub" id="concl-sub">수치만으로 자동 생성 (positioning/brief.py · 해설 easy.py) · 변화 포인트는 전주 대비 기준 단위 이상 바뀐 항목만 · 전망·목표가 아님</div>
     <div class="summary" id="brief"></div>
     <details class="prevb" id="prevb"><summary></summary><ul></ul></details>
     <details class="allbasis"><summary>블록별 근거 수치</summary><ul class="concl" id="concl"></ul></details>
@@ -350,13 +355,16 @@ function renderConclusion() {
   if (!b) { box.innerHTML = '<div class="empty">결론 없음 (brief 미생성 주차)</div>'; }
   else {
     const vs = b.vs_prev || {};
-    const ch = (b.changes || []).map(c => `<li><b>${esc(c.label)}</b> ${esc(c.text)}</li>`).join('');
+    const ez = (t, cls = '') => t ? `<div class="easy${cls}"><b>쉽게 말하면</b>${esc(t)}</div>` : '';
+    const ch = (b.changes || []).map(c => `<li><b>${esc(c.label)}</b> ${esc(c.text)}${ez(c.easy)}</li>`).join('');
     box.innerHTML =
-      `<div class="blk"><div class="lbl">요약${vs.unchanged ? '<span class="same">지난주 결론과 변화 없음</span>' : ''}</div><ul><li>${esc(b.line?.text)}</li></ul></div>` +
+      `<div class="blk"><div class="lbl">요약${vs.unchanged ? '<span class="same">지난주 결론과 변화 없음</span>' : ''}</div><ul><li>${esc(b.line?.text)}${ez(b.line?.easy)}</li></ul></div>` +
       `<div class="blk"><div class="lbl">변화 포인트 <span class="dim">(전주 대비, 변화 큰 순 최대 3개)</span></div>` +
-        (ch ? `<ol>${ch}</ol>` : '') + (b.changes_note ? `<div class="note">${esc(b.changes_note)}</div>` : '') + '</div>' +
-      `<div class="blk"><div class="lbl">리스크 <span class="dim">(가장 가까운 임계값)</span></div><ul><li>${esc(b.risk?.text || '임계값 데이터 없음')}</li></ul>` +
-        (vs.risk ? `<div class="note">${esc(vs.risk)}</div>` : '') + '</div>';
+        (ch ? `<ol>${ch}</ol>` : '') + (b.changes_note ? `<div class="note">${esc(b.changes_note)}</div>` : '') +
+        (b.changes_easy || []).map(t => ez(t, ' lone')).join('') + '</div>' +
+      `<div class="blk"><div class="lbl">리스크 <span class="dim">(가장 가까운 임계값)</span></div><ul><li>${esc(b.risk?.text || '임계값 데이터 없음')}${ez(b.risk?.easy)}</li></ul>` +
+        (vs.risk ? `<div class="note">${esc(vs.risk)}</div>` : '') + '</div>' +
+      (b.overall ? `<div class="blk"><div class="lbl">종합</div><ul><li class="overall">${esc(b.overall)}</li></ul></div>` : '');
   }
   const pb = b?.prev_brief, pe = document.getElementById('prevb');
   pe.style.display = pb ? '' : 'none';

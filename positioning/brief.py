@@ -5,11 +5,14 @@
            변화 점수(|변화| / UNIT) ≥ 1인 범주를 점수 큰 순으로 최대 3개. 부호 전환은 +10점
   risk     현재가에서 가장 가까운 임계값(ES 신호 전환가 · SPX zero-gamma) 1개와 넘으면 생기는 일
   vs_prev  전주에 저장된 brief와 비교한 결과("변화 없음" 명시용)
+  easy     '쉽게 말하면' 해설(easy.py). 주제(감마·COT·전환가)마다 한 번만, 해당 항목 아래에 붙임:
+           변화 포인트에 있으면 그 항목, 없으면 전환가→요약 · 감마→리스크 · COT→변화 포인트 끝. 종합 한 줄은 overall
 
 해석·전망 문장 없음. 숫자와 '넘으면 기계적으로 바뀌는 것'만. 기준 단위는 UNIT에서 조정.
 """
 from __future__ import annotations
 
+from . import easy
 from .report import _px, sg
 
 UNIT = {
@@ -212,8 +215,20 @@ def build(snap, prev):
         vs["unchanged"] = ln.get("changed") is False and not ch and bool(rk) and prk.get("key") == rk["key"]
     if rk:
         rk["label"] = rk["text"].split(" (")[0]
-    return {"line": ln, "changes": ch, "changes_note": note, "risk": rk, "vs_prev": vs,
-            "prev_week": (prev or {}).get("week"), "prev_brief": _compact(pb)}
+    ez = easy.build(snap, prev, UNIT["cot_z"], UNIT["flip"])
+    topic = {"options": "gamma", "cot": "cot", "flip": "flip"}
+    for c in ch:
+        c["easy"] = ez.get(topic[c["key"]])
+    shown = {topic[c["key"]] for c in ch}
+    if "flip" not in shown:
+        ln["easy"] = ez.get("flip")
+    if "gamma" not in shown and rk:
+        rk["easy"] = ez.get("gamma")
+    extra = [ez.get("cot")] if "cot" not in shown and ez.get("cot") else []
+    if "gamma" not in shown and not rk and ez.get("gamma"):
+        extra.append(ez["gamma"])
+    return {"line": ln, "changes": ch, "changes_note": note, "changes_easy": extra, "risk": rk, "vs_prev": vs,
+            "overall": ez.get("overall"), "prev_week": (prev or {}).get("week"), "prev_brief": _compact(pb)}
 
 
 def _compact(b):
@@ -224,15 +239,24 @@ def _compact(b):
             "changes_note": b.get("changes_note"), "risk": (b.get("risk") or {}).get("text")}
 
 
+def _ez(text, e):
+    """항목 + '쉽게 말하면' 해설 → (본문, [하위 불릿]) — 해설 없으면 본문 문자열 그대로"""
+    return (text, [f"쉽게 말하면: {e}"]) if e else text
+
+
 def to_lines(b):
-    """마크다운·로그용 평문 3블록"""
-    out = [("요약", [b["line"]["text"] + (" · **지난주 결론과 변화 없음**" if b["vs_prev"].get("unchanged") else "")])]
-    ch = [f"{c['label']}: {c['text']}" for c in b["changes"]]
+    """마크다운·로그용 평문 3블록 + 종합. 항목은 문자열 또는 (본문, [하위])"""
+    out = [("요약", [_ez(b["line"]["text"] + (" · **지난주 결론과 변화 없음**" if b["vs_prev"].get("unchanged") else ""),
+                      b["line"].get("easy"))])]
+    ch = [_ez(f"{c['label']}: {c['text']}", c.get("easy")) for c in b["changes"]]
     if b.get("changes_note"):
         ch.append(b["changes_note"])
+    ch += [f"쉽게 말하면: {e}" for e in b.get("changes_easy") or []]
     out.append(("변화 포인트", ch))
-    rk = [b["risk"]["text"]] if b.get("risk") else ["임계값 데이터 없음"]
+    rk = [_ez(b["risk"]["text"], b["risk"].get("easy"))] if b.get("risk") else ["임계값 데이터 없음"]
     if b["vs_prev"].get("risk"):
         rk.append(b["vs_prev"]["risk"])
     out.append(("리스크", rk))
+    if b.get("overall"):
+        out.append(("종합", [b["overall"]]))
     return out

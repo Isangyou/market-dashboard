@@ -21,7 +21,7 @@
     intraday.py     # 장중 수집 → data/intraday/YYYY-MM-DD.json (평일 08:50~15:40만)
     market_day.py   # 거래일(휴장일) 판정 — update.yml·intraday.yml 공용
   positioning/      # 주간 포지셔닝 리포트 (CTA 모델·CBOE 옵션·CFTC COT) — docs/positioning.md
-    cta.py · options.py · cot.py · report.py(근거 수치) · brief.py(결론) · run.py(진입점)
+    cta.py · options.py · cot.py · report.py(근거 수치) · brief.py(결론) · easy.py(쉽게 말하면) · run.py(진입점)
   data/
     latest.json     # 현재값 카드용 (값·전일대비·소스·기준시각)
     series/*.json   # 항목별 시계열 (날짜, 값, 소스)
@@ -47,6 +47,7 @@
 ## 주간 포지셔닝 (weekly.html)
 - 범위: 미국 지수·VIX·금리·원자재·FX. CTA는 자체 추세추종 모델(실제 포지션 아님을 화면에 명시)
 - 결론 = 수치 기반 3블록(positioning/brief.py): (1) 한 줄 요약 — ES CTA 방향·규모·3년 백분위·전주 대비 (2) 변화 포인트 — 전주 대비 기준 단위(`UNIT`) 이상 바뀐 항목만, 전환가 거리·옵션·COT 중 변화 큰 순 최대 3개 (3) 리스크 — 가장 가까운 임계값과 넘으면 기계적으로 바뀌는 것 한 줄. 주차 파일에 `brief` 저장, 다음 주가 그것과 비교해 '변화 없음'을 명시. 해석·가격 전망·목표가 문장 금지. 블록별 근거 수치(report.py)는 접어서
+- 각 항목 아래 '쉽게 말하면' 해설(positioning/easy.py, 수치 템플릿·고정 문장 금지): 딜러 감마=변동성 쿠션(부호·전주 대비 배율), COT=주체·자산·방향·평소 주간 변동의 N배·순포지션 치우침, 전환가=지수 X% 하락 시 CTA 매도 시작선·전주 대비 안전/위험·감마와 합친 하방 쿠션 겹수, 끝에 종합 한 줄. 전문용어는 괄호 설명
 - 차트는 이중축 금지 → 위아래 분리. 상세 규칙·가정은 docs/positioning.md
 
 ## 수집 항목

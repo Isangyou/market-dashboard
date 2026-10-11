@@ -20,6 +20,7 @@ Actions: `.github/workflows/positioning.yml` — KST 화~토 07:10 (UTC 월~금 
 | `positioning/options.py` | CBOE 지연 체인 → P/C, OI 벽, 25Δ 스큐, ATM IV, 딜러 GEX·zero-gamma |
 | `positioning/cot.py` | CFTC Socrata API — TFF(금융) · Disaggregated(원자재) |
 | `positioning/brief.py` | 결론(수치 기반): 한 줄 요약 · 변화 포인트 · 리스크, 전주 저장 결론과 비교. 기준 단위 `UNIT` |
+| `positioning/easy.py` | 결론 항목별 '쉽게 말하면' 해설 + 종합 한 줄 (수치 템플릿) |
 | `positioning/report.py` | 블록별 근거 수치(임계값 `THRESH`) · Notion 마크다운 · CTA×COT 교차 |
 | `positioning/run.py` | 진입점. 주차 키·확정 판정·실패 섹션 보충·옵션 일별 누적 |
 | `data/positioning/weeks/YYYY-MM-DD.json` | 주간 스냅샷 (키 = 미국 기준 그 주 금요일) |
@@ -42,6 +43,15 @@ Actions: `.github/workflows/positioning.yml` — KST 화~토 07:10 (UTC 월~금 
 
 기준 단위 `UNIT`: 전환가 거리 0.5%p · SPX 35일 GEX 5$bn · zero-gamma 거리 0.5%p · 25Δ 스큐 1vp · ATM IV 1%p · P/C(OI) 0.10 · COT 주간 변화 1σ(새 공표 주만) · ES 포지션 5%p(요약)
 화면 상단 배지 "지난주 결론과 변화 없음" = 요약 변화 없음 && 변화 포인트 0개 && 리스크 임계값 같음
+
+## 쉽게 말하면 (easy.py, 2026-10-11~)
+brief에 함께 저장(`changes[i].easy` · `line.easy` · `risk.easy` · `changes_easy` · `overall`). 주제마다 한 번만: 변화 포인트에 있으면 그 항목 아래, 없으면 전환가→요약, 감마→리스크, COT→변화 포인트 끝. COT 새 공표 없는 주는 COT 해설 생략.
+| 주제 | 내용 |
+|---|---|
+| 딜러 감마 | 35일 GEX 부호(롱=흡수/숏=증폭)·$bn/1%·전주 대비 배율(≥1.5배 두꺼워짐, ≤0.67배 얇아짐, 부호 바뀌면 전환), 다음 월물 만기 소멸 %, zero-gamma까지 % |
+| COT | 주간 σ 상위 2개 시장: 주체·순숏/롱 확대·축소(숏커버)·계약 수·평소 주간 변동의 N배·시사(국채: 금리 상승 베팅 확대/축소)·순포지션 치우침(OI %, 3년 백분위). 나머지 ≥1σ 목록. 국채 레버리지펀드엔 베이시스 거래 주의 한 줄 |
+| 전환가 | 가장 가까운 활성 전환가 = '지수 X% 하락 시 CTA 매도 시작선', 전주 같은 룩백 대비 0.5%p 이상 멀어짐=안전/가까워짐=위험, 1주 ∓1σ 포지션 변화, 다음 선, 하방 쿠션 겹수(딜러 롱 감마 구간 + CTA 롱 유지 구간) |
+| 종합 | 감마 상태·쿠션 겹수 + CTA 방향/백분위/선까지 거리 + 국채 레버리지펀드 ≥1σ 변화(만기별 엇갈림 표기) |
 
 ## 모델·가정 (요약 — 상세는 각 모듈 docstring)
 - CTA: 룩백 20/60/125/250일 위험조정 모멘텀 tanh 평균 × 변동성 레버리지(3년 중앙 σ/60일 σ, 상한 1.5). ±100% = 정상 변동성 풀 포지션.

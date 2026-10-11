@@ -26,6 +26,11 @@
 | 증시자금동향 | `fetch/naver.py deposit_trend`(E32) → `data/series/deposit.json` (고객예탁금·신용잔고·주식형/혼합형/채권형 펀드, 억원) | 2002-05-03~2026-09-22 6,006일 백필(로컬 1회). update.yml 매 실행 최신 1페이지, `asof`=기준일이라 값이 같으면 파일 안 씀(재실행 0건 변경 확인). 2거래일 지연. 파일 1.26MB(gzip 약 170KB) — 화면이 전체를 읽음 |
 | ADR | 1차 `fetch/adrinfo.py`(E37) → `data/series/adr_kospi.json`·`adr_kosdaq.json` (source=adrinfo, 2019-10-07~, 1,718·1,717행). 폴백 `fetch/naver.py breadth`(E29) → `breadth_*.json` → `run.py adr_from_breadth` → `adr_naver_*.json` | **2026-10-06 adrinfo 이력 등록**: 사용자 제공 `adr_history_adrinfo.json`으로 시드(파일은 원본 그대로 보존). update-data가 평일 16:00 KST 이후 첫 실행에서 하루 1회 요청(`meta.adrinfo_fetches`), 새 날짜만 이어 붙임. 403이면 그날은 네이버 계산값을 넣고(화면 점선) 다음 날 adrinfo 값으로 교체. 네이버 계산값은 20거래일째(약 10-27)부터 생김 → 그전엔 폴백할 값이 없음. **일별 차트 활성**(VKOSPI \| ADR 행 — 10-06 배치 변경, 1년 기본·range slider·120·75 연회색 점선·adrinfo 실선/네이버 점선·출처 adrinfo.kr) |
 
+## 2026-10-11 (일) 위클리 결론 '쉽게 말하면' 해설
+- `positioning/easy.py` 추가 → brief 각 항목 아래 해설 + 종합 한 줄(weekly.html·Notion 마크다운 하위 불릿). 규칙은 docs/positioning.md
+- `--rebuild-conclusion`으로 3개 주차 재생성 — brief·markdown 외 필드 변경 0건. 10-09 주(COT 10-06): 감마 +12.6→+53.6$bn(4.3배), UB 레버리지펀드 숏커버 +82.6k(3.6σ), ES 20일 매도선 -2.6%(지난주 -1.5%), 쿠션 2겹
+- 렌더링 1440·390 콘솔 오류 0, 가로 넘침 없음
+
 ## 2026-10-07 (수) 기술적 지표 페이지 (technical.html)
 - 대상 4개: S&P500·나스닥 종합 = `fetch/yf.py index_daily` → `data/series/spx.json`·`ixic.json` (source=yfinance:^GSPC/^IXIC, asof = 그날 16:00 ET를 KST로). 첫 수집 1년(251행, 2025-10-07~2026-10-06), 이후 매 실행 1개월 재요청·병합. **미국장 마감(16:20 ET) 전엔 오늘 봉 제외** — 10-06 23:00 KST 가정 → 마지막 봉 10-05, 10-07 05:30 KST → 10-06 확인. 코스피·코스닥 = 기존 `kospi.json`·`kosdaq.json`(305행) 재사용
 - 갱신: update-data(run.py)에 포함 — 매 실행 yfinance 2건 추가. Pages 배포 목록(`pages.yml`)에 technical.html 추가
