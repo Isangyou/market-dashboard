@@ -11,7 +11,7 @@
  "futures": null,
  "futures_price": {
   "source": "naver:indicators",
-  "asof": "2026-10-13T08:37:13+09:00",
+  "asof": "2026-10-13T08:40:14+09:00",
   "value": 1008.25,
   "change": 0.0,
   "change_pct": 0.0,
@@ -25,7 +25,7 @@
  "usdkrw": {
   "source": "naver:hana_round",
   "label": "하나은행 고시",
-  "asof": "2026-10-13T08:51:00+09:00",
+  "asof": "2026-10-13T08:58:00+09:00",
   "last_close": 1336.0,
   "rows": [
    {
@@ -43,6 +43,10 @@
    {
     "t": "08:51",
     "v": 1335.5
+   },
+   {
+    "t": "08:58",
+    "v": 1335.0
    }
   ],
   "stale": false
@@ -52,7 +56,7 @@
    "symbol": "NQ=F",
    "name": "나스닥100 선물",
    "source": "yfinance:NQ=F 1m",
-   "asof": "2026-10-13T08:47:00+09:00",
+   "asof": "2026-10-13T08:50:00+09:00",
    "since": "2026-10-13T06:00:00+09:00",
    "prev_close": 30877.5,
    "prev_close_at": "2026-10-13T05:59:00+09:00",
@@ -489,6 +493,18 @@
     {
      "t": "08:47",
      "c": 30820.5
+    },
+    {
+     "t": "08:48",
+     "c": 30820.0
+    },
+    {
+     "t": "08:49",
+     "c": 30818.5
+    },
+    {
+     "t": "08:50",
+     "c": 30820.5
     }
    ],
    "stale": false
@@ -497,7 +513,7 @@
    "symbol": "CL=F",
    "name": "WTI 선물",
    "source": "yfinance:CL=F 1m",
-   "asof": "2026-10-13T08:47:00+09:00",
+   "asof": "2026-10-13T08:50:00+09:00",
    "since": "2026-10-13T06:00:00+09:00",
    "prev_close": 93.16,
    "prev_close_at": "2026-10-13T05:59:00+09:00",
@@ -929,7 +945,19 @@
     },
     {
      "t": "08:47",
+     "c": 93.14
+    },
+    {
+     "t": "08:48",
+     "c": 93.15
+    },
+    {
+     "t": "08:49",
      "c": 93.17
+    },
+    {
+     "t": "08:50",
+     "c": 93.18
     }
    ],
    "stale": false
@@ -968,9 +996,20 @@
    "fut_foreign": null,
    "program_kospi": null,
    "usdkrw": 1335.5
+  },
+  {
+   "t": "09:00",
+   "sampled_at": "2026-10-13T09:00:05+09:00",
+   "kospi": null,
+   "kospi_chg_pct": null,
+   "foreign_kospi": null,
+   "foreign_kosdaq": null,
+   "fut_foreign": null,
+   "program_kospi": null,
+   "usdkrw": 1335.0
   }
  ],
- "updated_at": "2026-10-13T08:57:05+09:00",
+ "updated_at": "2026-10-13T09:00:05+09:00",
  "market_day": {
   "date": "2026-10-13",
   "trading": true,
