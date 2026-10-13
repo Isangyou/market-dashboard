@@ -4,13 +4,13 @@
   "KOSPI": {
    "date": "2026-10-13",
    "source": "naver:index_chart",
-   "asof": "2026-10-13T09:02:00+09:00",
+   "asof": "2026-10-13T09:06:00+09:00",
    "status": "OPEN",
    "last_close": 6384.24,
    "open": 6186.08,
-   "value": 6193.4,
-   "change": -190.84,
-   "change_pct": -2.99,
+   "value": 6134.03,
+   "change": -250.21,
+   "change_pct": -3.92,
    "bars": [
     {
      "t": "09:00",
@@ -24,8 +24,28 @@
     },
     {
      "t": "09:02",
-     "c": 6193.4,
-     "v": 14301
+     "c": 6181.4,
+     "v": 16949
+    },
+    {
+     "t": "09:03",
+     "c": 6172.3,
+     "v": 20168
+    },
+    {
+     "t": "09:04",
+     "c": 6151.02,
+     "v": 22627
+    },
+    {
+     "t": "09:05",
+     "c": 6133.99,
+     "v": 25496
+    },
+    {
+     "t": "09:06",
+     "c": 6134.03,
+     "v": 25923
     }
    ],
    "stale": false
@@ -33,13 +53,13 @@
   "KOSDAQ": {
    "date": "2026-10-13",
    "source": "naver:index_chart",
-   "asof": "2026-10-13T09:02:00+09:00",
+   "asof": "2026-10-13T09:04:00+09:00",
    "status": "OPEN",
    "last_close": 849.19,
    "open": 823.69,
-   "value": 824.55,
-   "change": -24.64,
-   "change_pct": -2.9,
+   "value": 824.48,
+   "change": -24.71,
+   "change_pct": -2.91,
    "bars": [
     {
      "t": "09:00",
@@ -53,8 +73,18 @@
     },
     {
      "t": "09:02",
-     "c": 824.55,
-     "v": 18467
+     "c": 827.88,
+     "v": 23466
+    },
+    {
+     "t": "09:03",
+     "c": 825.08,
+     "v": 29195
+    },
+    {
+     "t": "09:04",
+     "c": 824.48,
+     "v": 30024
     }
    ],
    "stale": false
@@ -64,7 +94,7 @@
   "KOSPI": {
    "source": "naver:trend_time",
    "unit": "억원",
-   "asof": "2026-10-13T09:01:00+09:00",
+   "asof": "2026-10-13T09:04:00+09:00",
    "basis": "KRX 장중 누적 잠정치 (~15:40, 시간외·NXT 제외)",
    "rows": [
     {
@@ -72,6 +102,18 @@
      "foreign": -2137.6,
      "individual": 886.7,
      "institution": 1239.2
+    },
+    {
+     "t": "09:03",
+     "foreign": -2350.7,
+     "individual": 591.7,
+     "institution": 1725.4
+    },
+    {
+     "t": "09:04",
+     "foreign": -2913.8,
+     "individual": 783.1,
+     "institution": 2081.9
     }
    ],
    "stale": false
@@ -79,7 +121,7 @@
   "KOSDAQ": {
    "source": "naver:trend_time",
    "unit": "억원",
-   "asof": "2026-10-13T09:01:00+09:00",
+   "asof": "2026-10-13T09:04:00+09:00",
    "basis": "KRX 장중 누적 잠정치 (~15:40, 시간외·NXT 제외)",
    "rows": [
     {
@@ -87,18 +129,51 @@
      "foreign": 107.1,
      "individual": -147.8,
      "institution": 35.1
+    },
+    {
+     "t": "09:03",
+     "foreign": 381.9,
+     "individual": -434.1,
+     "institution": 38.1
+    },
+    {
+     "t": "09:04",
+     "foreign": 376.4,
+     "individual": -411.3,
+     "institution": 10.6
     }
    ],
    "stale": false
   }
  },
- "futures": null,
+ "futures": {
+  "source": "naver:trend_time_fut",
+  "unit": "계약",
+  "asof": "2026-10-13T08:46:00+09:00",
+  "rows": [
+   {
+    "t": "08:45",
+    "foreign": 58,
+    "individual": 6,
+    "institution": -57,
+    "foreign_amt": 142.0
+   },
+   {
+    "t": "08:46",
+    "foreign": -19,
+    "individual": 78,
+    "institution": -56,
+    "foreign_amt": -45.9
+   }
+  ],
+  "stale": false
+ },
  "futures_price": {
   "source": "naver:indicators",
-  "asof": "2026-10-13T08:42:57+09:00",
-  "value": 1008.25,
-  "change": 0.0,
-  "change_pct": 0.0,
+  "asof": "2026-10-13T08:46:59+09:00",
+  "value": 975.85,
+  "change": -32.4,
+  "change_pct": -3.21,
   "delay": "20분 지연",
   "stale": false
  },
@@ -109,7 +184,7 @@
  "usdkrw": {
   "source": "naver:hana_round",
   "label": "하나은행 고시",
-  "asof": "2026-10-13T09:02:00+09:00",
+  "asof": "2026-10-13T09:05:00+09:00",
   "last_close": 1336.0,
   "rows": [
    {
@@ -143,6 +218,18 @@
    {
     "t": "09:02",
     "v": 1336.7
+   },
+   {
+    "t": "09:03",
+    "v": 1336.9
+   },
+   {
+    "t": "09:04",
+    "v": 1337.7
+   },
+   {
+    "t": "09:05",
+    "v": 1337.5
    }
   ],
   "stale": false
@@ -152,7 +239,7 @@
    "symbol": "NQ=F",
    "name": "나스닥100 선물",
    "source": "yfinance:NQ=F 1m",
-   "asof": "2026-10-13T08:53:00+09:00",
+   "asof": "2026-10-13T08:56:00+09:00",
    "since": "2026-10-13T06:00:00+09:00",
    "prev_close": 30877.5,
    "prev_close_at": "2026-10-13T05:59:00+09:00",
@@ -612,7 +699,19 @@
     },
     {
      "t": "08:53",
-     "c": 30812.75
+     "c": 30814.75
+    },
+    {
+     "t": "08:54",
+     "c": 30814.75
+    },
+    {
+     "t": "08:55",
+     "c": 30808.75
+    },
+    {
+     "t": "08:56",
+     "c": 30808.0
     }
    ],
    "stale": false
@@ -621,11 +720,11 @@
    "symbol": "CL=F",
    "name": "WTI 선물",
    "source": "yfinance:CL=F 1m",
-   "asof": "2026-10-13T08:52:00+09:00",
+   "asof": "2026-10-13T08:56:00+09:00",
    "since": "2026-10-13T06:00:00+09:00",
    "prev_close": 93.16,
    "prev_close_at": "2026-10-13T05:59:00+09:00",
-   "delay_min": 11,
+   "delay_min": 10,
    "rows": [
     {
      "t": "07:00",
@@ -1074,6 +1173,22 @@
     {
      "t": "08:52",
      "c": 93.15
+    },
+    {
+     "t": "08:53",
+     "c": 93.18
+    },
+    {
+     "t": "08:54",
+     "c": 93.17
+    },
+    {
+     "t": "08:55",
+     "c": 93.22
+    },
+    {
+     "t": "08:56",
+     "c": 93.2
     }
    ],
    "stale": false
@@ -1134,9 +1249,20 @@
    "fut_foreign": null,
    "program_kospi": null,
    "usdkrw": 1336.7
+  },
+  {
+   "t": "09:06",
+   "sampled_at": "2026-10-13T09:06:06+09:00",
+   "kospi": 6134.03,
+   "kospi_chg_pct": -3.92,
+   "foreign_kospi": -2913.8,
+   "foreign_kosdaq": 376.4,
+   "fut_foreign": -19,
+   "program_kospi": null,
+   "usdkrw": 1337.5
   }
  ],
- "updated_at": "2026-10-13T09:03:05+09:00",
+ "updated_at": "2026-10-13T09:06:06+09:00",
  "market_day": {
   "date": "2026-10-13",
   "trading": true,
