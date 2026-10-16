@@ -1,17 +1,101 @@
 {
  "date": "2026-10-16",
  "index": {
-  "KOSPI": null,
-  "KOSDAQ": null
+  "KOSPI": {
+   "date": "2026-10-16",
+   "source": "naver:index_chart",
+   "asof": "2026-10-16T09:02:00+09:00",
+   "status": "OPEN",
+   "last_close": 5554.22,
+   "open": 5653.99,
+   "value": 5636.21,
+   "change": 81.99,
+   "change_pct": 1.48,
+   "bars": [
+    {
+     "t": "09:00",
+     "c": 5656.04,
+     "v": 7045
+    },
+    {
+     "t": "09:01",
+     "c": 5642.25,
+     "v": 9488
+    },
+    {
+     "t": "09:02",
+     "c": 5636.21,
+     "v": 9930
+    }
+   ],
+   "stale": false
+  },
+  "KOSDAQ": {
+   "date": "2026-10-16",
+   "source": "naver:index_chart",
+   "asof": "2026-10-16T09:02:00+09:00",
+   "status": "OPEN",
+   "last_close": 760.82,
+   "open": 772.17,
+   "value": 770.49,
+   "change": 9.67,
+   "change_pct": 1.27,
+   "bars": [
+    {
+     "t": "09:00",
+     "c": 772.9,
+     "v": 9035
+    },
+    {
+     "t": "09:01",
+     "c": 770.32,
+     "v": 14676
+    },
+    {
+     "t": "09:02",
+     "c": 770.49,
+     "v": 15474
+    }
+   ],
+   "stale": false
+  }
  },
  "investor": {
-  "KOSPI": null,
-  "KOSDAQ": null
+  "KOSPI": {
+   "source": "naver:trend_time",
+   "unit": "억원",
+   "asof": "2026-10-16T09:01:00+09:00",
+   "basis": "KRX 장중 누적 잠정치 (~15:40, 시간외·NXT 제외)",
+   "rows": [
+    {
+     "t": "09:01",
+     "foreign": -1312.9,
+     "individual": 1740.5,
+     "institution": -447.3
+    }
+   ],
+   "stale": false
+  },
+  "KOSDAQ": {
+   "source": "naver:trend_time",
+   "unit": "억원",
+   "asof": "2026-10-16T09:01:00+09:00",
+   "basis": "KRX 장중 누적 잠정치 (~15:40, 시간외·NXT 제외)",
+   "rows": [
+    {
+     "t": "09:01",
+     "foreign": -368.8,
+     "individual": 467.3,
+     "institution": -99.0
+    }
+   ],
+   "stale": false
+  }
  },
  "futures": null,
  "futures_price": {
   "source": "naver:indicators",
-  "asof": "2026-10-16T08:40:15+09:00",
+  "asof": "2026-10-16T08:43:15+09:00",
   "value": 861.3,
   "change": 0.0,
   "change_pct": 0.0,
@@ -25,7 +109,7 @@
  "usdkrw": {
   "source": "naver:hana_round",
   "label": "하나은행 고시",
-  "asof": "2026-10-16T08:58:00+09:00",
+  "asof": "2026-10-16T09:02:00+09:00",
   "last_close": 1342.5,
   "rows": [
    {
@@ -47,6 +131,18 @@
    {
     "t": "08:58",
     "v": 1341.3
+   },
+   {
+    "t": "09:00",
+    "v": 1341.3
+   },
+   {
+    "t": "09:01",
+    "v": 1341.4
+   },
+   {
+    "t": "09:02",
+    "v": 1341.6
    }
   ],
   "stale": false
@@ -56,7 +152,7 @@
    "symbol": "NQ=F",
    "name": "나스닥100 선물",
    "source": "yfinance:NQ=F 1m",
-   "asof": "2026-10-16T08:50:00+09:00",
+   "asof": "2026-10-16T08:53:00+09:00",
    "since": "2026-10-16T06:00:00+09:00",
    "prev_close": 30078.25,
    "prev_close_at": "2026-10-16T05:59:00+09:00",
@@ -484,7 +580,19 @@
     },
     {
      "t": "08:50",
-     "c": 29992.25
+     "c": 29993.0
+    },
+    {
+     "t": "08:51",
+     "c": 29992.0
+    },
+    {
+     "t": "08:52",
+     "c": 29995.75
+    },
+    {
+     "t": "08:53",
+     "c": 29994.25
     }
    ],
    "stale": false
@@ -493,7 +601,7 @@
    "symbol": "CL=F",
    "name": "WTI 선물",
    "source": "yfinance:CL=F 1m",
-   "asof": "2026-10-16T08:49:00+09:00",
+   "asof": "2026-10-16T08:52:00+09:00",
    "since": "2026-10-16T06:00:00+09:00",
    "prev_close": 96.12,
    "prev_close_at": "2026-10-16T05:59:00+09:00",
@@ -902,6 +1010,18 @@
     {
      "t": "08:49",
      "c": 96.16
+    },
+    {
+     "t": "08:50",
+     "c": 96.18
+    },
+    {
+     "t": "08:51",
+     "c": 96.16
+    },
+    {
+     "t": "08:52",
+     "c": 96.17
     }
    ],
    "stale": false
@@ -962,9 +1082,20 @@
    "fut_foreign": null,
    "program_kospi": null,
    "usdkrw": 1341.3
+  },
+  {
+   "t": "09:03",
+   "sampled_at": "2026-10-16T09:03:06+09:00",
+   "kospi": 5636.21,
+   "kospi_chg_pct": 1.48,
+   "foreign_kospi": -1312.9,
+   "foreign_kosdaq": -368.8,
+   "fut_foreign": null,
+   "program_kospi": null,
+   "usdkrw": 1341.6
   }
  ],
- "updated_at": "2026-10-16T09:00:06+09:00",
+ "updated_at": "2026-10-16T09:03:06+09:00",
  "market_day": {
   "date": "2026-10-16",
   "trading": true,
