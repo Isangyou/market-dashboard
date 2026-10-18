@@ -26,6 +26,14 @@
 | 증시자금동향 | `fetch/naver.py deposit_trend`(E32) → `data/series/deposit.json` (고객예탁금·신용잔고·주식형/혼합형/채권형 펀드, 억원) | 2002-05-03~2026-09-22 6,006일 백필(로컬 1회). update.yml 매 실행 최신 1페이지, `asof`=기준일이라 값이 같으면 파일 안 씀(재실행 0건 변경 확인). 2거래일 지연. 파일 1.26MB(gzip 약 170KB) — 화면이 전체를 읽음 |
 | ADR | 1차 `fetch/adrinfo.py`(E37) → `data/series/adr_kospi.json`·`adr_kosdaq.json` (source=adrinfo, 2019-10-07~, 1,718·1,717행). 폴백 `fetch/naver.py breadth`(E29) → `breadth_*.json` → `run.py adr_from_breadth` → `adr_naver_*.json` | **2026-10-06 adrinfo 이력 등록**: 사용자 제공 `adr_history_adrinfo.json`으로 시드(파일은 원본 그대로 보존). update-data가 평일 16:00 KST 이후 첫 실행에서 하루 1회 요청(`meta.adrinfo_fetches`), 새 날짜만 이어 붙임. 403이면 그날은 네이버 계산값을 넣고(화면 점선) 다음 날 adrinfo 값으로 교체. 네이버 계산값은 20거래일째(약 10-27)부터 생김 → 그전엔 폴백할 값이 없음. **일별 차트 활성**(VKOSPI \| ADR 행 — 10-06 배치 변경, 1년 기본·range slider·120·75 연회색 점선·adrinfo 실선/네이버 점선·출처 adrinfo.kr) |
 
+## 2026-10-18 (일) 위클리 감마 해설 수정
+- 버그: 10-16 주 '다음 옵션 만기' = 10/16(이미 지난 날, 소멸 0%). 원인 `options.next_monthly_opex`가 기준일=셋째 금요일이면 그날을 고름 → `next_opex()`로 교체(기준일 이후 월말물·월물 중 가까운 것). 해설·근거 수치·weekly 카드는 0%·null·지난 만기면 문장 생략
+- 10-16 주 파일 보정: CBOE 체인 재요청(주말, 타임스탬프·spot·GEX·zero-gamma 저장값과 일치한 9개 중 8개 — NDX는 타임스탬프 달라 미보정, 카드에서 0%라 생략됨) → SPX 다음 만기 **10/30 월말, |감마| 22.5%**
+- 새 저장 필드: `gex_near_by_expiry`(35일 이내 만기별 GEX), `gex_profile.near_usd_bn`(35일 GEX 가격대별) — 다음 주 부호 전환 원인 분해용
+- 10-16 주 감마 해설: 롱 +53.6 → 숏 -62.1$bn(합계 -115.7) = 지수 7,812→7,659(-1.9%) 효과 **-86.5**(복원됨) + 10/12·13·14·16 만기 소멸 **-42.5**(10-09 주는 상위 8개 만기만 있어 최소치, 10/15 누락) + 나머지 +13.3. zero-gamma 7,744(+1.1%)
+- 종합: '딜러 자동 매수 흐름 소멸 … 하방 안전판은 CTA 매도선(-3.0%) 1겹만 남음'
+- `--rebuild-conclusion` 4개 주차: brief·markdown 외 변경 0건(10-16은 위 옵션 필드 보정 포함). weekly.html 1440·390 콘솔 오류 0, 가로 넘침 없음
+
 ## 2026-10-11 (일) 위클리 결론 '쉽게 말하면' 해설
 - `positioning/easy.py` 추가 → brief 각 항목 아래 해설 + 종합 한 줄(weekly.html·Notion 마크다운 하위 불릿). 규칙은 docs/positioning.md
 - `--rebuild-conclusion`으로 3개 주차 재생성 — brief·markdown 외 필드 변경 0건. 10-09 주(COT 10-06): 감마 +12.6→+53.6$bn(4.3배), UB 레버리지펀드 숏커버 +82.6k(3.6σ), ES 20일 매도선 -2.6%(지난주 -1.5%), 쿠션 2겹

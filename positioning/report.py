@@ -105,8 +105,9 @@ def options_bullets(opt: dict, prev: dict | None) -> list[dict]:
             walls.append(f"풋 벽 {_px(spx['put_gamma_wall'])}")
         if walls:
             subs.append(" · ".join(walls) + " (행사가별 순GEX 최대·최소)")
-        if spx.get("gamma_expiring_by_opex_pct") is not None:
-            subs.append(f"{spx['next_opex']} 월물 만기까지 |감마| {spx['gamma_expiring_by_opex_pct']:.0f}% 소멸")
+        # 비중 0%(=이미 지난 만기, 체인은 당일 만기 제외) 또는 없음이면 생략
+        if (spx.get("gamma_expiring_by_opex_pct") or 0) >= 0.5:
+            subs.append(f"{spx['next_opex']} {spx.get('next_opex_kind') or '월물'} 만기까지 |감마| {spx['gamma_expiring_by_opex_pct']:.0f}% 소멸")
         p = P.get("SPX")
         if p and p.get("gex_usd_bn") is not None:
             subs.append(f"전주 GEX {sg(p['gex_usd_bn'], 1)}$bn → {sg(g, 1)}$bn")

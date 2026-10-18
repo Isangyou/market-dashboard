@@ -1,9 +1,10 @@
 """'쉽게 말하면' 해설 — 결론(brief) 각 항목 아래 붙는 한 문단. 전부 수치 템플릿(고정 문장 없음).
 
-  gamma    SPX 딜러 감마 부호·규모(35일 이내 GEX)와 전주 대비 배율 → '변동성 쿠션'
+  gamma    SPX 딜러 감마: (a) zero-gamma 선 대비 위치 (b) 1%당 매매 규모 (c) 쿠션=자동 매수 흐름 정의 + 부호 전환 시
+           원인 분해(지수 이동=복원됨 / 만기 소멸=복원 안 됨) (d) 되돌아가는 조건 + 다음 주요 만기 소멸 비중
   cot      새 COT 공표 주: 주간 σ 상위 시장의 주체·방향·평소 대비 배율·시사점 + 순포지션 치우침
   flip     ES CTA 전환가를 '지수가 X% 빠지면 CTA 매도가 시작되는 선'으로, 전주 대비 안전/위험 + 감마와 합친 하방 쿠션 겹수
-  overall  옵션·CTA·채권 포지션을 합친 한 줄
+  overall  옵션·CTA·채권 포지션을 합친 한 줄. 감마 부호가 바뀐 주는 '자동 매수 흐름 소멸/복원' + 하방 안전판 겹수
 
 기준 단위는 brief.UNIT 공유. 전문용어는 처음 나올 때 괄호로 짧게 설명.
 """
@@ -16,6 +17,7 @@ TSY_LONG_END = {"ZB", "UB"}
 GROUP_EASY = {"lev": "레버리지펀드(헤지펀드 등 단기 투기 자금)", "mm": "운용역(원자재 추세·투기 자금)",
               "am": "자산운용사(연기금·장기 자금)", "dealer": "딜러(은행 등 중개)"}
 RATIO_UP, RATIO_DOWN = 1.5, 1 / 1.5
+SAFETY = {"딜러 롱 감마": "딜러 롱 감마", "CTA 롱 유지(매도 없음)": "CTA 매도선"}  # 종합 한 줄의 안전판 이름
 
 
 def _get(d, *ks):
@@ -49,45 +51,108 @@ def _ratio_phrase(cur, old):
 
 
 # ── 딜러 감마 ──
-def gamma(u, pu):
+CUSHION_DEF = ("여기서 '쿠션'은 지지선(가격이 멈추는 선)이 아니라 딜러의 자동 매수 흐름이다: 롱 감마에선 지수가 빠질 때 "
+               "딜러가 기계적으로 사 주지만, 숏 감마에선 같이 팔아서 낙폭이 커진다.")
+
+
+def opex(u, asof=None):
+    """다음 주요 만기 (MM/DD, 종류, 소멸 비중%). 만기가 기준일 이전·당일이거나 비중이 0·없음이면 None"""
+    e, pct = u.get("next_opex"), u.get("gamma_expiring_by_opex_pct")
+    if not e or pct is None or round(pct) <= 0 or (asof and e <= asof):
+        return None
+    return e[5:].replace("-", "/"), u.get("next_opex_kind") or "월물", pct
+
+
+def _near_at(u, s):
+    """35일 이내 GEX 프로파일을 가격 s에서 선형 보간($bn). 프로파일 없거나 범위 밖이면 None"""
+    pr = (u or {}).get("gex_profile") or {}
+    xs, ys = pr.get("spot"), pr.get("near_usd_bn")
+    if not xs or not ys or s is None or not xs[0] <= s <= xs[-1]:
+        return None
+    for i in range(len(xs) - 1):
+        if xs[i] <= s <= xs[i + 1]:
+            w = (s - xs[i]) / (xs[i + 1] - xs[i]) if xs[i + 1] != xs[i] else 0
+            return ys[i] + (ys[i + 1] - ys[i]) * w
+    return None
+
+
+def flip_cause(u, pu, asof, pasof):
+    """전주 대비 GEX 변화 분해($bn): 지수 이동(같은 포지션, 가격만 전주→이번 주) · 만기 소멸(전주에 있던 만기 중
+    (전주 기준일, 이번 기준일]에 끝난 것) · 나머지(신규·청산 포지션, 35일 창 이동). 이번 주 단기 프로파일 없으면 None"""
+    if not u or not pu or not asof or not pasof:
+        return None
+    g, pg = _gex(u), _gex(pu)
+    at_prev = _near_at(u, pu.get("spot"))
+    if g is None or pg is None or at_prev is None:
+        return None
+    lst = pu.get("gex_near_by_expiry")
+    full = lst is not None
+    gone = [x for x in (lst if full else pu.get("diag_gex_by_expiry") or []) if pasof < x["exp"] <= asof]
+    spot_eff = g - at_prev
+    exp_eff = -sum(x["gex_usd_bn"] for x in gone)
+    return {"spot": spot_eff, "expiry": exp_eff, "rest": (g - pg) - spot_eff - exp_eff, "total": g - pg,
+            "gone": sorted(x["exp"] for x in gone), "full": full}
+
+
+def _cause_text(u, pu, fc):
+    s0, s1 = pu["spot"], u["spot"]
+    days = "·".join(e[5:].replace("-", "/") for e in fc["gone"])
+    t = (f"부호가 바뀐 원인(지난주 {'롱' if _gex(pu) > 0 else '숏'} 감마 {sg(_gex(pu), 1)}$bn → {sg(_gex(u), 1)}$bn, "
+         f"합계 {sg(fc['total'], 1)}$bn): ① 지수가 {_px(s0)}→{_px(s1)}({sg((s1 / s0 - 1) * 100, 1)}%)로 "
+         f"{'내려와 zero-gamma 선 아래로 간' if s1 < s0 else '올라와 zero-gamma 선 위로 간'} 효과 {sg(fc['spot'], 1)}$bn "
+         f"— 포지션은 그대로고 지수 위치 때문에 생긴 부분이라 지수가 {'다시 오르면' if s1 < s0 else '다시 빠지면'} 되돌아간다.")
+    if fc["gone"]:
+        t += (f" ② {days} 옵션 만기로 포지션 자체가 소멸한 효과 {sg(fc['expiry'], 1)}$bn"
+              + ("" if fc["full"] else "(지난주 상위 8개 만기만 집계, 최소치)") + " — 지수가 돌아와도 복원되지 않는다.")
+    if abs(fc["rest"]) >= 0.5:
+        t += f" 나머지 {sg(fc['rest'], 1)}$bn은 새로 쌓이거나 정리된 포지션."
+    return t
+
+
+def gamma(u, pu, asof=None, pasof=None):
     if not u or _gex(u) is None:
         return None
     g = _gex(u)
     pg = _gex(pu) if pu else None
+    switched = pg is not None and (g > 0) != (pg > 0)
     rp, r = _ratio_phrase(g, pg)
     long_g = g > 0
-    zd = _zg_dist(u)
-    if long_g:
-        s = (f"딜러는 지금 롱 감마(가격이 오르면 팔고 내리면 사서 움직임을 되돌리는 헤지 위치)다. "
-             f"35일 이내 만기 기준 지수 1% 변동당 약 {abs(g):.1f}$bn을 반대 방향으로 매매하는 규모" + (f"로 {rp}" if rp else "다."))
-        if r is not None and r >= RATIO_UP:
-            s += " — 변동성 쿠션이 두꺼워져 급등락은 억제되고 횡보에 유리한 쪽이다."
-        elif r is not None and r <= RATIO_DOWN:
-            s += " — 변동성 쿠션이 얇아져 지난주보다 움직임을 덜 흡수한다."
-        else:
-            s += " — 변동성 쿠션 두께는 지난주와 비슷하다." if r is not None else (" — 쿠션 역할을 한다." if rp else " 급등락을 억제하고 횡보에 유리한 쪽이다.")
+    zg, zd = u.get("zero_gamma"), _zg_dist(u)
+    zline = f"zero-gamma 선({_px(zg)}: 딜러 감마 부호가 바뀌는 가격)" if zg else None
+    pos = "롱 감마(지수가 내리면 사고 오르면 파는 헤지 위치)" if long_g else "숏 감마(지수가 내리면 팔고 오르면 사는 헤지 위치)"
+    # (a) 위치
+    on_side = zd is not None and ((long_g and zd < 0) or (not long_g and zd > 0))
+    if on_side:
+        s = (f"지수가 {zline} {'위로 올라와' if long_g else '아래로 내려와'} 딜러가 {pos}로 전환됐다." if switched else
+             f"지수가 {zline} {'위' if long_g else '아래'}에 있어 딜러가 {pos} 상태다.")
     else:
-        s = (f"딜러는 지금 숏 감마(가격이 내리면 팔고 오르면 사서 움직임을 키우는 헤지 위치)다. "
-             f"35일 이내 만기 기준 지수 1% 변동당 약 {abs(g):.1f}$bn이 같은 방향으로 붙는 규모" + (f"로 {rp}" if rp else "다."))
+        s = f"딜러가 {pos}로 전환됐다." if switched else f"딜러는 {pos} 상태다."
+    # (b) 규모
+    s += (f" 이 상태에선 지수가 1% 움직일 때 딜러가 {'반대' if long_g else '같은'} 방향으로 약 {abs(g):.1f}$bn 매매해서 "
+          f"움직임이 {'줄어든다' if long_g else '커진다'}(35일 이내 만기 기준)")
+    if not switched and rp:
+        s += f" — {rp}"
         if r is not None and r >= RATIO_UP:
-            s += " — 움직임 증폭 효과가 커졌다."
+            s += f", {'자동 매수 흐름이 두꺼워졌다' if long_g else '증폭 효과가 커졌다'}."
         elif r is not None and r <= RATIO_DOWN:
-            s += " — 증폭 효과는 지난주보다 작다."
+            s += f", {'자동 매수 흐름이 얇아졌다' if long_g else '증폭 효과는 작아졌다'}."
         else:
-            s += (" — " if rp else " ") + "쿠션 없이 움직임이 증폭되는 구간이다."
-    tail = []
-    if u.get("gamma_expiring_by_opex_pct") is not None and u.get("next_opex"):
-        tail.append(f"전체 감마의 {u['gamma_expiring_by_opex_pct']:.0f}%는 {u['next_opex'][5:].replace('-', '/')} 옵션 만기에 사라지고")
-    if zd is not None:
-        if long_g and zd < 0:
-            tail.append(f"지수가 {abs(zd):.1f}% 내려 {_px(u['zero_gamma'])}(zero-gamma: 딜러 감마 부호가 바뀌는 선) 아래로 가면 "
-                        f"숏 감마로 바뀌어 움직임을 증폭하는 쪽이 된다")
-        elif not long_g and zd > 0:
-            tail.append(f"지수가 {zd:.1f}% 올라 {_px(u['zero_gamma'])}(zero-gamma: 딜러 감마 부호가 바뀌는 선)을 넘으면 "
-                        f"롱 감마로 돌아와 쿠션이 생긴다")
-    if tail:
-        s += " 다만 " + ", ".join(tail)
-        s += " 쿠션이 그만큼 얇아진다." if s.endswith("사라지고") else "."
+            s += ", 규모는 비슷하다." if r is not None else "."
+    else:
+        s += "."
+    # (c) 쿠션 정의 + 부호 전환 원인
+    s += " " + CUSHION_DEF
+    if switched:
+        fc = flip_cause(u, pu, asof, pasof)
+        s += " " + (_cause_text(u, pu, fc) if fc else
+                    f"지난주 {'롱' if pg > 0 else '숏'} 감마 {sg(pg, 1)}$bn에서 부호가 바뀌었다(원인 분해용 가격대별 데이터 없음).")
+    # (d) 되돌아가는 조건
+    if on_side:
+        s += (f" 지수가 {abs(zd):.1f}% 빠져 zero-gamma 선({_px(zg)}) 아래로 내려가면 이 흐름이 매도로 바뀐다." if long_g else
+              f" 지수가 {zd:.1f}% 올라 zero-gamma 선({_px(zg)})을 다시 넘으면 자동 매수 흐름이 복원된다.")
+    ox = opex(u, asof)
+    if ox:
+        s += f" 전체 감마(절댓값)의 {ox[2]:.0f}%는 {ox[0]} {ox[1]} 옵션 만기에 사라져 그만큼 흐름 규모가 줄어든다."
     return s
 
 
@@ -271,7 +336,19 @@ def overall(es, u, pu, c, pc, unit=1.0):
     if not bits:
         return None
     cs = cushions(es, u) if es and es["position_pct"] > 0 else []
-    if g is not None and g > 0:
+    pg = _gex(pu) if pu else None
+    if g is not None and pg is not None and (g > 0) != (pg > 0):
+        zd, zg = _zg_dist(u), u.get("zero_gamma")
+        flow = (f"딜러 자동 매수 흐름 {'소멸' if g < 0 else '복원'}({'롱' if pg > 0 else '숏'} 감마 {sg(pg, 1)} → "
+                f"{'숏' if g < 0 else '롱'} 감마 {sg(g, 1)}$bn"
+                + (f", 지수가 {zd:.1f}% 올라 {_px(zg)} 선을 넘으면 복원" if g < 0 and zd is not None and zd > 0 else "") + ")")
+        if not cs:
+            shape = flow + "으로 하방 안전판 없음"
+        elif len(cs) == 1:
+            shape = flow + f"으로 하방 안전판은 {SAFETY.get(cs[0][1], cs[0][1])}(-{abs(cs[0][0]):.1f}%) 1겹만 남음"
+        else:
+            shape = flow + f"으로 하방 안전판 {len(cs)}겹: " + " · ".join(f"{SAFETY.get(n, n)} -{abs(d):.1f}%까지" for d, n in cs)
+    elif g is not None and g > 0:
         shape = f"하방 쿠션 {len(cs)}겹의 롱 감마 횡보 구조" if cs else "롱 감마 횡보 구조"
         if cs and cs[0][1] == "딜러 롱 감마":
             shape += f", 다만 {abs(cs[0][0]):.1f}% 아래부터는 쿠션이 얇아진다"
@@ -286,5 +363,6 @@ def build(snap, prev, unit_cot=1.0, unit_flip=0.5):
     es, pes = _get(snap, "cta", "assets", "ES"), _get(prev, "cta", "assets", "ES")
     u, pu = _get(snap, "options", "underlyings", "SPX"), _get(prev, "options", "underlyings", "SPX")
     c, pc = snap.get("cot"), (prev or {}).get("cot")
-    return {"gamma": gamma(u, pu), "cot": cot(c, pc, unit_cot), "flip": flip(es, pes, u, unit_flip),
+    asof, pasof = _get(snap, "asof", "us_market_date") or snap.get("week"), _get(prev, "asof", "us_market_date") or (prev or {}).get("week")
+    return {"gamma": gamma(u, pu, asof, pasof), "cot": cot(c, pc, unit_cot), "flip": flip(es, pes, u, unit_flip),
             "overall": overall(es, u, pu, c, pc, unit_cot)}

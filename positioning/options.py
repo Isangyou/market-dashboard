@@ -111,11 +111,34 @@ def third_friday(y: int, m: int) -> date:
 
 
 def next_monthly_opex(today: date) -> date:
+    """오늘 '이후'(당일 제외 — 체인은 dte>=1만 남김) 첫 월물(셋째 금요일)"""
     tf = third_friday(today.year, today.month)
-    if tf >= today:
+    if tf > today:
         return tf
     y, m = (today.year + 1, 1) if today.month == 12 else (today.year, today.month + 1)
     return third_friday(y, m)
+
+
+def next_opex(exps, today: date) -> tuple[date, str]:
+    """다음 주요 만기 = 월말물·월물 중 오늘 이후 가장 가까운 것 → (날짜, '월말'|'월물').
+    월말물 = 체인에 있는 그 달 마지막 만기(말일 3일 전 이내), 월물 = 셋째 금요일(휴장이면 체인상 직전 만기)"""
+    exps = sorted({e for e in exps if e > today})
+    cands = []
+    for y, m in sorted({(e.year, e.month) for e in exps})[:3]:
+        inm = [e for e in exps if (e.year, e.month) == (y, m)]
+        last = inm[-1]
+        nxt = date(y + (m == 12), m % 12 + 1, 1)
+        if (nxt - last).days <= 4:
+            cands.append((last, "월말"))
+        tf = third_friday(y, m)
+        mo = max((e for e in inm if 0 <= (tf - e).days <= 1), default=None)
+        if mo and mo != last:
+            cands.append((mo, "월물"))
+        elif mo:
+            cands.append((mo, "월물·월말"))
+    if not cands:
+        return next_monthly_opex(today), "월물"
+    return min(cands)
 
 
 def analyze(key: str, df: pd.DataFrame, spot: float, today: date) -> dict:
@@ -206,11 +229,18 @@ def analyze(key: str, df: pd.DataFrame, spot: float, today: date) -> dict:
                                     "iv": round(float(r.iv), 4), "gamma_bs": float(f"{r.gamma_bs:.3e}"), "gamma_cboe": float(f"{r.gamma_cboe:.3e}"),
                                     "gex_usd_mn": round(float(r.gex) / 1e6, 1)} for _, r in top.iterrows()]
 
-        # 다음 월물 OPEX까지 만기 도래하는 |감마| 비중
-        opex = next_monthly_opex(today)
+        # 35일 이내 만기별 GEX 전부(현재가 기준) — 다음 주 '만기 소멸 효과' 계산용
+        bn = d[d.dte <= 35].groupby("exp")["gex"].sum()
+        out["gex_near_by_expiry"] = [{"exp": e.isoformat(), "gex_usd_bn": round(float(v) / 1e9, 3)} for e, v in bn.items()]
+        # 35일 이내 GEX 가격대별 프로파일(같은 grid) — 다음 주 '지수 이동 효과' 계산용
+        out["gex_profile"]["near_usd_bn"] = [round(_gex_at(near, s) / 1e9, 3) for s in grid] if len(near) else None
+
+        # 다음 주요 만기(월말·월물 중 가까운 것)까지 만기 도래하는 |감마| 비중
+        opex, kind = next_opex(d["exp"].unique(), today)
         d["absg"] = d["gex"].abs()
         tot = d["absg"].sum()
         out["next_opex"] = opex.isoformat()
+        out["next_opex_kind"] = kind
         out["gamma_expiring_by_opex_pct"] = round(float(d.loc[d.exp <= opex, "absg"].sum() / tot * 100), 1) if tot else None
     return out
 

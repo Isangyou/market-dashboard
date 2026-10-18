@@ -474,7 +474,7 @@ function renderOptions() {
     card('P/C (OI)', nf(u.pc_oi, 2), d(u.pc_oi, p.pc_oi, 2)),
     card('P/C (거래량, 주평균)', nf(WK[selOpt], 2), `당일 ${nf(u.pc_vol, 2)}`),
     card('25Δ 스큐 (30일, vp)', sg(u.skew_25d_30d, 1), d(u.skew_25d_30d, p.skew_25d_30d, 1)),
-    card('ATM IV 30일 (%)', nf(u.atm_iv_30d, 1), `${u.next_opex || ''} 만기까지 |감마| ${nf(u.gamma_expiring_by_opex_pct, 0)}% 소멸`),
+    card('ATM IV 30일 (%)', nf(u.atm_iv_30d, 1), (u.gamma_expiring_by_opex_pct >= 0.5 && u.next_opex) ? `${u.next_opex} ${u.next_opex_kind || '월물'} 만기까지 |감마| ${nf(u.gamma_expiring_by_opex_pct, 0)}% 소멸` : ''),
   ].join('');
 
   // 행사가별 GEX
