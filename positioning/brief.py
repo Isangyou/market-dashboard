@@ -1,12 +1,12 @@
-"""결론(수치 기반) — 한 줄 요약 · 변화 포인트 · 리스크.
+"""결론(수치 기반) — 데이터 성격 순 3블록 + 종합.
 
-  line     CTA 주식(ES) 포지션 방향·규모·3년 백분위 + 전주 대비 변화
-  changes  전주 스냅샷 대비 바뀐 항목만. 범주 3개(전환가 거리 · 옵션 · 선물 COT) 중
-           변화 점수(|변화| / UNIT) ≥ 1인 범주를 점수 큰 순으로 최대 3개. 부호 전환은 +10점
-  risk     현재가에서 가장 가까운 임계값(ES 신호 전환가 · SPX zero-gamma) 1개와 넘으면 생기는 일
-  vs_prev  전주에 저장된 brief와 비교한 결과("변화 없음" 명시용)
-  easy     '쉽게 말하면' 해설(easy.py). 주제(감마·COT·전환가)마다 한 번만, 해당 항목 아래에 붙임:
-           변화 포인트에 있으면 그 항목, 없으면 전환가→요약 · 감마→리스크 · COT→변화 포인트 끝. 종합 한 줄은 overall
+  blocks[0] cot      관측 포지션(CFTC COT): ES + 주간 σ ≥ UNIT 시장의 레버리지펀드·자산운용사(원자재는 운용역) 순포지션·주간 변화·σ
+  blocks[1] options  관측 시장 상태(옵션): SPX ATM IV30 · 25Δ 스큐 · P/C · 최대 콜·풋 OI 행사가, 전주 대비 수치 + NDX·RUT·VIX 한 줄
+  blocks[2] model    추정(모델): 딜러 감마 · zero-gamma · CTA 포지션 · CTA 전환가 — 항목마다 가정 한 줄, 방향·레벨 위주
+                     + 가장 가까운 기계적 임계값(risk) 한 줄
+  각 블록 easy      '쉽게 말하면'(easy.py). 관측 블록은 관측값만, 추정 블록은 '모델상으로는 ~'
+  overall           '관측: …. 모델상으로는 ….'
+  unchanged         블록별 전주 대비 기준 단위(UNIT) 미만이면 True → 화면에 '지난주와 변화 없음'
 
 해석·전망 문장 없음. 숫자와 '넘으면 기계적으로 바뀌는 것'만. 기준 단위는 UNIT에서 조정.
 """
@@ -64,111 +64,6 @@ def _active_flips(es):
     return [f for f in es.get("flips", []) if (f["signal"] > 0 and f["dist_pct"] < 0) or (f["signal"] < 0 and f["dist_pct"] > 0)]
 
 
-# ── (1) 한 줄 요약 ──
-def line(snap, prev):
-    es = _es(snap)
-    if not es:
-        return {"text": "CTA 주식(ES) 데이터 없음", "changed": None}
-    pos, pct = es["position_pct"], es["position_pctile_3y"]
-    head = f"CTA 주식(ES) {_dir(pos)} {sg(pos, 0)}% · 3년 {pct:.0f}백분위"
-    pes = _es(prev)
-    if pes:
-        d = pos - pes["position_pct"]
-        tail = (f"전주 {sg(pes['position_pct'], 0)}% → {sg(d, 1)}%p, 백분위 {pes['position_pctile_3y']:.0f}→{pct:.0f}")
-        changed = abs(d) >= UNIT["cta_pos"] or _dir(pos) != _dir(pes["position_pct"])
-    else:
-        d = es.get("position_chg_1w_pp")
-        tail = f"모델 기준 1주 변화 {sg(d, 1)}%p, 전주 스냅샷 없음"
-        changed = None
-    if changed is False:
-        tail += f" — 방향·규모 변화 없음(±{UNIT['cta_pos']:.0f}%p 미만)"
-    return {"text": f"{head} ({tail})", "changed": changed, "pos": pos, "pctile": pct}
-
-
-# ── (2) 변화 포인트 ──
-def _chg_flip(es, pes):
-    if not es or not pes:
-        return None
-    pf = {f["lookback"]: f for f in pes.get("flips", [])}
-    score, bits = 0.0, []
-    for f in es.get("flips", []):
-        p = pf.get(f["lookback"])
-        if p and (f["signal"] > 0) != (p["signal"] > 0):
-            score += FLIP_BONUS
-            bits.append(f"{f['lookback']}일 신호 {'매수' if p['signal'] > 0 else '매도'}→{'매수' if f['signal'] > 0 else '매도'} 전환")
-    act = _active_flips(es)
-    if act:
-        f = min(act, key=lambda x: abs(x["dist_pct"]))
-        p = pf.get(f["lookback"])
-        if p:
-            dd = abs(f["dist_pct"]) - abs(p["dist_pct"])
-            s = abs(dd) / UNIT["flip"]
-            if s >= 1:
-                score += s
-                bits.append(f"ES {f['lookback']}일 {sg(p['dist_pct'], 1)}% → {sg(f['dist_pct'], 1)}% "
-                            f"({abs(dd):.1f}%p {'멀어짐' if dd > 0 else '가까워짐'}, 전환가 {_px(p['flip_level'])} → {_px(f['flip_level'])})")
-    return {"key": "flip", "label": "전환가 거리", "score": round(score, 2), "text": " · ".join(bits)} if bits else None
-
-
-def _chg_options(u, pu):
-    if not u or not pu:
-        return None
-    cand = []
-
-    def add(name, cur, old, unit, fmt, sign_flip=False):
-        if cur is None or old is None:
-            return
-        s = abs(cur - old) / unit + (FLIP_BONUS if sign_flip and (cur > 0) != (old > 0) else 0)
-        if s >= 1:
-            cand.append((s, f"{name} {fmt(old)} → {fmt(cur)}"))
-
-    g, pg = _gex(u), _gex(pu)
-    add("SPX 딜러 감마(35일)", g, pg, UNIT["gex"], lambda v: f"{sg(v, 1)}$bn", sign_flip=True)
-    add("zero-gamma 거리", _zg_dist(u), _zg_dist(pu), UNIT["zg"], lambda v: f"{sg(v, 1)}%")
-    add("25Δ 스큐", u.get("skew_25d_30d"), pu.get("skew_25d_30d"), UNIT["skew"], lambda v: f"{sg(v, 1)}vp")
-    add("ATM IV30", u.get("atm_iv_30d"), pu.get("atm_iv_30d"), UNIT["iv"], lambda v: f"{v:.1f}%")
-    add("P/C(OI)", u.get("pc_oi"), pu.get("pc_oi"), UNIT["pc"], lambda v: f"{v:.2f}")
-    if not cand:
-        return None
-    cand.sort(key=lambda x: -x[0])
-    return {"key": "options", "label": "옵션 포지셔닝", "score": round(cand[0][0], 2), "text": " · ".join(t for _, t in cand)}
-
-
-def _chg_cot(cot, pcot):
-    """새 COT가 공표된 주만. 헤드라인 그룹 주간 변화 σ 상위 2개 시장"""
-    rd, prd = (cot or {}).get("report_date"), (pcot or {}).get("report_date")
-    if not rd or not prd or rd == prd:
-        return None
-    cand = []
-    for m in cot.get("markets", {}).values():
-        g = m["groups"][m["headline"]]
-        z = g.get("chg_1w_z")
-        if z is not None and abs(z) / UNIT["cot_z"] >= 1:
-            cand.append((abs(z) / UNIT["cot_z"], f"{m['name']} {GROUP_KO.get(m['headline'], m['headline'])} 순 {sg(g['net'] / 1000, 1)}k"
-                                                f"(주간 {sg(g['chg_1w'] / 1000, 1)}k, {sg(z, 1)}σ)"))
-    if not cand:
-        return None
-    cand.sort(key=lambda x: -x[0])
-    return {"key": "cot", "label": f"선물 포지션(COT {rd[5:]})", "score": round(cand[0][0], 2),
-            "text": " · ".join(t for _, t in cand[:2]) + (f" 외 {len(cand) - 2}개 시장 ≥1σ" if len(cand) > 2 else "")}
-
-
-def changes(snap, prev):
-    if not prev:
-        return [], "전주 스냅샷 없음 — 비교 생략"
-    out = [c for c in (_chg_flip(_es(snap), _es(prev)),
-                       _chg_options(_spx(snap), _spx(prev)),
-                       _chg_cot(snap.get("cot"), prev.get("cot"))) if c]
-    out.sort(key=lambda c: -c["score"])
-    notes = []
-    rd, prd = _get(snap, "cot", "report_date"), _get(prev, "cot", "report_date")
-    if rd and rd == prd:
-        notes.append(f"COT 새 공표 없음({rd} 기준 동일)")
-    if not out:
-        notes.insert(0, "변화 없음 — 전환가 거리·옵션·선물 모두 기준 단위 미만")
-    return out[:3], " · ".join(notes) or None
-
-
 # ── (3) 리스크 ──
 def risk(snap):
     es, u = _es(snap), _spx(snap)
@@ -199,64 +94,235 @@ def risk(snap):
     return min(cand, key=lambda c: abs(c["dist_pct"]))
 
 
+# ── 블록 ──
+GROUP_SHOW = {"TFF": ("lev", "am"), "DIS": ("mm",)}
+COT_MAX = 5  # ES 포함 표시 시장 수
+
+
+def _cot_groups(m):
+    gs = GROUP_SHOW["TFF"] if "lev" in m["groups"] else GROUP_SHOW["DIS"]
+    return [(g, m["groups"][g]) for g in gs if g in m["groups"]]
+
+
+def _cot_item(m):
+    parts = []
+    for g, x in _cot_groups(m):
+        mv = easy._move(x["net"], x["chg_1w"])[0].split("(")[0]
+        parts.append(f"{GROUP_KO.get(g, g)}: {mv}, 주간 {sg(x['chg_1w'] / 1000, 1)}k({sg(x.get('chg_1w_z'), 1)}σ) → 순 {sg(x['net'] / 1000, 1)}k")
+    return f"{m['name']} — " + " · ".join(parts)
+
+
+def cot_movers(cot, unit=UNIT["cot_z"]):
+    """(|σ|, 시장키, 그룹키) — 표시 그룹 중 |주간 σ| ≥ unit, 큰 순"""
+    out = []
+    for k, m in (cot or {}).get("markets", {}).items():
+        for g, x in _cot_groups(m):
+            if x.get("chg_1w_z") is not None and abs(x["chg_1w_z"]) >= unit:
+                out.append((abs(x["chg_1w_z"]), k, g))
+    return sorted(out, key=lambda t: -t[0])
+
+
+def block_cot(snap, prev):
+    c, pc = snap.get("cot") or {}, (prev or {}).get("cot") or {}
+    rd, prd = c.get("report_date"), pc.get("report_date")
+    M = c.get("markets") or {}
+    blk = {"key": "cot", "title": "관측 포지션 (CFTC COT)", "kind": "observed",
+           "asof": f"{rd[5:].replace('-', '/')}(화) 포지션" if rd else None, "items": [], "note": None}
+    if not M:
+        blk.update(note="COT 데이터 없음", unchanged=None)
+        return blk
+    keys = ["ES"] if "ES" in M else []
+    for _, k, _ in cot_movers(c):
+        if k not in keys and len(keys) < COT_MAX:
+            keys.append(k)
+    blk["items"] = [{"text": _cot_item(M[k])} for k in keys]
+    rest = {k for _, k, _ in cot_movers(c)} - set(keys)
+    notes = []
+    if rest:
+        notes.append(f"그 외 주간 ≥{UNIT['cot_z']:.0f}σ {len(rest)}개 시장(아래 표)")
+    if prd and rd == prd:
+        notes.insert(0, f"새 공표 없음 — {rd} 기준 그대로")
+        blk["unchanged"] = True
+    else:
+        blk["unchanged"] = not cot_movers(c) if prd else None
+        if blk["unchanged"]:
+            notes.insert(0, f"모든 시장 주간 변화 {UNIT['cot_z']:.0f}σ 미만")
+    blk["note"] = " · ".join(notes) or None
+    return blk
+
+
+def _dv(cur, old, d):
+    return f"지난주 {old:.{d}f}, {sg(cur - old, d)}" if cur is not None and old is not None else "지난주 없음"
+
+
+def block_options(snap, prev):
+    u, pu = _spx(snap), _spx(prev) or {}
+    wk = _get(snap, "options_week", "pc_vol_avg", "SPX")
+    pwk = _get(prev, "options_week", "pc_vol_avg", "SPX")
+    blk = {"key": "options", "title": "관측 시장 상태 (옵션 시장)", "kind": "observed",
+           "asof": f"CBOE {_get(snap, 'asof', 'options') or '–'}", "items": [], "note": None}
+    if not u:
+        blk.update(note="옵션 데이터 없음", unchanged=None)
+        return blk
+    it = []
+    if u.get("atm_iv_30d") is not None:
+        old = pu.get("atm_iv_30d")
+        it.append(f"SPX ATM IV30 {u['atm_iv_30d']:.1f}% (" + (f"지난주 {old:.1f}%, {sg(u['atm_iv_30d'] - old, 1)}%p" if old is not None else "지난주 없음") + ")")
+    if u.get("skew_25d_30d") is not None:
+        old = pu.get("skew_25d_30d")
+        it.append(f"25Δ 스큐 {sg(u['skew_25d_30d'], 1)}vp (" + (f"지난주 {sg(old, 1)}vp, {sg(u['skew_25d_30d'] - old, 1)}vp" if old is not None else "지난주 없음") + ")")
+    if u.get("pc_oi") is not None:
+        t = f"P/C(OI) {u['pc_oi']:.2f} ({_dv(u['pc_oi'], pu.get('pc_oi'), 2)})"
+        if wk is not None:
+            t += f" · P/C(거래량, 주평균) {wk:.2f}" + (f" (지난주 {pwk:.2f})" if pwk is not None else "")
+        it.append(t)
+    cw, pw = u.get("call_oi_wall"), u.get("put_oi_wall")
+    if cw or pw:
+        dd = lambda k: f"{sg((k / u['spot'] - 1) * 100, 1)}%" if k else "–"
+        t = (f"최대 OI 행사가(현재가 ±15%, 전 만기): 콜 {_px(cw)}({dd(cw)}) · 풋 {_px(pw)}({dd(pw)}) / 현재가 {_px(u['spot'])}")
+        if pu.get("call_oi_wall") or pu.get("put_oi_wall"):
+            t += f" (지난주 콜 {_px(pu.get('call_oi_wall'))} · 풋 {_px(pu.get('put_oi_wall'))})"
+        it.append(t)
+    U, PU = _get(snap, "options", "underlyings") or {}, _get(prev, "options", "underlyings") or {}
+    oth = []
+    for k in ("NDX", "RUT"):
+        x, q = U.get(k), PU.get(k) or {}
+        if x and x.get("atm_iv_30d") is not None:
+            oth.append(f"{k} IV30 {x['atm_iv_30d']:.1f}%" + (f"({sg(x['atm_iv_30d'] - q['atm_iv_30d'], 1)})" if q.get("atm_iv_30d") is not None else ""))
+    v, q = U.get("VIX"), PU.get("VIX") or {}
+    if v and v.get("pc_oi") is not None:
+        oth.append(f"VIX 옵션 P/C(OI) {v['pc_oi']:.2f}" + (f"({sg(v['pc_oi'] - q['pc_oi'], 2)})" if q.get("pc_oi") is not None else ""))
+    if oth:
+        it.append("그 외: " + " · ".join(oth))
+    blk["items"] = [{"text": t} for t in it]
+    if pu:
+        small = all(a is None or b is None or abs(a - b) < unit for a, b, unit in (
+            (u.get("atm_iv_30d"), pu.get("atm_iv_30d"), UNIT["iv"]), (u.get("skew_25d_30d"), pu.get("skew_25d_30d"), UNIT["skew"]),
+            (u.get("pc_oi"), pu.get("pc_oi"), UNIT["pc"])))
+        blk["unchanged"] = small and cw == pu.get("call_oi_wall") and pw == pu.get("put_oi_wall")
+        if blk["unchanged"]:
+            blk["note"] = f"IV·스큐 {UNIT['iv']:.0f}vp, P/C {UNIT['pc']:.2f} 미만 변화 · OI 집중 행사가 동일"
+    else:
+        blk["unchanged"] = None
+    return blk
+
+
+ASSUME = {
+    "gamma": "딜러=고객 반대편(콜 롱·풋 숏) · 35일 이내 만기 · BS 감마 재계산",
+    "zg": "같은 가정으로 가격대별 감마를 다시 계산해 부호가 바뀌는 가격 · 전 만기",
+    "cta": "20·60·125·250일 추세추종 + 변동성 타기팅 복제 모델 (실제 CTA 포지션 아님)",
+    "flip": "같은 모델에서 다음 주말 룩백 신호가 0이 되는 가격",
+}
+
+
+def block_model(snap, prev):
+    es, pes = _es(snap), _es(prev)
+    u, pu = _spx(snap), _spx(prev)
+    blk = {"key": "model", "title": "추정 (모델 기반)", "kind": "model", "asof": None, "items": [], "note": None}
+    it, same = [], []
+    g = _gex(u) if u else None
+    if g is not None:
+        pg = _gex(pu) if pu else None
+        side = "롱" if g > 0 else "숏"
+        if pg is None:
+            t = f"{side} 감마 · 규모 {sg(g, 0)}$bn/1%"
+        elif (g > 0) != (pg > 0):
+            t = f"{side} 감마 — 지난주 {'롱' if pg > 0 else '숏'} 감마에서 전환 · 규모 {sg(g, 0)}$bn/1% (지난주 {sg(pg, 0)})"
+            same.append(False)
+        else:
+            t = f"{side} 감마 유지 · 규모 {sg(g, 0)}$bn/1% (지난주 {sg(pg, 0)})"
+            same.append(abs(g - pg) < UNIT["gex"])
+        it.append({"label": "딜러 감마", "assume": ASSUME["gamma"], "text": t})
+    if u:
+        zd, pzd = _zg_dist(u), _zg_dist(pu)
+        if zd is not None:
+            t = f"{_px(u['zero_gamma'])} — 지수({_px(u['spot'])})가 선 {'아래' if zd > 0 else '위'}, 선까지 {sg(zd, 1)}%"
+            if pzd is not None:
+                t += f" (지난주 {_px(pu['zero_gamma'])}, 지수가 선 {'아래' if pzd > 0 else '위'} {sg(pzd, 1)}%)"
+                same.append(abs(zd - pzd) < UNIT["zg"])
+        else:
+            t = "현재가 ±12% 범위 안에 부호가 바뀌는 가격 없음"
+        it.append({"label": "zero-gamma", "assume": ASSUME["zg"], "text": t})
+    if es:
+        pos, pct = es["position_pct"], es["position_pctile_3y"]
+        t = f"ES {_dir(pos)} {abs(pos):.0f}% · 3년 {pct:.0f}백분위"
+        if pes:
+            d = pos - pes["position_pct"]
+            word = "비슷" if abs(d) < UNIT["cta_pos"] else ("확대" if (d > 0) == (pos > 0) else "축소")
+            if _dir(pos) != _dir(pes["position_pct"]):
+                word = "방향 전환"
+            t += f" (지난주 {sg(pes['position_pct'], 0)}%·{pes['position_pctile_3y']:.0f}백분위 → {word})"
+            same.append(word == "비슷")
+        it.append({"label": "CTA 포지션", "assume": ASSUME["cta"], "text": t})
+        act = _active_flips(es)
+        if act:
+            act.sort(key=lambda x: abs(x["dist_pct"]))
+            f = act[0]
+            t = f"가장 가까운 {'매도' if f['dist_pct'] < 0 else '매수'} 전환선 {f['lookback']}일 {_px(f['flip_level'])}({sg(f['dist_pct'], 1)}%)"
+            pf = {x["lookback"]: x for x in (pes or {}).get("flips", [])}.get(f["lookback"])
+            if pf:
+                t += f" (지난주 {sg(pf['dist_pct'], 1)}%)"
+                same.append(abs(abs(f["dist_pct"]) - abs(pf["dist_pct"])) < UNIT["flip"])
+            nxt = [x for x in act[1:] if (x["dist_pct"] < 0) == (f["dist_pct"] < 0)]
+            if nxt:
+                t += f" · 다음 {nxt[0]['lookback']}일 {_px(nxt[0]['flip_level'])}({sg(nxt[0]['dist_pct'], 1)}%)"
+        else:
+            t = "모든 룩백 신호가 이미 현재 방향 — 가까운 전환선 없음"
+        it.append({"label": "CTA 전환가", "assume": ASSUME["flip"], "text": t})
+    blk["items"] = it
+    blk["unchanged"] = all(same) if same and prev else None
+    return blk
+
+
 # ── 조립 + 전주 결론과 비교 ──
 def build(snap, prev):
-    ln = line(snap, prev)
-    ch, note = changes(snap, prev)
+    blocks = [block_cot(snap, prev), block_options(snap, prev), block_model(snap, prev)]
     rk = risk(snap)
     pb = (prev or {}).get("brief")
     vs = {}
+    if rk:
+        rk["label"] = rk["text"].split(" (")[0]
     if pb:
         prk = pb.get("risk") or {}
         if rk and prk.get("key") == rk["key"]:
             vs["risk"] = f"지난주와 같은 임계값 (거리 {sg(prk['dist_pct'], 1)}% → {sg(rk['dist_pct'], 1)}%)"
         elif rk:
             vs["risk"] = f"지난주 가장 가까운 임계값은 {prk.get('label') or prk.get('key', '–')} ({sg(prk.get('dist_pct'), 1)}%)"
-        vs["unchanged"] = ln.get("changed") is False and not ch and bool(rk) and prk.get("key") == rk["key"]
-    if rk:
-        rk["label"] = rk["text"].split(" (")[0]
-    ez = easy.build(snap, prev, UNIT["cot_z"], UNIT["flip"])
-    topic = {"options": "gamma", "cot": "cot", "flip": "flip"}
-    for c in ch:
-        c["easy"] = ez.get(topic[c["key"]])
-    shown = {topic[c["key"]] for c in ch}
-    if "flip" not in shown:
-        ln["easy"] = ez.get("flip")
-    if "gamma" not in shown and rk:
-        rk["easy"] = ez.get("gamma")
-    extra = [ez.get("cot")] if "cot" not in shown and ez.get("cot") else []
-    if "gamma" not in shown and not rk and ez.get("gamma"):
-        extra.append(ez["gamma"])
-    return {"line": ln, "changes": ch, "changes_note": note, "changes_easy": extra, "risk": rk, "vs_prev": vs,
-            "overall": ez.get("overall"), "prev_week": (prev or {}).get("week"), "prev_brief": _compact(pb)}
+        vs["unchanged"] = all(b.get("unchanged") for b in blocks) and bool(rk) and prk.get("key") == rk["key"]
+    blocks[2]["note"] = (f"가장 가까운 기계적 임계값: {rk['text']}" + (f" — {vs['risk']}" if vs.get("risk") else "")) if rk else None
+    ez = easy.build(snap, prev, UNIT)
+    blocks[0]["easy"] = [ez["cot"]] if ez.get("cot") else []
+    blocks[1]["easy"] = [ez["options"]] if ez.get("options") else []
+    blocks[2]["easy"] = [f"모델상으로는 {t}" for t in (ez.get("gamma"), ez.get("flip")) if t]
+    return {"blocks": blocks, "risk": rk, "vs_prev": vs, "overall": ez.get("overall"),
+            "prev_week": (prev or {}).get("week"), "prev_brief": _compact(pb)}
+
+
+def _item_text(i):
+    return f"{i['label']}: {i['text']}" if i.get("label") else i["text"]
 
 
 def _compact(b):
     """전주 결론 원문만 보관(화면 '지난주 결론' 비교용). 재귀 저장 방지로 prev_brief는 빼고"""
     if not b:
         return None
-    return {"line": b["line"]["text"], "changes": [c["text"] for c in b.get("changes", [])],
-            "changes_note": b.get("changes_note"), "risk": (b.get("risk") or {}).get("text")}
-
-
-def _ez(text, e):
-    """항목 + '쉽게 말하면' 해설 → (본문, [하위 불릿]) — 해설 없으면 본문 문자열 그대로"""
-    return (text, [f"쉽게 말하면: {e}"]) if e else text
+    if "blocks" not in b:  # 2026-10-18 이전 구조
+        return {"blocks": [{"title": "결론(이전 구조)", "items": [b["line"]["text"]] + [c["text"] for c in b.get("changes", [])]
+                            + [x for x in (b.get("changes_note"), (b.get("risk") or {}).get("text")) if x]}]}
+    return {"blocks": [{"title": x["title"], "items": [_item_text(i) for i in x["items"]] + ([x["note"]] if x.get("note") else [])}
+                       for x in b["blocks"]], "overall": b.get("overall")}
 
 
 def to_lines(b):
-    """마크다운·로그용 평문 3블록 + 종합. 항목은 문자열 또는 (본문, [하위])"""
-    out = [("요약", [_ez(b["line"]["text"] + (" · **지난주 결론과 변화 없음**" if b["vs_prev"].get("unchanged") else ""),
-                      b["line"].get("easy"))])]
-    ch = [_ez(f"{c['label']}: {c['text']}", c.get("easy")) for c in b["changes"]]
-    if b.get("changes_note"):
-        ch.append(b["changes_note"])
-    ch += [f"쉽게 말하면: {e}" for e in b.get("changes_easy") or []]
-    out.append(("변화 포인트", ch))
-    rk = [_ez(b["risk"]["text"], b["risk"].get("easy"))] if b.get("risk") else ["임계값 데이터 없음"]
-    if b["vs_prev"].get("risk"):
-        rk.append(b["vs_prev"]["risk"])
-    out.append(("리스크", rk))
+    """마크다운·로그용: [(블록 제목, [항목 문자열 또는 (본문, [하위])])] + 종합"""
+    out = []
+    for x in b["blocks"]:
+        title = x["title"] + (f" · {x['asof']}" if x.get("asof") else "") + (" · 지난주와 변화 없음" if x.get("unchanged") else "")
+        items = [(_item_text(i), [f"가정: {i['assume']}"]) if i.get("assume") else _item_text(i) for i in x["items"]]
+        if x.get("note"):
+            items.append(x["note"])
+        items += [f"쉽게 말하면: {e}" for e in x.get("easy") or []]
+        out.append((title, items))
     if b.get("overall"):
         out.append(("종합", [b["overall"]]))
     return out

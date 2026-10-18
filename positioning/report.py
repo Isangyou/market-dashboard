@@ -1,6 +1,6 @@
 """주간 스냅샷 → 블록별 근거 수치 · CTA×COT 교차 · Notion 붙여넣기용 마크다운.
 
-결론(요약·변화 포인트·리스크)은 brief.py. 여기 문장은 수치를 그대로 옮긴 근거 목록. 임계값은 THRESH에서 조정.
+결론(관측 포지션·관측 시장 상태·추정)은 brief.py. 근거 수치도 같은 순서. 여기 문장은 수치를 그대로 옮긴 근거 목록. 임계값은 THRESH에서 조정.
 """
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ def cta_bullets(cta: dict) -> list[dict]:
     out = []
     if "주식" in C:
         c = C["주식"]
-        head = f"CTA 주식 {_dir(c['position_pct'])} {abs(c['position_pct']):.0f}% (전주 대비 {sg(c['chg_1w_pp'], 0)}%p)"
+        head = f"[추정] CTA 주식 {_dir(c['position_pct'])} {abs(c['position_pct']):.0f}% (전주 대비 {sg(c['chg_1w_pp'], 0)}%p)"
         subs = []
         es = A.get("ES")
         if es:
@@ -80,11 +80,12 @@ def cta_bullets(cta: dict) -> list[dict]:
     if big:
         subs.append("주간 변화 상위: " + ", ".join(f"{a['name']} {sg(a['position_chg_1w_pp'], 0)}%p" for a in big))
     if others:
-        out.append({"kind": "cta_others", "head": "CTA 자산군: " + " · ".join(others), "subs": subs})
+        out.append({"kind": "cta_others", "head": "[추정] CTA 자산군: " + " · ".join(others), "subs": subs})
     return out
 
 
-def options_bullets(opt: dict, prev: dict | None) -> list[dict]:
+def gamma_bullets(opt: dict, prev: dict | None) -> list[dict]:
+    """[추정] SPX 딜러 감마 — 딜러=고객 반대편 가정"""
     U = opt.get("underlyings", {})
     P = (prev or {}).get("underlyings", {})
     out = []
@@ -111,7 +112,15 @@ def options_bullets(opt: dict, prev: dict | None) -> list[dict]:
         p = P.get("SPX")
         if p and p.get("gex_usd_bn") is not None:
             subs.append(f"전주 GEX {sg(p['gex_usd_bn'], 1)}$bn → {sg(g, 1)}$bn")
-        out.append({"kind": "gamma", "head": head, "subs": subs})
+        out.append({"kind": "gamma", "head": "[추정] " + head, "subs": subs})
+    return out
+
+
+def options_obs_bullets(opt: dict, prev: dict | None) -> list[dict]:
+    """관측값만(P/C·스큐·IV·최대 OI 행사가) — 딜러 가정 없음"""
+    U = opt.get("underlyings", {})
+    P = (prev or {}).get("underlyings", {})
+    out = []
     rows = []
     for k in ("SPX", "NDX", "RUT", "VIX", "TLT", "GLD", "USO"):
         u = U.get(k)
@@ -127,10 +136,15 @@ def options_bullets(opt: dict, prev: dict | None) -> list[dict]:
                 s += f"({sg(u['skew_25d_30d'] - p['skew_25d_30d'], 1)})"
             bits.append(s)
         if u.get("atm_iv_30d") is not None:
-            bits.append(f"ATM IV30 {u['atm_iv_30d']:.1f}%")
+            s = f"ATM IV30 {u['atm_iv_30d']:.1f}%"
+            if p.get("atm_iv_30d") is not None:
+                s += f"({sg(u['atm_iv_30d'] - p['atm_iv_30d'], 1)})"
+            bits.append(s)
+        if u.get("call_oi_wall") or u.get("put_oi_wall"):
+            bits.append(f"최대 OI 콜 {_px(u.get('call_oi_wall'))}·풋 {_px(u.get('put_oi_wall'))}")
         rows.append(f"{k}: " + " · ".join(bits))
     if rows:
-        out.append({"kind": "options", "head": "콜/풋 포지셔닝 (괄호: 전주 대비)", "subs": rows})
+        out.append({"kind": "options", "head": "[관측] 옵션 시장 — P/C·스큐·IV·최대 OI 행사가 (괄호: 전주 대비)", "subs": rows})
     return out
 
 
@@ -142,7 +156,7 @@ def cot_bullets(cot: dict) -> list[dict]:
         lev, am = es["groups"]["lev"], es["groups"]["am"]
         out.append({
             "kind": "cot",
-            "head": f"ES 레버리지펀드 순 {fmt_k(lev['net'])}(주간 {fmt_k(lev['chg_1w'])}) · 자산운용사 순 {fmt_k(am['net'])}(주간 {fmt_k(am['chg_1w'])})",
+            "head": f"[관측] ES 레버리지펀드 순 {fmt_k(lev['net'])}(주간 {fmt_k(lev['chg_1w'])}) · 자산운용사 순 {fmt_k(am['net'])}(주간 {fmt_k(am['chg_1w'])})",
             "subs": [f"레버리지펀드 3년 {lev['pctile_3y']:.0f}백분위(z {fmt_num(lev['z_3y'], 1, True)}), 자산운용사 {am['pctile_3y']:.0f}백분위(z {fmt_num(am['z_3y'], 1, True)})",
                      f"기준일 {es['report_date']}(화) · OI {fmt_k(es['oi'], False)}({fmt_k(es['oi_chg_1w'])})"],
         })
@@ -159,7 +173,7 @@ def cot_bullets(cot: dict) -> list[dict]:
     if jumps:
         subs.append("주간 변화 이례(≥2σ): " + ", ".join(jumps))
     if subs:
-        out.append({"head": "선물 투기 포지션(Lev Funds·Managed Money) 극단·급변", "subs": subs})
+        out.append({"head": "[관측] 선물 투기 포지션(Lev Funds·Managed Money) 극단·급변", "subs": subs})
     return out
 
 
@@ -199,13 +213,15 @@ def crowding(cta: dict, cot: dict) -> list[dict]:
 
 
 def build_conclusion(snap: dict, prev: dict | None) -> list[dict]:
+    # 데이터 성격 순: 관측 포지션(COT) → 관측 시장 상태(옵션) → 추정(딜러 감마 · CTA · 교차)
     cb = []
-    cb += cta_bullets(snap.get("cta", {}))
-    cb += options_bullets(snap.get("options", {}), (prev or {}).get("options"))
     cb += cot_bullets(snap.get("cot", {}))
+    cb += options_obs_bullets(snap.get("options", {}), (prev or {}).get("options"))
+    cb += gamma_bullets(snap.get("options", {}), (prev or {}).get("options"))
+    cb += cta_bullets(snap.get("cta", {}))
     flags = [r for r in snap.get("crowding", []) if r["flag"]]
     if flags:
-        cb.append({"kind": "cross", "head": "교차 확인(CTA 모델 × COT)",
+        cb.append({"kind": "cross", "head": "[추정] 교차 확인(CTA 모델 × COT)",
                    "subs": [f"{r['name']}: {r['flag']} (CTA {sg(r['cta_pos'], 0)}%/{r['cta_pctile']:.0f}p · COT {r['cot_pctile']:.0f}p)" for r in flags]})
     return cb
 

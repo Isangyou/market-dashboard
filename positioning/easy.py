@@ -4,7 +4,8 @@
            원인 분해(지수 이동=복원됨 / 만기 소멸=복원 안 됨) (d) 되돌아가는 조건 + 다음 주요 만기 소멸 비중
   cot      새 COT 공표 주: 주간 σ 상위 시장의 주체·방향·평소 대비 배율·시사점 + 순포지션 치우침
   flip     ES CTA 전환가를 '지수가 X% 빠지면 CTA 매도가 시작되는 선'으로, 전주 대비 안전/위험 + 감마와 합친 하방 쿠션 겹수
-  overall  옵션·CTA·채권 포지션을 합친 한 줄. 감마 부호가 바뀐 주는 '자동 매수 흐름 소멸/복원' + 하방 안전판 겹수
+  options  관측 옵션 시장(IV30·스큐·P/C·최대 OI 행사가)을 지난주와 비교한 평이한 설명 — 모델 가정 없음
+  overall  '관측: COT·옵션 시장. 모델상으로는 딜러 감마·CTA.' 감마 부호가 바뀐 주는 '자동 매수 흐름 소멸/복원' + 하방 안전판 겹수
 
 기준 단위는 brief.UNIT 공유. 전문용어는 처음 나올 때 괄호로 짧게 설명.
 """
@@ -316,53 +317,139 @@ def flip(es, pes, u, flip_unit=0.5):
     return s
 
 
-# ── 종합 ──
-def overall(es, u, pu, c, pc, unit=1.0):
-    bits = []
-    g = _gex(u) if u else None
-    if g is not None:
-        _, r = _ratio_phrase(g, _gex(pu) if pu else None)
-        rr = f"(지난주의 {r:.1f}배)" if r is not None else ""
-        bits.append(f"옵션은 딜러 {'롱 감마' + rr + '로 변동을 흡수' if g > 0 else '숏 감마' + rr + '로 변동을 증폭'}")
-    if es:
-        act = _active(es)
-        f = min(act, key=lambda x: abs(x["dist_pct"])) if act else None
-        side = "롱" if es["position_pct"] > 0 else "숏"
-        bits.append(f"CTA는 {side} {abs(es['position_pct']):.0f}%(3년 {es['position_pctile_3y']:.0f}백분위)"
-                    + (f"에 {'매도' if f['dist_pct'] < 0 else '매수'}선까지 {abs(f['dist_pct']):.1f}%" if f else ""))
-    rd, prd = (c or {}).get("report_date"), (pc or {}).get("report_date")
-    if rd and rd != prd:
-        bits.append(bonds(c, unit))
-    if not bits:
+# ── 관측 옵션 시장 ──
+def _cmp(cur, old, unit, up, down, same="지난주와 비슷하다"):
+    if cur is None or old is None:
         return None
+    return up if cur - old >= unit else down if old - cur >= unit else same
+
+
+def options(u, pu, wk=None, unit=None):
+    """관측값만: 옵션 가격(IV)·풋/콜 가격 차(스큐)·미결제 비율(P/C)·미결제 집중 행사가"""
+    if not u:
+        return None
+    unit = unit or {"iv": 1.0, "skew": 1.0, "pc": 0.10}
+    pu = pu or {}
+    out = []
+    iv, piv = u.get("atm_iv_30d"), pu.get("atm_iv_30d")
+    if iv is not None:
+        t = f"옵션 가격에 담긴 SPX 앞으로 30일 예상 변동폭(ATM IV30)은 연 {iv:.1f}%(하루 약 {iv / 252 ** 0.5:.2f}%)"
+        c = _cmp(iv, piv, unit["iv"], f"로 지난주 {piv:.1f}%보다 올랐다(옵션이 비싸짐)", f"로 지난주 {piv:.1f}%보다 내렸다(옵션이 싸짐)",
+                 f"로 지난주 {piv:.1f}%와 비슷하다") if piv is not None else None
+        out.append(t + (c or "다") + ".")
+    sk, psk = u.get("skew_25d_30d"), pu.get("skew_25d_30d")
+    if sk is not None:
+        t = f"하락 보험인 풋이 같은 거리의 콜보다 {abs(sk):.1f}vp {'비싸' if sk > 0 else '싸'}"
+        c = _cmp(sk, psk, unit["skew"], f" 지난주({sg(psk, 1)}vp)보다 하락 대비 수요가 커졌다", f" 지난주({sg(psk, 1)}vp)보다 하락 대비 수요가 줄었다",
+                 f" 지난주({sg(psk, 1)}vp)와 비슷하다") if psk is not None else None
+        out.append(t + (c or "다") + ".")
+    pc, ppc = u.get("pc_oi"), pu.get("pc_oi")
+    if pc is not None:
+        t = f"남아 있는 풋 계약은 콜의 {pc:.2f}배(P/C, 미결제 기준)"
+        c = _cmp(pc, ppc, unit["pc"], f"로 지난주 {ppc:.2f}배보다 풋 쪽 비중이 늘었다", f"로 지난주 {ppc:.2f}배보다 풋 쪽 비중이 줄었다",
+                 f"로 지난주 {ppc:.2f}배와 비슷하다") if ppc is not None else None
+        out.append(t + (c or "다") + "." + (f" 이번 주 거래량 기준으로는 {wk:.2f}배." if wk is not None else ""))
+    cw, pw = u.get("call_oi_wall"), u.get("put_oi_wall")
+    if cw and pw:
+        dd = lambda k: sg((k / u["spot"] - 1) * 100, 1)
+        if cw == pw:
+            t = f"미결제가 가장 많이 쌓인 행사가는 콜·풋 모두 {_px(cw)}(현재가 대비 {dd(cw)}%)"
+        else:
+            t = f"미결제가 가장 많이 쌓인 행사가는 콜 {_px(cw)}({dd(cw)}%) · 풋 {_px(pw)}({dd(pw)}%)"
+        moved = pu.get("call_oi_wall") and (pu.get("call_oi_wall"), pu.get("put_oi_wall")) != (cw, pw)
+        out.append(t + (f"로, 지난주(콜 {_px(pu['call_oi_wall'])} · 풋 {_px(pu.get('put_oi_wall'))})에서 옮겨 왔다." if moved else
+                        ("로 지난주와 같다." if pu.get("call_oi_wall") else "다.")))
+    return " ".join(out) or None
+
+
+# ── 종합 ──
+GROUP_SHORT = {"lev": "레버리지펀드", "am": "자산운용사", "mm": "운용역"}
+
+
+def _cot_obs(c, pc, unit):
+    rd, prd = (c or {}).get("report_date"), (pc or {}).get("report_date")
+    if not rd:
+        return None
+    if prd and rd == prd:
+        return f"COT 새 공표 없음({rd[5:].replace('-', '/')} 기준)"
+    rows = []
+    for k, m in (c.get("markets") or {}).items():
+        for g in (("lev", "am") if "lev" in m["groups"] else ("mm",)):
+            x = m["groups"].get(g)
+            if x and x.get("chg_1w_z") is not None and abs(x["chg_1w_z"]) >= unit:
+                rows.append((abs(x["chg_1w_z"]), k, m, g, x))
+    if not rows:
+        return f"COT({rd[5:].replace('-', '/')})는 모든 시장 주간 변화가 평소 범위(1σ 미만)"
+    rows.sort(key=lambda r: -r[0])
+    return f"COT({rd[5:].replace('-', '/')})는 " + " · ".join(
+        f"{GROUP_SHORT[g]} {m['name']} {_move(x['net'], x['chg_1w'])[0].split('(')[0]}({sg(x['chg_1w_z'], 1)}σ)" for _, k, m, g, x in rows[:2]) + (
+        f" 외 {len(rows) - 2}건 ≥1σ" if len(rows) > 2 else "")
+
+
+def _opt_obs(u, pu, unit):
+    if not u or u.get("atm_iv_30d") is None:
+        return None
+    pu = pu or {}
+    iv, sk, pc = u.get("atm_iv_30d"), u.get("skew_25d_30d"), u.get("pc_oi")
+    piv, psk, ppc = pu.get("atm_iv_30d"), pu.get("skew_25d_30d"), pu.get("pc_oi")
+    bits = [f"IV30 {iv:.1f}%" + (f"({sg(iv - piv, 1)}%p)" if piv is not None else "")]
+    if sk is not None:
+        bits.append(f"스큐 {sg(sk, 1)}vp" + (f"({sg(sk - psk, 1)})" if psk is not None else ""))
+    if pc is not None:
+        bits.append(f"P/C {pc:.2f}" + (f"({sg(pc - ppc, 2)})" if ppc is not None else ""))
+    tag = ""
+    if piv is not None and psk is not None and sk is not None:
+        div, dsk = iv - piv, sk - psk
+        if div >= unit["iv"] and dsk >= unit["skew"]:
+            tag = "로 옵션이 비싸지고 하락 대비 수요 증가"
+        elif div <= -unit["iv"] and dsk <= -unit["skew"]:
+            tag = "로 옵션이 싸지고 하락 대비 수요 감소"
+        elif abs(div) < unit["iv"] and abs(dsk) < unit["skew"] and (ppc is None or abs(pc - ppc) < unit["pc"]):
+            tag = "로 지난주와 비슷"
+    return "SPX 옵션은 " + "·".join(bits) + tag
+
+
+def _model_shape(es, u, pu):
+    g = _gex(u) if u else None
     cs = cushions(es, u) if es and es["position_pct"] > 0 else []
     pg = _gex(pu) if pu else None
     if g is not None and pg is not None and (g > 0) != (pg > 0):
         zd, zg = _zg_dist(u), u.get("zero_gamma")
-        flow = (f"딜러 자동 매수 흐름 {'소멸' if g < 0 else '복원'}({'롱' if pg > 0 else '숏'} 감마 {sg(pg, 1)} → "
-                f"{'숏' if g < 0 else '롱'} 감마 {sg(g, 1)}$bn"
+        flow = (f"딜러 자동 매수 흐름 {'소멸' if g < 0 else '복원'}({'롱' if pg > 0 else '숏'} 감마 → {'숏' if g < 0 else '롱'} 감마"
                 + (f", 지수가 {zd:.1f}% 올라 {_px(zg)} 선을 넘으면 복원" if g < 0 and zd is not None and zd > 0 else "") + ")")
         if not cs:
-            shape = flow + "으로 하방 안전판 없음"
-        elif len(cs) == 1:
-            shape = flow + f"으로 하방 안전판은 {SAFETY.get(cs[0][1], cs[0][1])}(-{abs(cs[0][0]):.1f}%) 1겹만 남음"
-        else:
-            shape = flow + f"으로 하방 안전판 {len(cs)}겹: " + " · ".join(f"{SAFETY.get(n, n)} -{abs(d):.1f}%까지" for d, n in cs)
-    elif g is not None and g > 0:
-        shape = f"하방 쿠션 {len(cs)}겹의 롱 감마 횡보 구조" if cs else "롱 감마 횡보 구조"
-        if cs and cs[0][1] == "딜러 롱 감마":
-            shape += f", 다만 {abs(cs[0][0]):.1f}% 아래부터는 쿠션이 얇아진다"
-    elif g is not None:
-        shape = "숏 감마로 움직임이 커지기 쉬운 구조" + (f", CTA 매도선 {abs(cs[0][0]):.1f}% 한 겹만 남음" if cs else "")
-    else:
-        shape = "옵션 데이터 없이 CTA 기준만 판단 가능한 구조"
-    return "지금 시장 구조는 " + shape + " — " + " · ".join(bits) + "."
+            return flow + "으로 하방 안전판 없음"
+        if len(cs) == 1:
+            return flow + f"으로 하방 안전판은 {SAFETY.get(cs[0][1], cs[0][1])}(-{abs(cs[0][0]):.1f}%) 1겹만 남음"
+        return flow + f"으로 하방 안전판 {len(cs)}겹: " + " · ".join(f"{SAFETY.get(n, n)} -{abs(d):.1f}%까지" for d, n in cs)
+    if g is not None and g > 0:
+        s = f"딜러 롱 감마로 하방 안전판 {len(cs)}겹(" + " · ".join(f"{SAFETY.get(n, n)} -{abs(d):.1f}%까지" for d, n in cs) + ")" if cs else "딜러 롱 감마로 변동 흡수 쪽"
+        return s
+    if g is not None:
+        return "딜러 숏 감마로 움직임이 커지기 쉬운 쪽" + (f", 하방 안전판은 CTA 매도선(-{abs(cs[0][0]):.1f}%) 1겹" if cs else ", 하방 안전판 없음")
+    return None
 
 
-def build(snap, prev, unit_cot=1.0, unit_flip=0.5):
+def overall(snap, prev, unit):
+    es, pes = _get(snap, "cta", "assets", "ES"), _get(prev, "cta", "assets", "ES")
+    u, pu = _get(snap, "options", "underlyings", "SPX"), _get(prev, "options", "underlyings", "SPX")
+    obs = [x for x in (_cot_obs(snap.get("cot"), (prev or {}).get("cot"), unit["cot_z"]), _opt_obs(u, pu, unit)) if x]
+    rd, prd = _get(snap, "cot", "report_date"), _get(prev, "cot", "report_date")
+    if rd and rd != prd:
+        obs.append(bonds(snap["cot"], unit["cot_z"]))
+    mdl = [x for x in (_model_shape(es, u, pu),) if x]
+    if es:
+        side = "롱" if es["position_pct"] > 0 else "숏"
+        mdl.append(f"CTA {side} {abs(es['position_pct']):.0f}%(3년 {es['position_pctile_3y']:.0f}백분위)")
+    if not obs and not mdl:
+        return None
+    return ("관측: " + " · ".join(obs) + "." if obs else "") + (" 모델상으로는 " + " · ".join(mdl) + "." if mdl else "")
+
+
+def build(snap, prev, unit):
     es, pes = _get(snap, "cta", "assets", "ES"), _get(prev, "cta", "assets", "ES")
     u, pu = _get(snap, "options", "underlyings", "SPX"), _get(prev, "options", "underlyings", "SPX")
     c, pc = snap.get("cot"), (prev or {}).get("cot")
     asof, pasof = _get(snap, "asof", "us_market_date") or snap.get("week"), _get(prev, "asof", "us_market_date") or (prev or {}).get("week")
-    return {"gamma": gamma(u, pu, asof, pasof), "cot": cot(c, pc, unit_cot), "flip": flip(es, pes, u, unit_flip),
-            "overall": overall(es, u, pu, c, pc, unit_cot)}
+    return {"cot": cot(c, pc, unit["cot_z"]), "options": options(u, pu, _get(snap, "options_week", "pc_vol_avg", "SPX"), unit),
+            "gamma": gamma(u, pu, asof, pasof), "flip": flip(es, pes, u, unit["flip"]), "overall": overall(snap, prev, unit)}

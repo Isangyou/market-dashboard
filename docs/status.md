@@ -26,6 +26,13 @@
 | 증시자금동향 | `fetch/naver.py deposit_trend`(E32) → `data/series/deposit.json` (고객예탁금·신용잔고·주식형/혼합형/채권형 펀드, 억원) | 2002-05-03~2026-09-22 6,006일 백필(로컬 1회). update.yml 매 실행 최신 1페이지, `asof`=기준일이라 값이 같으면 파일 안 씀(재실행 0건 변경 확인). 2거래일 지연. 파일 1.26MB(gzip 약 170KB) — 화면이 전체를 읽음 |
 | ADR | 1차 `fetch/adrinfo.py`(E37) → `data/series/adr_kospi.json`·`adr_kosdaq.json` (source=adrinfo, 2019-10-07~, 1,718·1,717행). 폴백 `fetch/naver.py breadth`(E29) → `breadth_*.json` → `run.py adr_from_breadth` → `adr_naver_*.json` | **2026-10-06 adrinfo 이력 등록**: 사용자 제공 `adr_history_adrinfo.json`으로 시드(파일은 원본 그대로 보존). update-data가 평일 16:00 KST 이후 첫 실행에서 하루 1회 요청(`meta.adrinfo_fetches`), 새 날짜만 이어 붙임. 403이면 그날은 네이버 계산값을 넣고(화면 점선) 다음 날 adrinfo 값으로 교체. 네이버 계산값은 20거래일째(약 10-27)부터 생김 → 그전엔 폴백할 값이 없음. **일별 차트 활성**(VKOSPI \| ADR 행 — 10-06 배치 변경, 1년 기본·range slider·120·75 연회색 점선·adrinfo 실선/네이버 점선·출처 adrinfo.kr) |
 
+## 2026-10-18 (일) 위클리 결론 구조 — 데이터 성격 순
+- `brief` 구조 교체: `line·changes·risk` → `blocks`[1 관측 포지션(COT) · 2 관측 시장 상태(옵션) · 3 추정(모델, 항목별 `assume`)] + `overall`("관측: …. 모델상으로는 ….") — 규칙은 docs/positioning.md
+- weekly.html 섹션 재배치: 0 결론 → 1 COT(관측) → 2 옵션 시장(관측: IV30·스큐·P/C·최대 OI 행사가 카드·표·일별 추이) → 3 추정: 3-1 딜러 감마(카드·행사가별 GEX·프로파일·표·GEX/zero-gamma 일별 추이) · 3-2 CTA · 3-3 교차. 옵션 섹션의 GEX 항목은 3-1로 분리, 기초자산 선택도 따로
+- 근거 수치(report.py) 같은 순서 + [관측]/[추정] 태그
+- `--rebuild-conclusion` 4개 주차: conclusion·brief·markdown 외 변경 0건. 1440·390 × 4주차 콘솔 오류 0, 가로 넘침 없음
+- 10-16 주 종합: "관측: COT(10/13)는 레버리지펀드 EUR 순숏 확대(-2.3σ) · 자산운용사 AUD 순숏 확대(-1.4σ) 외 5건 ≥1σ · SPX 옵션은 IV30 14.3%(+2.4%p)·스큐 +6.2vp(+2.8)·P/C 1.44(+0.01)로 옵션이 비싸지고 하락 대비 수요 증가 · … 모델상으로는 딜러 자동 매수 흐름 소멸 … 하방 안전판은 CTA 매도선(-3.0%) 1겹만 남음 · CTA 롱 65%(3년 49백분위)."
+
 ## 2026-10-18 (일) 위클리 감마 해설 수정
 - 버그: 10-16 주 '다음 옵션 만기' = 10/16(이미 지난 날, 소멸 0%). 원인 `options.next_monthly_opex`가 기준일=셋째 금요일이면 그날을 고름 → `next_opex()`로 교체(기준일 이후 월말물·월물 중 가까운 것). 해설·근거 수치·weekly 카드는 0%·null·지난 만기면 문장 생략
 - 10-16 주 파일 보정: CBOE 체인 재요청(주말, 타임스탬프·spot·GEX·zero-gamma 저장값과 일치한 9개 중 8개 — NDX는 타임스탬프 달라 미보정, 카드에서 0%라 생략됨) → SPX 다음 만기 **10/30 월말, |감마| 22.5%**

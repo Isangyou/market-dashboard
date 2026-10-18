@@ -42,6 +42,11 @@
   .panel h2 { font-size: 14.5px; font-weight: 600; margin: 0 0 2px; }
   .panel h3 { font-size: 13px; font-weight: 600; margin: 14px 0 2px; color: var(--text); }
   .sub { color: var(--faint); font-size: 11.5px; margin-bottom: 6px; }
+  .kind { display: inline-block; font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 10px; padding: 0 7px; margin-left: 8px; font-weight: 600; vertical-align: 2px; }
+  .kind.model { border-style: dashed; }
+  .assume { font-size: 11.5px; color: var(--muted); margin: 2px 0 2px; }
+  .summary .blk.model { border-top: 1px dashed var(--line); padding-top: 6px; }
+  .summary .asm { display: block; font-size: 11.5px; color: var(--faint); margin-top: 1px; }
   .secno { color: var(--faint); font-weight: 500; margin-right: 6px; }
   .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
   .grid2 > .panel { margin-bottom: 0; }
@@ -141,18 +146,106 @@
 
   <section class="panel">
     <h2><span class="secno">0</span>결론</h2>
-    <div class="sub" id="concl-sub">수치만으로 자동 생성 (positioning/brief.py · 해설 easy.py) · 변화 포인트는 전주 대비 기준 단위 이상 바뀐 항목만 · 전망·목표가 아님</div>
+    <div class="sub" id="concl-sub">수치만으로 자동 생성 (positioning/brief.py · 해설 easy.py) · 데이터 성격 순: ① 관측 포지션 ② 관측 시장 상태 ③ 추정(모델) · 전망·목표가 아님</div>
     <div class="summary" id="brief"></div>
     <details class="prevb" id="prevb"><summary></summary><ul></ul></details>
     <details class="allbasis"><summary>블록별 근거 수치</summary><ul class="concl" id="concl"></ul></details>
     <pre class="md" id="md"></pre>
   </section>
 
-  <!-- 1. CTA -->
+  <!-- 1. 관측 포지션 (COT) -->
   <section class="panel">
     <div class="row">
       <div>
-        <h2><span class="secno">1</span>CTA 포지셔닝 (자체 추세추종 모델)</h2>
+        <h2><span class="secno">1</span>관측 포지션 — 선물 포지션 (CFTC COT)<span class="kind">관측</span></h2>
+        <div class="sub" id="cot-sub"></div>
+      </div>
+    </div>
+    <div class="tscroll"><table id="cot-table"></table></div>
+    <div class="sub" style="margin-top:6px">금융선물 = TFF(Leveraged Funds / Asset Manager), 원자재 = Disaggregated(Managed Money). 백분위·z = 최근 3년(156주) 기준.
+      주간 σ = 주간 변화를 3년 주간 변화 표준편차로 나눈 값. 행 클릭 → 아래 차트 시장 변경.</div>
+  </section>
+  <section class="grid2 stack">
+    <div class="panel">
+      <h2>투기 순포지션 3년 백분위</h2>
+      <div class="sub">점 = 이번 주, 가는 선 = 4주 전 → 이번 주 이동</div>
+      <div id="cot-pct" class="chart" style="height:460px"></div>
+    </div>
+    <div class="panel">
+      <h2 id="cot-hist-title">순포지션 추이</h2>
+      <div class="sub">계약 수, 주간(화요일 기준)</div>
+      <div id="cot-hist" class="chart" style="height:460px"></div>
+    </div>
+  </section>
+
+  <!-- 2. 관측 시장 상태 (옵션) -->
+  <section class="panel">
+    <div class="row">
+      <div>
+        <h2><span class="secno">2</span>관측 시장 상태 — 옵션 시장<span class="kind">관측</span></h2>
+        <div class="sub" id="opt-sub"></div>
+      </div>
+      <select id="opt-sel" aria-label="기초자산 선택"></select>
+    </div>
+    <div class="cards" id="opt-cards"></div>
+  </section>
+  <section class="panel">
+    <h2>기초자산별 요약 (관측)</h2>
+    <div class="sub">괄호 = 전주 스냅샷 대비 변화. P/C(거래량 주평균) = 이번 주 수집된 일별 스냅샷 평균. 최대 OI 행사가 = 현재가 ±15%, 전 만기 합산</div>
+    <div class="tscroll"><table id="opt-table"></table></div>
+  </section>
+  <section class="panel">
+    <h2>SPX 옵션 지표 일별 추이 (관측)</h2>
+    <div class="sub" id="opth-sub">매 실행 누적 — 수집 시작 이후 기간만 표시</div>
+    <div id="opth" class="chart" style="height:380px"></div>
+  </section>
+
+  <!-- 3. 추정 (모델 기반) -->
+  <section class="panel est-head">
+    <h2><span class="secno">3</span>추정 (모델 기반)<span class="kind model">추정</span></h2>
+    <div class="sub">아래 수치는 관측값이 아니라 가정을 둔 모델 출력. 절대 규모보다 방향(부호)과 레벨(가격대)을 보는 용도</div>
+  </section>
+  <!-- 3-1. 딜러 감마 (추정) -->
+  <section class="panel">
+    <div class="row">
+      <div>
+        <h2><span class="secno">3-1</span>딜러 감마 · zero-gamma<span class="kind model">추정</span></h2>
+        <div class="assume">가정: 딜러=고객 반대편(콜 OI 롱·풋 OI 숏, naive GEX) · 감마는 BS(r=q=0) 재계산 · zero-gamma = 같은 가정으로 가격대별 감마를 다시 계산해 부호가 바뀌는 가격(전 만기)</div>
+        <div class="sub" id="gex-sub"></div>
+      </div>
+      <select id="gex-sel" aria-label="기초자산 선택(감마)"></select>
+    </div>
+    <div class="cards" id="gex-cards"></div>
+  </section>
+  <section class="grid2 stack">
+    <div class="panel">
+      <h2>행사가별 딜러 GEX</h2>
+      <div class="sub" id="gexk-sub">$mn / 지수 1% 변동, 콜 + · 풋 − (naive 가정)</div>
+      <div id="gexk" class="chart" style="height:300px"></div>
+    </div>
+    <div class="panel">
+      <h2>가격대별 총 GEX 프로파일</h2>
+      <div class="sub">기초자산 가격이 x일 때 총 GEX($bn/1%) — 0을 지나는 가격 = zero-gamma</div>
+      <div id="gexp" class="chart" style="height:300px"></div>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>기초자산별 딜러 감마 (추정)</h2>
+    <div class="sub">괄호 = 전주 대비. VIX는 GEX 미계산</div>
+    <div class="tscroll"><table id="gex-table"></table></div>
+  </section>
+  <section class="panel">
+    <h2>SPX 딜러 감마 일별 추이 (추정)</h2>
+    <div class="sub" id="gexh-sub">위: GEX($bn/1%, 전 만기) · 아래: SPX 가격과 zero-gamma — 축을 분리해 표시</div>
+    <div id="gexh" class="chart" style="height:340px"></div>
+  </section>
+
+  <!-- 3-2. CTA (추정) -->
+  <section class="panel">
+    <div class="row">
+      <div>
+        <h2><span class="secno">3-2</span>CTA 포지셔닝<span class="kind model">추정</span></h2>
+        <div class="assume">가정: 20·60·125·250일 추세추종 + 변동성 타기팅 복제 모델 — 실제 CTA 포지션 아님. 전환가 = 같은 모델에서 다음 주말 룩백 신호가 0이 되는 가격</div>
         <div class="sub" id="cta-sub"></div>
       </div>
     </div>
@@ -179,68 +272,9 @@
     <div id="cta-hist" class="chart" style="height:340px"></div>
   </section>
 
-  <!-- 2. 옵션 -->
+  <!-- 3-3. 교차 (추정 × 관측) -->
   <section class="panel">
-    <div class="row">
-      <div>
-        <h2><span class="secno">2</span>콜/풋옵션 포지셔닝 · 딜러 감마</h2>
-        <div class="sub" id="opt-sub"></div>
-      </div>
-      <select id="opt-sel" aria-label="기초자산 선택"></select>
-    </div>
-    <div class="cards" id="opt-cards"></div>
-  </section>
-  <section class="grid2 stack">
-    <div class="panel">
-      <h2>행사가별 딜러 GEX</h2>
-      <div class="sub" id="gexk-sub">$mn / 지수 1% 변동, 콜 + · 풋 − (naive 가정)</div>
-      <div id="gexk" class="chart" style="height:300px"></div>
-    </div>
-    <div class="panel">
-      <h2>가격대별 총 GEX 프로파일</h2>
-      <div class="sub">기초자산 가격이 x일 때 총 GEX($bn/1%) — 0을 지나는 가격 = zero-gamma</div>
-      <div id="gexp" class="chart" style="height:300px"></div>
-    </div>
-  </section>
-  <section class="panel">
-    <h2>기초자산별 요약</h2>
-    <div class="sub">괄호 = 전주 스냅샷 대비 변화. P/C(거래량 주평균) = 이번 주 수집된 일별 스냅샷 평균</div>
-    <div class="tscroll"><table id="opt-table"></table></div>
-  </section>
-  <section class="panel">
-    <h2>SPX 옵션 지표 일별 추이</h2>
-    <div class="sub" id="opth-sub">매 실행 누적 — 수집 시작 이후 기간만 표시</div>
-    <div id="opth" class="chart" style="height:380px"></div>
-  </section>
-
-  <!-- 3. 선물 COT -->
-  <section class="panel">
-    <div class="row">
-      <div>
-        <h2><span class="secno">3</span>선물 포지션 (CFTC COT)</h2>
-        <div class="sub" id="cot-sub"></div>
-      </div>
-    </div>
-    <div class="tscroll"><table id="cot-table"></table></div>
-    <div class="sub" style="margin-top:6px">금융선물 = TFF(Leveraged Funds / Asset Manager), 원자재 = Disaggregated(Managed Money). 백분위·z = 최근 3년(156주) 기준.
-      주간 σ = 주간 변화를 3년 주간 변화 표준편차로 나눈 값. 행 클릭 → 아래 차트 시장 변경.</div>
-  </section>
-  <section class="grid2 stack">
-    <div class="panel">
-      <h2>투기 순포지션 3년 백분위</h2>
-      <div class="sub">점 = 이번 주, 가는 선 = 4주 전 → 이번 주 이동</div>
-      <div id="cot-pct" class="chart" style="height:460px"></div>
-    </div>
-    <div class="panel">
-      <h2 id="cot-hist-title">순포지션 추이</h2>
-      <div class="sub">계약 수, 주간(화요일 기준)</div>
-      <div id="cot-hist" class="chart" style="height:460px"></div>
-    </div>
-  </section>
-
-  <!-- 4. 교차 -->
-  <section class="panel">
-    <h2><span class="secno">4</span>교차 확인 — CTA 모델 × COT 투기 포지션</h2>
+    <h2><span class="secno">3-3</span>교차 확인 — CTA 모델 × COT 투기 포지션<span class="kind model">추정</span></h2>
     <div class="sub">롱 크라우딩: CTA 포지션 3년 ≥80백분위 & COT ≥80백분위 · 숏 크라우딩: 둘 다 ≤20 · 방향 괴리: CTA 부호 ≠ COT z 부호(|z|≥1)</div>
     <div class="tscroll"><table id="cross"></table></div>
   </section>
@@ -345,32 +379,32 @@ function render() {
     `생성 ${esc((W.generated || '').replace('T', ' ').slice(0, 16))} KST · CTA ${esc(a.cta || '–')} 종가 · 옵션 ${esc(a.options || '–')} · COT ${esc(a.cot || '–')}(화)` +
     (W.stale && W.stale.length ? ` · <b>이전 값 유지: ${esc(W.stale.join(', '))}</b>` : '') +
     (PREV ? ` · 비교 대상: ${esc(PREV.week)} 주` : ' · 전주 스냅샷 없음(비교 생략)');
-  renderConclusion(); renderCTA(); renderOptions(); renderCOT(); renderCross();
+  renderConclusion(); renderCOT(); renderOptObs(); renderGamma(); renderCTA(); renderCross();
   document.getElementById('foot').innerHTML = [W.cta?.source, W.options?.source, W.cot?.source].filter(Boolean).map(esc).join('<br>');
 }
 
 // ── 0. 결론 ──
 function renderConclusion() {
   const b = W.brief, box = document.getElementById('brief');
-  if (!b) { box.innerHTML = '<div class="empty">결론 없음 (brief 미생성 주차)</div>'; }
+  const ez = (t, cls = '') => t ? `<div class="easy${cls}"><b>쉽게 말하면</b>${esc(t)}</div>` : '';
+  if (!b || !b.blocks) { box.innerHTML = '<div class="empty">결론 없음 (brief 미생성 주차)</div>'; }
   else {
     const vs = b.vs_prev || {};
-    const ez = (t, cls = '') => t ? `<div class="easy${cls}"><b>쉽게 말하면</b>${esc(t)}</div>` : '';
-    const ch = (b.changes || []).map(c => `<li><b>${esc(c.label)}</b> ${esc(c.text)}${ez(c.easy)}</li>`).join('');
-    box.innerHTML =
-      `<div class="blk"><div class="lbl">요약${vs.unchanged ? '<span class="same">지난주 결론과 변화 없음</span>' : ''}</div><ul><li>${esc(b.line?.text)}${ez(b.line?.easy)}</li></ul></div>` +
-      `<div class="blk"><div class="lbl">변화 포인트 <span class="dim">(전주 대비, 변화 큰 순 최대 3개)</span></div>` +
-        (ch ? `<ol>${ch}</ol>` : '') + (b.changes_note ? `<div class="note">${esc(b.changes_note)}</div>` : '') +
-        (b.changes_easy || []).map(t => ez(t, ' lone')).join('') + '</div>' +
-      `<div class="blk"><div class="lbl">리스크 <span class="dim">(가장 가까운 임계값)</span></div><ul><li>${esc(b.risk?.text || '임계값 데이터 없음')}${ez(b.risk?.easy)}</li></ul>` +
-        (vs.risk ? `<div class="note">${esc(vs.risk)}</div>` : '') + '</div>' +
+    box.innerHTML = (vs.unchanged ? '<div class="blk"><span class="same">지난주 결론과 변화 없음</span></div>' : '') +
+      b.blocks.map((x, i) => `<div class="blk${x.kind === 'model' ? ' model' : ''}"><div class="lbl">${i + 1}. ${esc(x.title)}` +
+        (x.asof ? ` <span class="dim">· ${esc(x.asof)}</span>` : '') + (x.unchanged ? '<span class="same">지난주와 변화 없음</span>' : '') + '</div>' +
+        (x.items?.length ? '<ul>' + x.items.map(it => `<li>${it.label ? `<b>${esc(it.label)}</b> ` : ''}${esc(it.text)}` +
+          (it.assume ? `<span class="asm">가정: ${esc(it.assume)}</span>` : '') + '</li>').join('') + '</ul>' : '') +
+        (x.note ? `<div class="note">${esc(x.note)}</div>` : '') +
+        (x.easy || []).map(t => ez(t, ' lone')).join('') + '</div>').join('') +
       (b.overall ? `<div class="blk"><div class="lbl">종합</div><ul><li class="overall">${esc(b.overall)}</li></ul></div>` : '');
   }
   const pb = b?.prev_brief, pe = document.getElementById('prevb');
   pe.style.display = pb ? '' : 'none';
   if (pb) {
     pe.querySelector('summary').textContent = `지난주 결론 (${b.prev_week} 주, 저장본)`;
-    pe.querySelector('ul').innerHTML = [pb.line, ...(pb.changes || []), pb.changes_note, pb.risk].filter(Boolean).map(t => `<li>${esc(t)}</li>`).join('');
+    pe.querySelector('ul').innerHTML = (pb.blocks || []).map(x => `<li>${esc(x.title)}<ul>` + x.items.map(t => `<li>${esc(t)}</li>`).join('') + '</ul></li>').join('') +
+      (pb.overall ? `<li>종합: ${esc(pb.overall)}</li>` : '');
   }
   const cb = W.conclusion || [];
   document.getElementById('concl').innerHTML = cb.length ? cb.map(b => `<li>${esc(b.head)}` +
@@ -385,7 +419,7 @@ document.getElementById('copy').onclick = async e => {
 };
 document.getElementById('showmd').onclick = () => { const m = document.getElementById('md'); m.style.display = m.style.display === 'block' ? 'none' : 'block'; };
 
-// ── 1. CTA ──
+// ── 3-2. CTA (추정) ──
 const CLASSES = ['주식', '금리', 'FX', '원자재', '변동성'];
 function renderCTA() {
   const A = W.cta?.assets || {}, K = W.cta?.classes || {};
@@ -452,32 +486,92 @@ function renderCtaDetail(a) {
   }));
 }
 
-// ── 2. 옵션 ──
-function renderOptions() {
+// ── 2. 관측 시장 상태 (옵션) ──
+const optCard = (lbl, val, chg) => `<div class="card"><div class="lbl">${lbl}</div><div class="val">${val}</div><div class="chg">${chg}</div></div>`;
+const dChg = (a, b, dd) => isNum(a) && isNum(b) ? `전주 대비 ${sg(a - b, dd)}` : '전주 없음';
+function renderOptObs() {
   const U = W.options?.underlyings || {}, PU = PREV?.options?.underlyings || {}, WK = W.options_week?.pc_vol_avg || {};
+  const PWK = PREV?.options_week?.pc_vol_avg || {};
   const ss = document.getElementById('opt-sel');
   const keys = Object.keys(U);
-  document.getElementById('opt-sub').textContent = `CBOE 지연 체인 ${W.asof?.options || '–'} · 이번 주 일별 스냅샷 ${W.options_week?.days?.length || 0}일` + (W.options?.failed?.length ? ` · 실패: ${W.options.failed.join(', ')}` : '');
-  if (!keys.length) { document.getElementById('opt-cards').innerHTML = '<div class="empty">옵션 데이터 없음</div>'; ['gexk', 'gexp', 'opth'].forEach(id => empty(id)); document.getElementById('opt-table').innerHTML = ''; return; }
+  document.getElementById('opt-sub').textContent = `CBOE 지연 체인 ${W.asof?.options || '–'} · 이번 주 일별 스냅샷 ${W.options_week?.days?.length || 0}일 · 관측값만(모델 가정 없음)` + (W.options?.failed?.length ? ` · 실패: ${W.options.failed.join(', ')}` : '');
+  if (!keys.length) { document.getElementById('opt-cards').innerHTML = '<div class="empty">옵션 데이터 없음</div>'; empty('opth'); document.getElementById('opt-table').innerHTML = ''; return; }
   if (!U[selOpt]) selOpt = keys[0];
-  ss.innerHTML = keys.filter(k => U[k].gex_usd_bn != null).map(k => `<option value="${k}"${k === selOpt ? ' selected' : ''}>${esc(U[k].name)}</option>`).join('');
-  ss.onchange = () => { selOpt = ss.value; renderOptions(); };
+  ss.innerHTML = keys.map(k => `<option value="${k}"${k === selOpt ? ' selected' : ''}>${esc(U[k].name)}</option>`).join('');
+  ss.onchange = () => { selOpt = ss.value; renderOptObs(); };
 
   const u = U[selOpt], p = PU[selOpt] || {};
-  const d = (a, b, dd) => isNum(a) && isNum(b) ? `전주 대비 ${sg(a - b, dd)}` : '전주 없음';
-  const card = (lbl, val, chg) => `<div class="card"><div class="lbl">${lbl}</div><div class="val">${val}</div><div class="chg">${chg}</div></div>`;
+  const wallD = k => isNum(k) ? ` <span class="dim">(${sg((k / u.spot - 1) * 100, 1)}%)</span>` : '';
   document.getElementById('opt-cards').innerHTML = [
-    card(`${esc(u.name)} 가격`, px(u.spot), d(u.spot, p.spot, 2)),
-    card('딜러 GEX ($bn/1%, 전 만기)', sg(u.gex_usd_bn, 2), `35일 이내 ${sg(u.gex_near_usd_bn, 2)} · ${d(u.gex_usd_bn, p.gex_usd_bn, 2)}`),
-    card('Zero-gamma', px(u.zero_gamma), isNum(u.zero_gamma) ? `현재가 대비 ${sg((u.zero_gamma / u.spot - 1) * 100, 1)}%` : '범위(±12%) 내 없음'),
-    card('콜 벽 / 풋 벽 (순GEX)', `${px(u.call_gamma_wall)} / ${px(u.put_gamma_wall)}`, `OI 기준 ${px(u.call_oi_wall)} / ${px(u.put_oi_wall)}`),
-    card('P/C (OI)', nf(u.pc_oi, 2), d(u.pc_oi, p.pc_oi, 2)),
-    card('P/C (거래량, 주평균)', nf(WK[selOpt], 2), `당일 ${nf(u.pc_vol, 2)}`),
-    card('25Δ 스큐 (30일, vp)', sg(u.skew_25d_30d, 1), d(u.skew_25d_30d, p.skew_25d_30d, 1)),
-    card('ATM IV 30일 (%)', nf(u.atm_iv_30d, 1), (u.gamma_expiring_by_opex_pct >= 0.5 && u.next_opex) ? `${u.next_opex} ${u.next_opex_kind || '월물'} 만기까지 |감마| ${nf(u.gamma_expiring_by_opex_pct, 0)}% 소멸` : ''),
+    optCard(`${esc(u.name)} 가격`, px(u.spot), dChg(u.spot, p.spot, 2)),
+    optCard('ATM IV 30일 (%)', nf(u.atm_iv_30d, 1), dChg(u.atm_iv_30d, p.atm_iv_30d, 1) + (isNum(u.atm_iv_30d) ? ` · 하루 약 ${nf(u.atm_iv_30d / Math.sqrt(252), 2)}%` : '')),
+    optCard('25Δ 스큐 (30일, vp)', sg(u.skew_25d_30d, 1), dChg(u.skew_25d_30d, p.skew_25d_30d, 1)),
+    optCard('P/C (OI)', nf(u.pc_oi, 2), dChg(u.pc_oi, p.pc_oi, 2)),
+    optCard('P/C (거래량, 주평균)', nf(WK[selOpt], 2), `당일 ${nf(u.pc_vol, 2)} · ${dChg(WK[selOpt], PWK[selOpt], 2)}`),
+    optCard('최대 OI 행사가 — 콜', px(u.call_oi_wall) + wallD(u.call_oi_wall), `지난주 ${px(p.call_oi_wall)}`),
+    optCard('최대 OI 행사가 — 풋', px(u.put_oi_wall) + wallD(u.put_oi_wall), `지난주 ${px(p.put_oi_wall)}`),
+    optCard('미결제 콜 / 풋', `${kc(u.call_oi).replace(/^\+/, '')} / ${kc(u.put_oi).replace(/^\+/, '')}`, '계약 수, 전 만기'),
   ].join('');
 
-  // 행사가별 GEX
+  let h = `<thead><tr><th class="l">기초자산</th><th>가격</th><th>ATM IV30</th><th>25Δ 스큐 vp</th><th>P/C OI</th><th>P/C 거래량(주평균)</th><th>콜 OI</th><th>풋 OI</th><th>최대 OI 콜</th><th>최대 OI 풋</th></tr></thead><tbody>`;
+  for (const c of CLASSES) {
+    const rows = Object.values(U).filter(x => x.class === c);
+    if (!rows.length) continue;
+    h += `<tr class="cls"><td colspan="10">${c}</td></tr>`;
+    for (const x of rows) {
+      const q = PU[x.key] || {};
+      const dd = (a, b, n) => isNum(a) && isNum(b) ? par(a - b, n) : '';
+      h += `<tr><td class="l">${esc(x.name)}</td><td>${px(x.spot)}</td><td>${nf(x.atm_iv_30d, 1)}${dd(x.atm_iv_30d, q.atm_iv_30d, 1)}</td>
+        <td>${sg(x.skew_25d_30d, 1)}${dd(x.skew_25d_30d, q.skew_25d_30d, 1)}</td><td>${nf(x.pc_oi, 2)}${dd(x.pc_oi, q.pc_oi, 2)}</td><td>${nf(WK[x.key], 2)}</td>
+        <td>${nf(x.call_oi)}</td><td>${nf(x.put_oi)}</td><td>${px(x.call_oi_wall)}</td><td>${px(x.put_oi_wall)}</td></tr>`;
+    }
+  }
+  document.getElementById('opt-table').innerHTML = h + '</tbody>';
+
+  // SPX 일별 추이 (small multiples: IV30 / P/C / 스큐)
+  const H = W.options_hist || {};
+  const x = H.date || [];
+  if (x.length < 2) { empty('opth', `누적 ${x.length}일 — 2일 이상 쌓이면 표시`); return; }
+  const ln = (y, ax, name, color = C.accent, fmt = '.2f') => ({ type: 'scatter', mode: 'lines+markers', x, y, xaxis: 'x' + ax, yaxis: 'y' + ax, name,
+    line: { color, width: 2 }, marker: { size: 5, color }, connectgaps: false, hovertemplate: `%{x}<br>${name} %{y:${fmt}}<extra></extra>` });
+  plot('opth', [
+    ln(H.SPX_atm_iv_30d, '', 'ATM IV30 %', C.accent, '.1f'),
+    ln(H.SPX_pc_oi, '2', 'P/C OI'), ln(H.SPX_pc_vol, '2', 'P/C 거래량', C.gray2),
+    ln(H.SPX_skew_25d_30d, '3', '25Δ 스큐 vp', C.gray1, '.1f'),
+  ], baseLayout({
+    showlegend: true, legend: { orientation: 'h', x: 0, y: 1.08, font: { size: 11, color: C.muted } },
+    xaxis: axis({ type: 'date', showticklabels: false }), yaxis: axis({ domain: [0.7, 1], title: { text: 'IV30', font: { size: 10.5 } } }),
+    xaxis2: axis({ type: 'date', anchor: 'y2', matches: 'x', showticklabels: false }), yaxis2: axis({ domain: [0.36, 0.64], title: { text: 'P/C', font: { size: 10.5 } } }),
+    xaxis3: axis({ type: 'date', anchor: 'y3', matches: 'x' }), yaxis3: axis({ domain: [0, 0.3], title: { text: '스큐', font: { size: 10.5 } } }),
+    hovermode: 'x', margin: { l: 56, r: 14, t: 24, b: 30 },
+  }));
+  document.getElementById('opth-sub').textContent = `매 실행 누적 · ${x[0]} ~ ${x[x.length - 1]} (${x.length}일)`;
+}
+
+// ── 3-1. 딜러 감마 (추정) ──
+let selGex = 'SPX';
+function renderGamma() {
+  const U = W.options?.underlyings || {}, PU = PREV?.options?.underlyings || {};
+  const keys = Object.keys(U).filter(k => isNum(U[k].gex_usd_bn));
+  document.getElementById('gex-sub').textContent = `CBOE 지연 체인 ${W.asof?.options || '–'} 기준 계산`;
+  if (!keys.length) { document.getElementById('gex-cards').innerHTML = '<div class="empty">GEX 데이터 없음</div>'; ['gexk', 'gexp', 'gexh'].forEach(id => empty(id)); document.getElementById('gex-table').innerHTML = ''; return; }
+  if (!U[selGex] || !keys.includes(selGex)) selGex = keys[0];
+  const ss = document.getElementById('gex-sel');
+  ss.innerHTML = keys.map(k => `<option value="${k}"${k === selGex ? ' selected' : ''}>${esc(U[k].name)}</option>`).join('');
+  ss.onchange = () => { selGex = ss.value; renderGamma(); };
+  const u = U[selGex], p = PU[selGex] || {};
+  const g = isNum(u.gex_near_usd_bn) ? u.gex_near_usd_bn : u.gex_usd_bn, pg = isNum(p.gex_near_usd_bn) ? p.gex_near_usd_bn : p.gex_usd_bn;
+  const side = v => v > 0 ? '롱 감마' : '숏 감마';
+  const zd = isNum(u.zero_gamma) ? (u.zero_gamma / u.spot - 1) * 100 : null, pzd = isNum(p.zero_gamma) && isNum(p.spot) ? (p.zero_gamma / p.spot - 1) * 100 : null;
+  document.getElementById('gex-cards').innerHTML = [
+    optCard('딜러 감마 방향 (35일 이내)', side(g), isNum(pg) ? `지난주 ${side(pg)}${(g > 0) !== (pg > 0) ? ' → 전환' : ' 유지'}` : '전주 없음'),
+    optCard('Zero-gamma', px(u.zero_gamma), isNum(zd) ? `지수가 선 ${zd > 0 ? '아래' : '위'}, 선까지 ${sg(zd, 1)}%` + (isNum(pzd) ? ` (지난주 ${sg(pzd, 1)}%)` : '') : '범위(±12%) 내 없음'),
+    optCard('규모 ($bn/1%)', `${sg(g, 0)}`, `35일 이내 · 전 만기 ${sg(u.gex_usd_bn, 0)} · 지난주 ${sg(pg, 0)}`),
+    optCard('콜 벽 / 풋 벽 (순GEX)', `${px(u.call_gamma_wall)} / ${px(u.put_gamma_wall)}`, '행사가별 순GEX 최대·최소'),
+    optCard('다음 주요 만기 |감마| 소멸', (u.gamma_expiring_by_opex_pct >= 0.5 && u.next_opex) ? `${nf(u.gamma_expiring_by_opex_pct, 0)}%` : '–',
+      (u.gamma_expiring_by_opex_pct >= 0.5 && u.next_opex) ? `${u.next_opex} ${u.next_opex_kind || '월물'}` : '해당 없음'),
+  ].join('');
+
   const gk = u.gex_by_strike;
   if (gk) {
     const sh = spotZg(u, '현재 ' + px(u.spot), 'zero-γ ' + px(u.zero_gamma));
@@ -496,47 +590,39 @@ function renderOptions() {
         yaxis: axis({ title: { text: '$bn / 1%', font: { size: 10.5 } }, zeroline: true }), xaxis: axis({ title: { text: '기초자산 가격', font: { size: 10.5 } } }), margin: { l: 56, r: 14, t: 22, b: 40 } }));
   } else empty('gexp', 'GEX 미계산');
 
-  // 요약 표
-  let h = `<thead><tr><th class="l">기초자산</th><th>가격</th><th>P/C OI</th><th>P/C 거래량(주평균)</th><th>콜 OI</th><th>풋 OI</th><th>콜 벽(OI)</th><th>풋 벽(OI)</th>
-    <th>25Δ 스큐 vp</th><th>ATM IV30</th><th>GEX $bn/1%</th><th>35일 이내</th><th>zero-γ (거리)</th></tr></thead><tbody>`;
+  let h = `<thead><tr><th class="l">기초자산</th><th>방향(35일)</th><th>GEX $bn/1%</th><th>35일 이내</th><th>zero-γ (거리)</th><th>콜 벽 / 풋 벽(순GEX)</th></tr></thead><tbody>`;
   for (const c of CLASSES) {
-    const rows = Object.values(U).filter(x => x.class === c);
+    const rows = Object.values(U).filter(x => x.class === c && isNum(x.gex_usd_bn));
     if (!rows.length) continue;
-    h += `<tr class="cls"><td colspan="13">${c}</td></tr>`;
+    h += `<tr class="cls"><td colspan="6">${c}</td></tr>`;
     for (const x of rows) {
       const q = PU[x.key] || {};
-      const dd = (a, b, n) => isNum(a) && isNum(b) ? par(a - b, n) : '';
-      h += `<tr><td class="l">${esc(x.name)}</td><td>${px(x.spot)}</td><td>${nf(x.pc_oi, 2)}${dd(x.pc_oi, q.pc_oi, 2)}</td><td>${nf(WK[x.key], 2)}</td>
-        <td>${nf(x.call_oi)}</td><td>${nf(x.put_oi)}</td><td>${px(x.call_oi_wall)}</td><td>${px(x.put_oi_wall)}</td>
-        <td>${sg(x.skew_25d_30d, 1)}${dd(x.skew_25d_30d, q.skew_25d_30d, 1)}</td><td>${nf(x.atm_iv_30d, 1)}${dd(x.atm_iv_30d, q.atm_iv_30d, 1)}</td>
-        <td>${isNum(x.gex_usd_bn) ? sg(x.gex_usd_bn, 2) + dd(x.gex_usd_bn, q.gex_usd_bn, 2) : '<span class="dim">—</span>'}</td>
+      const xg = isNum(x.gex_near_usd_bn) ? x.gex_near_usd_bn : x.gex_usd_bn;
+      h += `<tr><td class="l">${esc(x.name)}</td><td>${side(xg)}</td><td>${sg(x.gex_usd_bn, 2)}${isNum(q.gex_usd_bn) ? par(x.gex_usd_bn - q.gex_usd_bn, 2) : ''}</td>
         <td>${isNum(x.gex_near_usd_bn) ? sg(x.gex_near_usd_bn, 2) : '<span class="dim">—</span>'}</td>
-        <td>${isNum(x.zero_gamma) ? px(x.zero_gamma) + ` <span class="dim">(${sg((x.zero_gamma / x.spot - 1) * 100, 1)}%)</span>` : '<span class="dim">—</span>'}</td></tr>`;
+        <td>${isNum(x.zero_gamma) ? px(x.zero_gamma) + ` <span class="dim">(${sg((x.zero_gamma / x.spot - 1) * 100, 1)}%)</span>` : '<span class="dim">—</span>'}</td>
+        <td>${px(x.call_gamma_wall)} / ${px(x.put_gamma_wall)}</td></tr>`;
     }
   }
-  document.getElementById('opt-table').innerHTML = h + '</tbody>';
+  document.getElementById('gex-table').innerHTML = h + '</tbody>';
 
-  // SPX 일별 추이 (small multiples: GEX / P/C / 스큐)
   const H = W.options_hist || {};
   const x = H.date || [];
-  if (x.length < 2) { empty('opth', `누적 ${x.length}일 — 2일 이상 쌓이면 표시`); return; }
-  const ln = (y, ax, name, color = C.accent, fmt = '.2f') => ({ type: 'scatter', mode: 'lines+markers', x, y, xaxis: 'x' + ax, yaxis: 'y' + ax, name,
-    line: { color, width: 2 }, marker: { size: 5, color }, connectgaps: false, hovertemplate: `%{x}<br>${name} %{y:${fmt}}<extra></extra>` });
-  plot('opth', [
-    ln(H.SPX_gex_usd_bn, '', 'GEX $bn/1%'),
-    ln(H.SPX_pc_oi, '2', 'P/C OI'), ln(H.SPX_pc_vol, '2', 'P/C 거래량', C.gray2),
-    ln(H.SPX_skew_25d_30d, '3', '25Δ 스큐 vp', C.gray1, '.1f'),
+  if (x.length < 2) { empty('gexh', `누적 ${x.length}일 — 2일 이상 쌓이면 표시`); return; }
+  plot('gexh', [
+    { type: 'scatter', mode: 'lines+markers', x, y: H.SPX_gex_usd_bn, name: 'GEX $bn/1%', line: { color: C.accent, width: 2 }, marker: { size: 5, color: C.accent }, hovertemplate: '%{x}<br>GEX %{y:+.1f}<extra></extra>' },
+    { type: 'scatter', mode: 'lines', x, y: H.SPX_spot, name: 'SPX', xaxis: 'x2', yaxis: 'y2', line: { color: C.gray1, width: 1.8 }, hovertemplate: '%{x}<br>SPX %{y:,.0f}<extra></extra>' },
+    { type: 'scatter', mode: 'lines', x, y: H.SPX_zero_gamma, name: 'zero-gamma', xaxis: 'x2', yaxis: 'y2', line: { color: C.gray2, width: 1.5, dash: 'dot' }, hovertemplate: '%{x}<br>zero-γ %{y:,.0f}<extra></extra>' },
   ], baseLayout({
-    showlegend: true, legend: { orientation: 'h', x: 0, y: 1.08, font: { size: 11, color: C.muted } },
-    xaxis: axis({ type: 'date', showticklabels: false }), yaxis: axis({ domain: [0.7, 1], title: { text: 'GEX', font: { size: 10.5 } }, zeroline: true }),
-    xaxis2: axis({ type: 'date', anchor: 'y2', matches: 'x', showticklabels: false }), yaxis2: axis({ domain: [0.36, 0.64], title: { text: 'P/C', font: { size: 10.5 } } }),
-    xaxis3: axis({ type: 'date', anchor: 'y3', matches: 'x' }), yaxis3: axis({ domain: [0, 0.3], title: { text: '스큐', font: { size: 10.5 } } }),
-    hovermode: 'x', margin: { l: 56, r: 14, t: 24, b: 30 },
+    showlegend: true, legend: { orientation: 'h', x: 0, y: 1.1, font: { size: 11, color: C.muted } },
+    xaxis: axis({ type: 'date', showticklabels: false }), yaxis: axis({ domain: [0.56, 1], title: { text: 'GEX', font: { size: 10.5 } }, zeroline: true }),
+    xaxis2: axis({ type: 'date', anchor: 'y2', matches: 'x' }), yaxis2: axis({ domain: [0, 0.46], title: { text: '가격', font: { size: 10.5 } } }),
+    hovermode: 'x', margin: { l: 56, r: 14, t: 26, b: 30 },
   }));
-  document.getElementById('opth-sub').textContent = `매 실행 누적 · ${x[0]} ~ ${x[x.length - 1]} (${x.length}일)`;
+  document.getElementById('gexh-sub').textContent = `위: GEX($bn/1%, 전 만기) · 아래: SPX 가격과 zero-gamma(점선) — ${x[0]} ~ ${x[x.length - 1]} (${x.length}일)`;
 }
 
-// ── 3. COT ──
+// ── 1. 관측 포지션 (COT) ──
 // 발표 = 기준일(화) + 3일(금) 15:30 ET. 미 연방 휴일이 낀 주는 CFTC가 늦춰 발표 → 날짜는 표준 규칙, 휴일 주는 '지연 가능' 표시
 const US_HOLIDAYS = ['2026-01-01', '2026-01-19', '2026-02-16', '2026-05-25', '2026-06-19', '2026-07-03', '2026-09-07', '2026-10-12', '2026-11-11', '2026-11-26', '2026-12-25',
   '2027-01-01', '2027-01-18', '2027-02-15', '2027-05-31', '2027-06-18', '2027-07-05', '2027-09-06', '2027-10-11', '2027-11-11', '2027-11-25', '2027-12-24'];
@@ -623,7 +709,7 @@ function renderCOT() {
   })), baseLayout({ showlegend: true, hovermode: 'x', xaxis: axis({ type: 'date' }), yaxis: axis({ title: { text: '계약', font: { size: 10.5 } }, zeroline: true }), margin: { l: 64, r: 14, t: 30, b: 30 } }));
 }
 
-// ── 4. 교차 ──
+// ── 3-3. 교차 ──
 function renderCross() {
   const R = W.crowding || [];
   const t = document.getElementById('cross');
