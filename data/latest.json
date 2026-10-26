@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-10-26T08:45:41+09:00",
+ "generated_at": "2026-10-26T10:32:49+09:00",
  "items": {
   "ust_1m": {
    "label": "미국채 1M",
@@ -144,13 +144,13 @@
   "usdkrw": {
    "label": "USD/KRW",
    "unit": "KRW",
-   "value": 1324.5,
-   "change": -1.5,
-   "change_pct": -0.11,
+   "value": 1325.0,
+   "change": -1.0,
+   "change_pct": -0.08,
    "source": "naver:hana",
-   "asof": "2026-10-26T08:40:15+09:00",
+   "asof": "2026-10-26T10:31:52+09:00",
    "high": 1325.5,
-   "low": 1324.3,
+   "low": 1321.5,
    "stale": false
   },
   "usdjpy": {
@@ -166,12 +166,12 @@
   "usdcnh": {
    "label": "USD/CNH",
    "unit": "CNH",
-   "value": 6.6673,
-   "change": -0.0009,
-   "change_pct": -0.01,
+   "value": 6.6692,
+   "change": 0.0019,
+   "change_pct": 0.03,
    "source": "yfinance:CNH=X",
-   "asof": "2026-10-25",
-   "stale": true
+   "asof": "2026-10-26",
+   "stale": false
   },
   "eurusd": {
    "label": "EUR/USD",
@@ -186,31 +186,31 @@
   "dxy": {
    "label": "DXY",
    "unit": "pt",
-   "value": 101.81,
-   "change": 0.0,
-   "change_pct": 0.0,
+   "value": 101.63,
+   "change": -0.18,
+   "change_pct": -0.18,
    "source": "naver:majors_exchange",
-   "asof": "2026-10-26T08:35:11+09:00",
+   "asof": "2026-10-26T10:22:53+09:00",
    "stale": false
   },
   "wti": {
    "label": "WTI",
    "unit": "USD/bbl",
-   "value": 102.02,
-   "change": -1.25,
-   "change_pct": -1.21,
+   "value": 101.39,
+   "change": -1.88,
+   "change_pct": -1.82,
    "source": "naver:energy",
-   "asof": "2026-10-26T08:35:05+09:00",
+   "asof": "2026-10-26T10:22:19+09:00",
    "stale": false
   },
   "brent": {
    "label": "Brent",
    "unit": "USD/bbl",
-   "value": 115.51,
-   "change": -1.21,
-   "change_pct": -1.04,
+   "value": 114.93,
+   "change": -1.79,
+   "change_pct": -1.53,
    "source": "naver:energy",
-   "asof": "2026-10-26T08:35:05+09:00",
+   "asof": "2026-10-26T10:22:19+09:00",
    "stale": false
   },
   "vix": {
@@ -256,43 +256,43 @@
  },
  "investor": {
   "KOSPI": {
-   "date": "2026-10-23",
-   "individual": 422.13,
-   "foreign_only": -9806.63,
-   "other_foreign": -4.79,
-   "fin_invest": 5548.78,
-   "insurance": 830.38,
-   "trust": 1721.83,
-   "private_fund": -11.46,
-   "bank": -5.21,
-   "other_fin": 68.36,
-   "pension": 528.96,
+   "date": "2026-10-26",
+   "individual": 146.02,
+   "foreign_only": -2602.95,
+   "other_foreign": 9.65,
+   "fin_invest": 973.87,
+   "insurance": -0.85,
+   "trust": -189.16,
+   "private_fund": 418.78,
+   "bank": 0.53,
+   "other_fin": 12.75,
+   "pension": 1106.17,
    "gov": 0.0,
-   "other_corp": 707.68,
-   "foreign": -9811.42,
-   "institution": 8681.64,
+   "other_corp": 125.18,
+   "foreign": -2593.3,
+   "institution": 2322.09,
    "source": "naver:trend_daily",
-   "asof": "2026-10-23",
+   "asof": "2026-10-26",
    "stale": false
   },
   "KOSDAQ": {
-   "date": "2026-10-23",
-   "individual": 658.75,
-   "foreign_only": -425.12,
-   "other_foreign": 23.96,
-   "fin_invest": 303.4,
-   "insurance": -23.48,
-   "trust": -288.97,
-   "private_fund": 23.05,
-   "bank": -20.67,
-   "other_fin": -30.2,
-   "pension": -255.32,
+   "date": "2026-10-26",
+   "individual": 892.11,
+   "foreign_only": -574.76,
+   "other_foreign": 8.64,
+   "fin_invest": -430.89,
+   "insurance": 0.11,
+   "trust": 15.14,
+   "private_fund": 138.23,
+   "bank": -1.9,
+   "other_fin": 0.81,
+   "pension": -23.47,
    "gov": 0.0,
-   "other_corp": 34.62,
-   "foreign": -401.16,
-   "institution": -292.19,
+   "other_corp": -24.03,
+   "foreign": -566.12,
+   "institution": -301.97,
    "source": "naver:trend_daily",
-   "asof": "2026-10-23",
+   "asof": "2026-10-26",
    "stale": false
   }
  },
@@ -607,7 +607,8 @@
      "asof": "2026-10-23T00:00:00+09:00"
     }
    ],
-   "stale": false
+   "stale": true,
+   "stale_reason": "장중 잠정 · 금액 0"
   },
   "KOSDAQ": {
    "period": "DAY",
@@ -919,7 +920,8 @@
      "asof": "2026-10-23T00:00:00+09:00"
     }
    ],
-   "stale": false
+   "stale": true,
+   "stale_reason": "장중 잠정 · 금액 0"
   }
  },
  "meta": {
