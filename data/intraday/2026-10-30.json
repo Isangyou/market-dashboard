@@ -11,7 +11,7 @@
  "futures": null,
  "futures_price": {
   "source": "naver:indicators",
-  "asof": "2026-10-30T08:34:15+09:00",
+  "asof": "2026-10-30T08:37:15+09:00",
   "value": 935.0,
   "change": 0.0,
   "change_pct": 0.0,
@@ -25,7 +25,7 @@
  "usdkrw": {
   "source": "naver:hana_round",
   "label": "하나은행 고시",
-  "asof": "2026-10-30T08:46:00+09:00",
+  "asof": "2026-10-30T08:54:00+09:00",
   "last_close": 1340.5,
   "rows": [
    {
@@ -35,6 +35,10 @@
    {
     "t": "08:46",
     "v": 1338.5
+   },
+   {
+    "t": "08:54",
+    "v": 1339.0
    }
   ],
   "stale": false
@@ -44,7 +48,7 @@
    "symbol": "NQ=F",
    "name": "나스닥100 선물",
    "source": "yfinance:NQ=F 1m",
-   "asof": "2026-10-30T08:44:00+09:00",
+   "asof": "2026-10-30T08:47:00+09:00",
    "since": "2026-10-30T06:00:00+09:00",
    "prev_close": 29218.25,
    "prev_close_at": "2026-10-30T05:59:00+09:00",
@@ -468,7 +472,19 @@
     },
     {
      "t": "08:44",
-     "c": 29096.75
+     "c": 29096.25
+    },
+    {
+     "t": "08:45",
+     "c": 29090.25
+    },
+    {
+     "t": "08:46",
+     "c": 29081.5
+    },
+    {
+     "t": "08:47",
+     "c": 29087.0
     }
    ],
    "stale": false
@@ -477,7 +493,7 @@
    "symbol": "CL=F",
    "name": "WTI 선물",
    "source": "yfinance:CL=F 1m",
-   "asof": "2026-10-30T08:44:00+09:00",
+   "asof": "2026-10-30T08:47:00+09:00",
    "since": "2026-10-30T06:00:00+09:00",
    "prev_close": 102.86,
    "prev_close_at": "2026-10-30T05:59:00+09:00",
@@ -901,7 +917,19 @@
     },
     {
      "t": "08:44",
-     "c": 102.66
+     "c": 102.7
+    },
+    {
+     "t": "08:45",
+     "c": 102.74
+    },
+    {
+     "t": "08:46",
+     "c": 102.77
+    },
+    {
+     "t": "08:47",
+     "c": 102.73
     }
    ],
    "stale": false
@@ -940,9 +968,20 @@
    "fut_foreign": null,
    "program_kospi": null,
    "usdkrw": 1338.5
+  },
+  {
+   "t": "08:57",
+   "sampled_at": "2026-10-30T08:57:06+09:00",
+   "kospi": null,
+   "kospi_chg_pct": null,
+   "foreign_kospi": null,
+   "foreign_kosdaq": null,
+   "fut_foreign": null,
+   "program_kospi": null,
+   "usdkrw": 1339.0
   }
  ],
- "updated_at": "2026-10-30T08:54:06+09:00",
+ "updated_at": "2026-10-30T08:57:06+09:00",
  "market_day": {
   "date": "2026-10-30",
   "trading": true,
