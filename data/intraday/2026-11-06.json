@@ -4,13 +4,13 @@
   "KOSPI": {
    "date": "2026-11-06",
    "source": "naver:index_chart",
-   "asof": "2026-11-06T10:47:00+09:00",
+   "asof": "2026-11-06T10:50:00+09:00",
    "status": "OPEN",
    "last_close": 5383.8,
    "open": 5263.26,
-   "value": 4990.87,
-   "change": -392.93,
-   "change_pct": -7.3,
+   "value": 5001.91,
+   "change": -381.89,
+   "change_pct": -7.09,
    "bars": [
     {
      "t": "09:00",
@@ -549,8 +549,23 @@
     },
     {
      "t": "10:47",
-     "c": 4990.87,
-     "v": 112009
+     "c": 5008.65,
+     "v": 112691
+    },
+    {
+     "t": "10:48",
+     "c": 5013.2,
+     "v": 113280
+    },
+    {
+     "t": "10:49",
+     "c": 5006.78,
+     "v": 113797
+    },
+    {
+     "t": "10:50",
+     "c": 5001.91,
+     "v": 113872
     }
    ],
    "stale": false
@@ -558,13 +573,13 @@
   "KOSDAQ": {
    "date": "2026-11-06",
    "source": "naver:index_chart",
-   "asof": "2026-11-06T10:47:00+09:00",
+   "asof": "2026-11-06T10:50:00+09:00",
    "status": "OPEN",
    "last_close": 678.41,
    "open": 654.43,
-   "value": 636.11,
-   "change": -42.3,
-   "change_pct": -6.24,
+   "value": 636.17,
+   "change": -42.24,
+   "change_pct": -6.23,
    "bars": [
     {
      "t": "09:00",
@@ -1103,8 +1118,23 @@
     },
     {
      "t": "10:47",
-     "c": 636.11,
-     "v": 216105
+     "c": 636.93,
+     "v": 217117
+    },
+    {
+     "t": "10:48",
+     "c": 636.66,
+     "v": 218176
+    },
+    {
+     "t": "10:49",
+     "c": 636.24,
+     "v": 218966
+    },
+    {
+     "t": "10:50",
+     "c": 636.17,
+     "v": 219100
     }
    ],
    "stale": false
@@ -1114,7 +1144,7 @@
   "KOSPI": {
    "source": "naver:trend_time",
    "unit": "억원",
-   "asof": "2026-11-06T10:46:00+09:00",
+   "asof": "2026-11-06T10:49:00+09:00",
    "basis": "KRX 장중 누적 잠정치 (~15:40, 시간외·NXT 제외)",
    "rows": [
     {
@@ -1542,6 +1572,18 @@
      "foreign": -9939.8,
      "individual": 2800.3,
      "institution": 5862.5
+    },
+    {
+     "t": "10:48",
+     "foreign": -10060.0,
+     "individual": 2718.5,
+     "institution": 6056.3
+    },
+    {
+     "t": "10:49",
+     "foreign": -10245.4,
+     "individual": 2700.5,
+     "institution": 6234.4
     }
    ],
    "stale": false
@@ -1549,7 +1591,7 @@
   "KOSDAQ": {
    "source": "naver:trend_time",
    "unit": "억원",
-   "asof": "2026-11-06T10:46:00+09:00",
+   "asof": "2026-11-06T10:49:00+09:00",
    "basis": "KRX 장중 누적 잠정치 (~15:40, 시간외·NXT 제외)",
    "rows": [
     {
@@ -1977,6 +2019,18 @@
      "foreign": -1000.1,
      "individual": -214.9,
      "institution": 1183.2
+    },
+    {
+     "t": "10:48",
+     "foreign": -998.1,
+     "individual": -233.5,
+     "institution": 1201.6
+    },
+    {
+     "t": "10:49",
+     "foreign": -1007.6,
+     "individual": -214.2,
+     "institution": 1194.9
     }
    ],
    "stale": false
@@ -1985,7 +2039,7 @@
  "futures": {
   "source": "naver:trend_time_fut",
   "unit": "계약",
-  "asof": "2026-11-06T10:28:00+09:00",
+  "asof": "2026-11-06T10:31:00+09:00",
   "rows": [
    {
     "t": "08:45",
@@ -2714,13 +2768,34 @@
     "individual": -195,
     "institution": 1114,
     "foreign_amt": -1522.9
+   },
+   {
+    "t": "10:29",
+    "foreign": -797,
+    "individual": -194,
+    "institution": 1127,
+    "foreign_amt": -1544.1
+   },
+   {
+    "t": "10:30",
+    "foreign": -780,
+    "individual": -204,
+    "institution": 1115,
+    "foreign_amt": -1511.3
+   },
+   {
+    "t": "10:31",
+    "foreign": -705,
+    "individual": -211,
+    "institution": 1049,
+    "foreign_amt": -1366.2
    }
   ],
   "stale": false
  },
  "futures_price": {
   "source": "naver:indicators",
-  "asof": "2026-11-06T10:27:59+09:00",
+  "asof": "2026-11-06T10:30:59+09:00",
   "value": 774.1,
   "change": -63.15,
   "change_pct": -7.54,
@@ -2757,7 +2832,7 @@
   "KOSDAQ": {
    "source": "naver:program_chart",
    "unit": "억원",
-   "asof": "2026-11-06T10:40:00+09:00",
+   "asof": "2026-11-06T10:50:00+09:00",
    "rows": [
     {
      "t": "09:00",
@@ -2788,6 +2863,12 @@
      "arb": 152.4,
      "nonarb": -972.9,
      "total": -820.5
+    },
+    {
+     "t": "10:50",
+     "arb": 159.6,
+     "nonarb": -1085.2,
+     "total": -925.5
     }
    ],
    "stale": false
@@ -2796,7 +2877,7 @@
  "usdkrw": {
   "source": "naver:hana_round",
   "label": "하나은행 고시",
-  "asof": "2026-11-06T10:47:00+09:00",
+  "asof": "2026-11-06T10:50:00+09:00",
   "last_close": 1357.0,
   "rows": [
    {
@@ -3222,6 +3303,14 @@
    {
     "t": "10:47",
     "v": 1355.7
+   },
+   {
+    "t": "10:49",
+    "v": 1355.4
+   },
+   {
+    "t": "10:50",
+    "v": 1355.2
    }
   ],
   "stale": false
@@ -3231,11 +3320,11 @@
    "symbol": "NQ=F",
    "name": "나스닥100 선물",
    "source": "yfinance:NQ=F 1m",
-   "asof": "2026-11-06T10:38:00+09:00",
+   "asof": "2026-11-06T10:39:00+09:00",
    "since": "2026-11-06T06:00:00+09:00",
    "prev_close": 26686.25,
    "prev_close_at": "2026-11-06T06:00:00+09:00",
-   "delay_min": 10,
+   "delay_min": 12,
    "rows": [
     {
      "t": "06:01",
@@ -4107,7 +4196,11 @@
     },
     {
      "t": "10:38",
-     "c": 26926.0
+     "c": 26908.75
+    },
+    {
+     "t": "10:39",
+     "c": 26913.0
     }
    ],
    "stale": false
@@ -4116,11 +4209,11 @@
    "symbol": "CL=F",
    "name": "WTI 선물",
    "source": "yfinance:CL=F 1m",
-   "asof": "2026-11-06T10:38:00+09:00",
+   "asof": "2026-11-06T10:39:00+09:00",
    "since": "2026-11-06T06:00:00+09:00",
    "prev_close": 90.72,
    "prev_close_at": "2026-11-06T06:00:00+09:00",
-   "delay_min": 10,
+   "delay_min": 12,
    "rows": [
     {
      "t": "06:01",
@@ -4992,7 +5085,11 @@
     },
     {
      "t": "10:38",
-     "c": 91.18
+     "c": 91.1
+    },
+    {
+     "t": "10:39",
+     "c": 91.11
     }
    ],
    "stale": false
@@ -5449,9 +5546,20 @@
    "fut_foreign": -786,
    "program_kospi": -3931.2,
    "usdkrw": 1355.7
+  },
+  {
+   "t": "10:51",
+   "sampled_at": "2026-11-06T10:51:05+09:00",
+   "kospi": 5001.91,
+   "kospi_chg_pct": -7.09,
+   "foreign_kospi": -10245.4,
+   "foreign_kosdaq": -1007.6,
+   "fut_foreign": -705,
+   "program_kospi": -3931.2,
+   "usdkrw": 1355.2
   }
  ],
- "updated_at": "2026-11-06T10:48:06+09:00",
+ "updated_at": "2026-11-06T10:51:05+09:00",
  "market_day": {
   "date": "2026-11-06",
   "trading": true,
