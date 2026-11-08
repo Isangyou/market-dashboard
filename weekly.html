@@ -53,6 +53,8 @@
   .stack { margin-bottom: 14px; }
   .row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
   .chart { width: 100%; }
+  .h2v { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 8px; }
+  .h2v b { color: var(--text); font-weight: 600; }
 
   /* 결론 */
   .concl { margin: 6px 0 0; padding-left: 18px; }
@@ -199,6 +201,11 @@
     <div class="sub" id="opth-sub">매 실행 누적 — 수집 시작 이후 기간만 표시</div>
     <div id="opth" class="chart" style="height:380px"></div>
   </section>
+  <section class="panel">
+    <h2>CBOE Put/Call Ratio (관측)<span class="h2v" id="pc-now"></span></h2>
+    <div class="sub" id="pc-sub"></div>
+    <div id="pcr" class="chart" style="height:400px"></div>
+  </section>
 
   <!-- 3. 추정 (모델 기반) -->
   <section class="panel est-head">
@@ -304,7 +311,7 @@ const C = Object.fromEntries(['bg','panel','line','grid','text','muted','faint',
 const DATA = 'data/positioning/';
 const CONFIG = { displayModeBar: false, responsive: true };
 
-let IDX = null, W = null, PREV = null, selCta = 'ES', selOpt = 'SPX', selCot = 'ES';
+let IDX = null, W = null, PREV = null, PC = null, selCta = 'ES', selOpt = 'SPX', selCot = 'ES';
 
 // ── 포맷 ──
 const isNum = v => v != null && !isNaN(v);
@@ -356,6 +363,7 @@ async function getJSON(p) { const r = await fetch(p + '?t=' + Date.now()); if (!
 async function init() {
   try { IDX = await getJSON(DATA + 'index.json'); }
   catch (e) { document.getElementById('meta').textContent = '아직 생성된 주간 리포트가 없음 (data/positioning/index.json 없음)'; return; }
+  PC = await getJSON(DATA + 'cboe_pc.json').catch(() => null);
   const sel = document.getElementById('week');
   sel.innerHTML = IDX.weeks.map(w => `<option value="${w.week}">${esc(w.label)} · ${esc(w.status)}</option>`).join('');
   const q = new URLSearchParams(location.search).get('week');
@@ -382,8 +390,8 @@ function render() {
     `생성 ${esc((W.generated || '').replace('T', ' ').slice(0, 16))} KST · CTA ${esc(a.cta || '–')} 종가 · 옵션 ${esc(optLabel())} · COT ${esc(a.cot || '–')}(화)` +
     (W.stale && W.stale.length ? ` · <b>이전 값 유지: ${esc(W.stale.join(', '))}</b>` : '') +
     (PREV ? ` · 비교 대상: ${esc(PREV.week)} 주` : ' · 전주 스냅샷 없음(비교 생략)');
-  renderConclusion(); renderCOT(); renderOptObs(); renderGamma(); renderCTA(); renderCross();
-  document.getElementById('foot').innerHTML = [W.cta?.source, W.options?.source, W.cot?.source].filter(Boolean).map(esc).join('<br>');
+  renderConclusion(); renderCOT(); renderOptObs(); renderPC(); renderGamma(); renderCTA(); renderCross();
+  document.getElementById('foot').innerHTML = [W.cta?.source, W.options?.source, PC?.source && 'Put/Call Ratio: ' + PC.source, W.cot?.source].filter(Boolean).map(esc).join('<br>');
 }
 
 // ── 0. 결론 ──
@@ -549,6 +557,51 @@ function renderOptObs() {
     hovermode: 'x', margin: { l: 56, r: 14, t: 24, b: 30 },
   }));
   document.getElementById('opth-sub').textContent = `매 실행 누적 · ${x[0]} ~ ${x[x.length - 1]} (${x.length}일)`;
+}
+
+// ── CBOE Put/Call Ratio: Index·Total·Equity (CBOE 일별 공표치, 선택 주차 금요일까지) ──
+const PC_SER = [['index', 'Index P/C', () => C.accent, 2.2, 'solid'], ['total', 'Total P/C', () => C.gray1, 1.5, 'solid'], ['equity', 'Equity P/C', () => C.gray2, 1.5, 'solid']];
+function renderPC() {
+  const R = PC?.rows || {}, x = Object.keys(R).filter(d => d <= W.week).sort();
+  const nowEl = document.getElementById('pc-now');
+  if (x.length < 2) { nowEl.textContent = ''; document.getElementById('pc-sub').textContent = '소스 CBOE'; empty('pcr', 'CBOE P/C 데이터 없음'); return; }
+  const ys = Object.fromEntries(PC_SER.map(([k]) => [k, x.map(d => R[d][k] ?? null)]));
+  const last = x[x.length - 1];
+  nowEl.innerHTML = PC_SER.map(([k, nm]) => {
+    const v = R[last][k], w = ys[k].slice(-20).filter(isNum);
+    const avg = w.length ? w.reduce((a, b) => a + b, 0) / w.length : null;
+    return `${nm.replace(' P/C', '')} <b>${nf(v, 2)}</b> (20일 평균 대비 ${isNum(v) && avg ? nf(v / avg, 2) + '배' : '–'})`;
+  }).join(' · ');
+  const wd = d => '일월화수목금토'[new Date(d + 'T00:00:00').getDay()];
+  document.getElementById('pc-sub').textContent = `기준 ${last.slice(5).replace('-', '/')}(${wd(last)}) 장 마감 · ${x[0]} ~ ${last} (${x.length}거래일) · 가로선 = Index P/C 1.0 · 소스 CBOE`;
+  const [yy, mm, dd] = last.split('-').map(Number), t0 = new Date(Date.UTC(yy, mm - 4, dd));  // 3개월 전 (UTC로 계산해 시간대 밀림 방지)
+  const r0 = t0.toISOString().slice(0, 10), full = [x[0], last];
+  const yFit = rg => {  // 보이는 구간(세 시리즈 + 1.0선)에 y축 맞춤
+    const v = [1];
+    x.forEach((d, i) => { if (d >= rg[0].slice(0, 10) && d <= rg[1].slice(0, 10)) PC_SER.forEach(([k]) => isNum(ys[k][i]) && v.push(ys[k][i])); });
+    const lo = Math.min(...v), hi = Math.max(...v), pad = Math.max((hi - lo) * 0.08, 0.03);
+    return [lo - pad, hi + pad];
+  };
+  plot('pcr', PC_SER.map(([k, nm, col, w, dash]) => ({
+    type: 'scatter', mode: 'lines', x, y: ys[k], name: nm, connectgaps: false,
+    line: { color: col(), width: w, dash }, hovertemplate: `${nm} %{y:.2f}<extra></extra>`,
+  })), baseLayout({
+    showlegend: true, legend: { orientation: 'h', x: 0, y: 1.02, yanchor: 'bottom', font: { size: 11.5, color: C.muted } },
+    hovermode: 'x unified', margin: { l: 48, r: 14, t: 30, b: 20 },
+    xaxis: axis({ type: 'date', range: [r0, last], hoverformat: '%Y-%m-%d (%a)', spikecolor: C.gray2, spikethickness: 1, spikedash: 'dot',
+                  rangeslider: { visible: true, thickness: 0.08, bgcolor: C.bg, bordercolor: C.line, borderwidth: 1 } }),
+    yaxis: axis({ range: yFit([r0, last]), tickformat: '.2f', zeroline: false, showgrid: false }),
+    shapes: [{ type: 'line', xref: 'paper', x0: 0, x1: 1, yref: 'y', y0: 1, y1: 1, line: { color: C.gray2, width: 1, dash: 'dot' }, layer: 'below' }],
+  }));
+  const el = document.getElementById('pcr');
+  el._yFit = yFit; el._full = full;
+  if (!el._yfitOn) {
+    el._yfitOn = true;
+    el.on('plotly_relayout', e => {
+      const r = e['xaxis.range'] || (e['xaxis.range[0]'] && [e['xaxis.range[0]'], e['xaxis.range[1]']]) || (e['xaxis.autorange'] ? el._full : null);
+      if (r) Plotly.relayout(el, { 'yaxis.range': el._yFit(r.map(String)) });
+    });
+  }
 }
 
 // ── 3-1. 딜러 감마 (추정) ──

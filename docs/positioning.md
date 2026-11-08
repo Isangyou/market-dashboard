@@ -17,6 +17,7 @@ Actions: `.github/workflows/positioning.yml` — KST 화~금 07:10 (UTC 월~목 
 | 경로 | 내용 |
 |---|---|
 | `positioning/cta.py` | 추세추종 복제 모델 (yfinance 연속 선물 17종) |
+| `positioning/cboe_pc.py` | CBOE 일별 Put/Call Ratio(Index·Total·Equity 공표치) → `data/positioning/cboe_pc.json`. `{날짜}_daily_options` JSON, 403 = 거래일 아님·공표 전. 첫 실행 1년 백필, 이후 빠진 날만(최근 10평일 재확인, 3일 넘게 없으면 `no_data`) |
 | `positioning/options.py` | CBOE 지연 체인 → P/C, OI 벽, 25Δ 스큐, ATM IV, 딜러 GEX·zero-gamma |
 | `positioning/cot.py` | CFTC Socrata API — TFF(금융) · Disaggregated(원자재) |
 | `positioning/brief.py` | 결론(수치 기반): 한 줄 요약 · 변화 포인트 · 리스크, 전주 저장 결론과 비교. 기준 단위 `UNIT` |
@@ -60,6 +61,7 @@ Actions: `.github/workflows/positioning.yml` — KST 화~금 07:10 (UTC 월~목 
 - CTA: 룩백 20/60/125/250일 위험조정 모멘텀 tanh 평균 × 변동성 레버리지(3년 중앙 σ/60일 σ, 상한 1.5). ±100% = 정상 변동성 풀 포지션.
   전환가 = 다음 주말 기준 P_{t+5−L}. 시나리오 = 1주 ±1·2σ 로그 선형 경로 재계산
 - 옵션 체인 기준 시각(`asof.options_chain`·`options_label`, 기초자산별 `chain_asof`): 응답 `timestamp`는 **UTC 수집 시각**(HTTP Last-Modified와 같음 — 11-08 확인 01:30:19 = Last-Modified 01:30:22 GMT), 거래일은 `data.last_trade_time`(ET, 기초자산 마지막 체결). 체인 시각 = 수집 − 15분 지연, 그 거래일 16:15 ET 이후면 '종가 체인'(16:15로 표기), 아니면 '장중 스냅샷'. 표기 예) `CBOE 11/6(금) 16:15 ET 종가 체인 (수집 11/8(일) 10:30 KST)`. 11-08 이전 주차는 `last_trade_time`을 저장하지 않아 거래일을 평일로 추정(`--rebuild-conclusion`이 채움). 장중 스냅샷이면 그 주는 '확정'하지 않음
+- CBOE Put/Call Ratio 차트(옵션 시장 섹션 맨 아래, 전체 폭 400px): Index(포인트 색)·Total(짙은 회색)·Equity(연한 회색) 선, 가로선은 Index 1.0 연회색 점선 하나(y 격자 없음), 3개월 기본 + range slider(보이는 구간에 y 맞춤), 선택 주차 금요일까지. 제목 옆 최신값 + 20일 평균(최신 포함 최근 20거래일 단순평균) 대비 배율
 - 옵션 GEX: 딜러 콜 롱·풋 숏(naive) 가정, BS 감마(r=q=0) 재계산, $/지수 1%. VIX는 GEX 미계산
 - COT: 헤드라인 = Leveraged Funds(금융)/Managed Money(원자재). 백분위·z 3년(156주), 주간 σ = 주간 변화/3년 주간 변화 표준편차
 - 교차: 롱 크라우딩 = CTA 3년 ≥80p & COT ≥80p, 숏 = 둘 다 ≤20p, 괴리 = 부호 불일치 & |COT z|≥1

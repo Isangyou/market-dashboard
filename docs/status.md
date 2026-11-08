@@ -26,6 +26,13 @@
 | 증시자금동향 | `fetch/naver.py deposit_trend`(E32) → `data/series/deposit.json` (고객예탁금·신용잔고·주식형/혼합형/채권형 펀드, 억원) | 2002-05-03~2026-09-22 6,006일 백필(로컬 1회). update.yml 매 실행 최신 1페이지, `asof`=기준일이라 값이 같으면 파일 안 씀(재실행 0건 변경 확인). 2거래일 지연. 파일 1.26MB(gzip 약 170KB) — 화면이 전체를 읽음 |
 | ADR | 1차 `fetch/adrinfo.py`(E37) → `data/series/adr_kospi.json`·`adr_kosdaq.json` (source=adrinfo, 2019-10-07~, 1,718·1,717행). 폴백 `fetch/naver.py breadth`(E29) → `breadth_*.json` → `run.py adr_from_breadth` → `adr_naver_*.json` | **2026-10-06 adrinfo 이력 등록**: 사용자 제공 `adr_history_adrinfo.json`으로 시드(파일은 원본 그대로 보존). update-data가 평일 16:00 KST 이후 첫 실행에서 하루 1회 요청(`meta.adrinfo_fetches`), 새 날짜만 이어 붙임. 403이면 그날은 네이버 계산값을 넣고(화면 점선) 다음 날 adrinfo 값으로 교체. 네이버 계산값은 20거래일째(약 10-27)부터 생김 → 그전엔 폴백할 값이 없음. **일별 차트 활성**(VKOSPI \| ADR 행 — 10-06 배치 변경, 1년 기본·range slider·120·75 연회색 점선·adrinfo 실선/네이버 점선·출처 adrinfo.kr) |
 
+## 2026-11-08 (일) 위클리 CBOE Put/Call Ratio 독립 차트
+- 소스: `cdn.cboe.com/data/us/options/market_statistics/daily/{YYYY-MM-DD}_daily_options` (CBOE 일별 통계 화면이 읽는 JSON, `ratios` 배열) → `positioning/cboe_pc.py` → `data/positioning/cboe_pc.json`(16KB). positioning.run에서 options 섹션과 함께 갱신(실패해도 리포트 계속)
+- 백필: 265평일 요청 → 255행(2025-11-03~2026-11-06), 403 10일 = 전부 미 증시 휴장일(추수감사절·성탄·신정·MLK·대통령의날·성금요일·메모리얼·준틴스·7/3·노동절). 재실행 요청 0
+- 11/6 Index 1.26(20일 평균 대비 1.23배) · Total 0.95(1.07배) · Equity 0.59(0.97배) — pandas 독립 계산 일치(10-02 주 선택 시 0.86·0.78·0.58 / 0.89·0.94·1.05배도 일치)
+- 화면: 1440·390 콘솔 오류 0, 가로 넘침 없음, 높이 400px, 기본 범위 2026-08-06~11-06, 확대 시 y 재조정, 호버 날짜·세 값
+- 미검증: 다음 positioning 실행(Actions)에서 11/9~ 행이 붙는지, CBOE 당일 공표 시각(KST 07:10 회차에 전일분이 이미 있는지)
+
 ## 2026-11-08 (일) 위클리 옵션 체인 시각 표기·배치 시각
 - 원인: 화면의 옵션 시각 = CBOE `timestamp` 원문(예: `2026-11-08 01:30:19`) — 실제로는 **UTC 수집 시각**(HTTP Last-Modified 01:30:22 GMT와 일치)이라 KST처럼 읽혔음
 - 표기: `CBOE 11/6(금) 16:15 ET 종가 체인 (수집 11/8(일) 10:30 KST)` — 거래일 = `data.last_trade_time`(ET), 체인 시각 = 수집 − 15분, 그 거래일 16:15 ET 이후면 '종가 체인', 아니면 '장중 스냅샷'. 저장: 기초자산별 `chain_asof`, `asof.options_chain`·`options_label`. weekly.html 상단 메타·옵션 시장·딜러 감마 부제, brief 2번 블록 제목, 마크다운 '기준' 줄

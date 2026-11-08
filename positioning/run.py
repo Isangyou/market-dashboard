@@ -7,6 +7,7 @@
 
 저장 (data/positioning/):
   options_daily.json      옵션 스칼라 지표 일별 누적 {날짜: {SPX: {...}}}  ← 매 실행 누적
+  cboe_pc.json            CBOE 일별 Put/Call Ratio (Index·Total·Equity) 공표치 ← 매 실행 빠진 날만
   weeks/YYYY-MM-DD.json   주간 스냅샷(키 = 해당 주 금요일, 미국 기준). 주중엔 '진행 중'으로 덮어쓰고
                           금요일 종가 + 그 주 화요일 COT가 모두 반영되면 '확정'
   index.json              주차 목록 (weekly.html 드롭다운)
@@ -26,7 +27,7 @@ from fetch.common import log, now_kst
 from . import cot as cot_mod
 from . import cta as cta_mod
 from . import options as opt_mod
-from . import brief, report
+from . import brief, cboe_pc, report
 
 ROOT = Path(__file__).resolve().parent.parent
 SECTIONS = ("cta", "options", "cot")
@@ -88,6 +89,11 @@ def main(argv=None):
         snap["options"] = opt_mod.collect(mdate)
     if "cot" in only:
         snap["cot"] = cot_mod.collect()
+    if "options" in only:   # CBOE 일별 P/C(Index·Total·Equity) — 주차 파일과 별도 누적, weekly.html 독립 차트
+        try:
+            cboe_pc.update(ddir / "cboe_pc.json")
+        except Exception as e:  # noqa: BLE001
+            log.warning("CBOE P/C 갱신 실패: %s: %s", type(e).__name__, e)
 
     # 실패·미실행 섹션 보충
     for s in SECTIONS:
