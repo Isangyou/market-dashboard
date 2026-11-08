@@ -21,7 +21,7 @@
     intraday.py     # 장중 수집 → data/intraday/YYYY-MM-DD.json (평일 08:50~15:40만)
     market_day.py   # 거래일(휴장일) 판정 — update.yml·intraday.yml 공용
   positioning/      # 주간 포지셔닝 리포트 (CTA 모델·CBOE 옵션·CFTC COT) — docs/positioning.md
-    cta.py · options.py · cot.py · report.py(근거 수치) · brief.py(결론) · easy.py(쉽게 말하면) · run.py(진입점)
+    cta.py · options.py · cboe_pc.py(CBOE 일별 P/C) · cot.py · report.py(근거 수치) · brief.py(결론) · easy.py(쉽게 말하면) · run.py(진입점)
   data/
     latest.json     # 현재값 카드용 (값·전일대비·소스·기준시각)
     series/*.json   # 항목별 시계열 (날짜, 값, 소스)
@@ -40,7 +40,7 @@
   .github/workflows/update.yml    # 매시 + 거래일 장중 15분
   .github/workflows/intraday.yml  # 평일 08:35 시작(+15분마다 예비)→08:50 대기, 오전(~12:10)·오후(~15:40) 두 잡 루프
   .github/workflows/pages.yml     # Pages Actions 배포 (봇 푸시 후 호출됨)
-  .github/workflows/positioning.yml  # 주간 포지셔닝: KST 화~토 07:10
+  .github/workflows/positioning.yml  # 주간 포지셔닝: KST 화~금 07:10 + 금요일분 토 06:30(예비 09:30)
   requirements.txt
 ```
 
