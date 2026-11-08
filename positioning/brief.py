@@ -160,7 +160,7 @@ def block_options(snap, prev):
     wk = _get(snap, "options_week", "pc_vol_avg", "SPX")
     pwk = _get(prev, "options_week", "pc_vol_avg", "SPX")
     blk = {"key": "options", "title": "관측 시장 상태 (옵션 시장)", "kind": "observed",
-           "asof": f"CBOE {_get(snap, 'asof', 'options') or '–'}", "items": [], "note": None}
+           "asof": _get(snap, 'asof', 'options_label') or f"CBOE {_get(snap, 'asof', 'options') or '–'}", "items": [], "note": None}
     if not u:
         blk.update(note="옵션 데이터 없음", unchanged=None)
         return blk

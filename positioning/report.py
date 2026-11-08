@@ -247,5 +247,5 @@ def to_markdown(snap: dict) -> str:
         for s in b["subs"]:
             lines.append(f"        - {s}")
     src = snap.get("asof", {})
-    lines.append(f"- 기준: CTA 모델 {src.get('cta', '–')} 종가 · 옵션 CBOE {src.get('options', '–')} · COT {src.get('cot', '–')}(화)")
+    lines.append(f"- 기준: CTA 모델 {src.get('cta', '–')} 종가 · 옵션 {src.get('options_label') or 'CBOE ' + str(src.get('options') or '–')} · COT {src.get('cot', '–')}(화)")
     return "\n".join(lines)

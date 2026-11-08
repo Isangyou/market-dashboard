@@ -129,9 +129,14 @@ def main(argv=None):
     cta_asof = max((v["asof"] for v in snap["cta"].get("assets", {}).values()), default=None)
     cot_date = snap["cot"].get("report_date")
     opt_ts = next((v.get("cboe_timestamp") for v in snap["options"].get("underlyings", {}).values()), None)
-    snap["asof"] = {"cta": cta_asof, "options": opt_ts, "cot": cot_date, "us_market_date": mdate.isoformat()}
+    u0 = snap["options"].get("underlyings", {})
+    opt_chain = (u0.get("SPX") or next(iter(u0.values()), {})).get("chain_asof")
+    snap["asof"] = {"cta": cta_asof, "options": opt_ts, "options_chain": opt_chain,
+                    "options_label": opt_mod.chain_label(opt_chain), "cot": cot_date, "us_market_date": mdate.isoformat()}
     tue = (fri - timedelta(days=3)).isoformat()
-    final = cta_asof == fri.isoformat() and cot_date == tue and not snap["stale"]
+    # 금요일 정규장 중 수동 실행 등으로 장중 체인이면 확정하지 않음(다음 실행에서 종가 체인으로 확정)
+    final = (cta_asof == fri.isoformat() and cot_date == tue and not snap["stale"]
+             and (opt_chain or {}).get("kind") == "종가 체인")
     snap["status"] = "확정" if final else "진행 중"
     y, w, _ = fri.isocalendar()
     snap["week_label"] = f"{fri.year}년 {fri.month}월 {(fri.day - 1) // 7 + 1}주차 ({mon.strftime('%m/%d')}–{fri.strftime('%m/%d')}, ISO {y}-W{w:02d})"
@@ -168,6 +173,19 @@ def main(argv=None):
     print(snap["markdown"])
 
 
+def _backfill_chain_asof(snap):
+    """chain_asof 도입(2026-11-08) 전 주차: 저장된 CBOE timestamp(UTC)로 체인 기준 시각 계산(거래일은 평일 추정)"""
+    us = snap.get("options", {}).get("underlyings", {})
+    for v in us.values():
+        if "chain_asof" not in v and v.get("cboe_timestamp"):
+            v["chain_asof"] = opt_mod.chain_asof(v["cboe_timestamp"])
+    a = snap.setdefault("asof", {})
+    if us and "options_chain" not in a:
+        a["options_chain"] = (us.get("SPX") or next(iter(us.values()))).get("chain_asof")
+    if "options_chain" in a:
+        a["options_label"] = opt_mod.chain_label(a["options_chain"])
+
+
 def rebuild_conclusion(ddir: Path):
     """규칙 변경 후 기존 주차 결론 재생성. 전주 brief를 쓰므로 오래된 주부터 순서대로"""
     idx = _load(ddir / "index.json", {"weeks": []})
@@ -178,6 +196,7 @@ def rebuild_conclusion(ddir: Path):
         if not snap:
             continue
         snap.pop("summary", None)
+        _backfill_chain_asof(snap)
         snap["conclusion"] = report.build_conclusion(snap, prev)
         snap["brief"] = brief.build(snap, prev)
         snap["markdown"] = report.to_markdown(snap)

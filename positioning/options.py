@@ -17,7 +17,8 @@ from __future__ import annotations
 import math
 import re
 import time
-from datetime import date, datetime
+from datetime import date, datetime, time as dtime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
@@ -50,6 +51,47 @@ def _fetch(sym: str) -> dict:
     r = requests.get(URL.format(sym=sym), headers={"User-Agent": UA}, timeout=60)
     r.raise_for_status()
     return r.json()
+
+
+ET, KST = ZoneInfo("America/New_York"), ZoneInfo("Asia/Seoul")
+DELAY = timedelta(minutes=15)
+OPEN_ET, CLOSE_ET = dtime(9, 30), dtime(16, 15)  # 지수 옵션 정규장 마감 16:15 ET
+WD = "월화수목금토일"
+
+
+def chain_asof(ts_utc: str, last_trade_et: str | None = None) -> dict | None:
+    """CBOE 응답 시각 → 체인 기준 거래일·시각(ET).
+    ts_utc: 응답 `timestamp`(UTC, Last-Modified와 같음) = 수집 시각.
+    last_trade_et: `data.last_trade_time`(기초자산 마지막 체결, ET) → 거래일(휴장일 반영). 없으면 평일로 추정.
+    체인 시각 = 수집 시각 − 15분 지연, 그 거래일 16:15 ET 이후면 '종가 체인', 아니면 '장중 스냅샷'"""
+    try:
+        fetched = datetime.strptime(ts_utc[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return None
+    eff = (fetched - DELAY).astimezone(ET)
+    if last_trade_et:
+        d = datetime.fromisoformat(last_trade_et[:19]).date()
+    else:
+        d = eff.date() if eff.time() >= OPEN_ET else eff.date() - timedelta(days=1)
+        while d.weekday() >= 5:
+            d -= timedelta(days=1)
+    close = datetime.combine(d, CLOSE_ET, ET)
+    if eff >= close:
+        t, kind = close, "종가 체인"
+    else:
+        t, kind = max(eff, datetime.combine(d, OPEN_ET, ET)), "장중 스냅샷"
+    f = fetched.astimezone(KST)
+    return {"date": d.isoformat(), "time_et": t.strftime("%H:%M"), "kind": kind,
+            "fetched_kst": f.strftime("%Y-%m-%d %H:%M"), "fetched_utc": ts_utc[:19]}
+
+
+def chain_label(ca: dict | None) -> str:
+    """예) 'CBOE 11/6(금) 16:15 ET 종가 체인 (수집 11/8(일) 10:30 KST)'"""
+    if not ca:
+        return "CBOE –"
+    d, f = date.fromisoformat(ca["date"]), datetime.strptime(ca["fetched_kst"], "%Y-%m-%d %H:%M")
+    return (f"CBOE {d.month}/{d.day}({WD[d.weekday()]}) {ca['time_et']} ET {ca['kind']} "
+            f"(수집 {f.month}/{f.day}({WD[f.weekday()]}) {f:%H:%M} KST)")
 
 
 def parse_chain(js: dict, today: date) -> tuple[pd.DataFrame, float | None, str]:
@@ -304,11 +346,13 @@ def collect(today: date, keys: list[str] | None = None) -> dict:
     for k in keys or UNDERLYINGS:
         sym = UNDERLYINGS[k][0]
         try:
-            df, spot, ts = parse_chain(_fetch(sym), today)
+            js = _fetch(sym)
+            df, spot, ts = parse_chain(js, today)
             if df.empty or not spot:
                 raise ValueError("빈 체인 또는 기초자산 가격 없음")
             res[k] = analyze(k, df, spot, today)
             res[k]["cboe_timestamp"] = ts
+            res[k]["chain_asof"] = chain_asof(ts, (js.get("data") or {}).get("last_trade_time"))
             log.info("옵션 %-4s spot=%.2f P/C(OI)=%s GEX(BS)=%s$bn GEX(CBOE감마)=%s$bn zeroΓ=%s",
                      k, spot, res[k]["pc_oi"], res[k].get("gex_usd_bn"), res[k].get("gex_cboe_usd_bn"), res[k].get("zero_gamma"))
         except Exception as e:  # noqa: BLE001
@@ -316,7 +360,7 @@ def collect(today: date, keys: list[str] | None = None) -> dict:
             fails.append(k)
         time.sleep(1)
     return {"underlyings": res, "failed": fails,
-            "source": "CBOE delayed quotes (cdn.cboe.com/api/global/delayed_quotes/options), 15분 지연"}
+            "source": "CBOE delayed quotes (cdn.cboe.com/api/global/delayed_quotes/options), 15분 지연. 체인 시각 = 수집 시각(UTC timestamp) − 15분, 거래일 = 기초자산 last_trade_time(ET)"}
 
 
 # 일별 히스토리에 남길 스칼라 지표

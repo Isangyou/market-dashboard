@@ -371,12 +371,15 @@ async function load(week) {
   render();
 }
 
+// 옵션 체인 기준 = 거래일·시각(ET) + 장중 스냅샷/종가 체인, KST 수집 시각은 괄호 (positioning/options.py chain_label)
+const optLabel = () => W.asof?.options_label || `CBOE ${W.asof?.options || '–'}`;
+
 function render() {
   const st = document.getElementById('status');
   st.textContent = W.status; st.className = 'tag' + (W.status === '확정' ? ' final' : '');
   const a = W.asof || {};
   document.getElementById('meta').innerHTML =
-    `생성 ${esc((W.generated || '').replace('T', ' ').slice(0, 16))} KST · CTA ${esc(a.cta || '–')} 종가 · 옵션 ${esc(a.options || '–')} · COT ${esc(a.cot || '–')}(화)` +
+    `생성 ${esc((W.generated || '').replace('T', ' ').slice(0, 16))} KST · CTA ${esc(a.cta || '–')} 종가 · 옵션 ${esc(optLabel())} · COT ${esc(a.cot || '–')}(화)` +
     (W.stale && W.stale.length ? ` · <b>이전 값 유지: ${esc(W.stale.join(', '))}</b>` : '') +
     (PREV ? ` · 비교 대상: ${esc(PREV.week)} 주` : ' · 전주 스냅샷 없음(비교 생략)');
   renderConclusion(); renderCOT(); renderOptObs(); renderGamma(); renderCTA(); renderCross();
@@ -494,7 +497,7 @@ function renderOptObs() {
   const PWK = PREV?.options_week?.pc_vol_avg || {};
   const ss = document.getElementById('opt-sel');
   const keys = Object.keys(U);
-  document.getElementById('opt-sub').textContent = `CBOE 지연 체인 ${W.asof?.options || '–'} · 이번 주 일별 스냅샷 ${W.options_week?.days?.length || 0}일 · 관측값만(모델 가정 없음)` + (W.options?.failed?.length ? ` · 실패: ${W.options.failed.join(', ')}` : '');
+  document.getElementById('opt-sub').textContent = `${optLabel()} · 15분 지연 · 이번 주 일별 스냅샷 ${W.options_week?.days?.length || 0}일 · 관측값만(모델 가정 없음)` + (W.options?.failed?.length ? ` · 실패: ${W.options.failed.join(', ')}` : '');
   if (!keys.length) { document.getElementById('opt-cards').innerHTML = '<div class="empty">옵션 데이터 없음</div>'; empty('opth'); document.getElementById('opt-table').innerHTML = ''; return; }
   if (!U[selOpt]) selOpt = keys[0];
   ss.innerHTML = keys.map(k => `<option value="${k}"${k === selOpt ? ' selected' : ''}>${esc(U[k].name)}</option>`).join('');
@@ -553,7 +556,7 @@ let selGex = 'SPX';
 function renderGamma() {
   const U = W.options?.underlyings || {}, PU = PREV?.options?.underlyings || {};
   const keys = Object.keys(U).filter(k => isNum(U[k].gex_usd_bn));
-  document.getElementById('gex-sub').textContent = `CBOE 지연 체인 ${W.asof?.options || '–'} 기준 계산`;
+  document.getElementById('gex-sub').textContent = `${optLabel()} 기준 계산`;
   if (!keys.length) { document.getElementById('gex-cards').innerHTML = '<div class="empty">GEX 데이터 없음</div>'; ['gexk', 'gexp', 'gexh'].forEach(id => empty(id)); document.getElementById('gex-table').innerHTML = ''; return; }
   if (!U[selGex] || !keys.includes(selGex)) selGex = keys[0];
   const ss = document.getElementById('gex-sel');

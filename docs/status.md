@@ -26,6 +26,16 @@
 | 증시자금동향 | `fetch/naver.py deposit_trend`(E32) → `data/series/deposit.json` (고객예탁금·신용잔고·주식형/혼합형/채권형 펀드, 억원) | 2002-05-03~2026-09-22 6,006일 백필(로컬 1회). update.yml 매 실행 최신 1페이지, `asof`=기준일이라 값이 같으면 파일 안 씀(재실행 0건 변경 확인). 2거래일 지연. 파일 1.26MB(gzip 약 170KB) — 화면이 전체를 읽음 |
 | ADR | 1차 `fetch/adrinfo.py`(E37) → `data/series/adr_kospi.json`·`adr_kosdaq.json` (source=adrinfo, 2019-10-07~, 1,718·1,717행). 폴백 `fetch/naver.py breadth`(E29) → `breadth_*.json` → `run.py adr_from_breadth` → `adr_naver_*.json` | **2026-10-06 adrinfo 이력 등록**: 사용자 제공 `adr_history_adrinfo.json`으로 시드(파일은 원본 그대로 보존). update-data가 평일 16:00 KST 이후 첫 실행에서 하루 1회 요청(`meta.adrinfo_fetches`), 새 날짜만 이어 붙임. 403이면 그날은 네이버 계산값을 넣고(화면 점선) 다음 날 adrinfo 값으로 교체. 네이버 계산값은 20거래일째(약 10-27)부터 생김 → 그전엔 폴백할 값이 없음. **일별 차트 활성**(VKOSPI \| ADR 행 — 10-06 배치 변경, 1년 기본·range slider·120·75 연회색 점선·adrinfo 실선/네이버 점선·출처 adrinfo.kr) |
 
+## 2026-11-08 (일) 위클리 옵션 체인 시각 표기·배치 시각
+- 원인: 화면의 옵션 시각 = CBOE `timestamp` 원문(예: `2026-11-08 01:30:19`) — 실제로는 **UTC 수집 시각**(HTTP Last-Modified 01:30:22 GMT와 일치)이라 KST처럼 읽혔음
+- 표기: `CBOE 11/6(금) 16:15 ET 종가 체인 (수집 11/8(일) 10:30 KST)` — 거래일 = `data.last_trade_time`(ET), 체인 시각 = 수집 − 15분, 그 거래일 16:15 ET 이후면 '종가 체인', 아니면 '장중 스냅샷'. 저장: 기초자산별 `chain_asof`, `asof.options_chain`·`options_label`. weekly.html 상단 메타·옵션 시장·딜러 감마 부제, brief 2번 블록 제목, 마크다운 '기준' 줄
+- 판정 테스트 8건(일요일 수집→금 종가, 금 11:45 EST→11:30 장중, 16:25→16:10 장중, 16:35→종가, 월 개장 전→금 종가 등) 기대대로. 실제 CBOE 수집(scratch 폴더) SPX·SPY·NDX 모두 11/6 16:15 종가 체인
+- 과거 7개 주차: `--rebuild-conclusion`이 저장된 timestamp로 채움(거래일 평일 추정) → 전부 금요일 종가 체인. asof·brief·markdown·chain_asof 외 변경 0건
+- 확정 조건에 '종가 체인' 추가 — 금요일 정규장 중 수동 실행이면 '진행 중'으로 남고 다음 실행에서 확정
+- 스케줄: 월~목분 KST 화~금 07:10(UTC 월~목 22:10) 그대로, **금요일분 KST 토 06:30**(UTC 금 21:30 = 17:30 EDT / 16:30 EST) + 예비 토 09:30. 참고: 실제 schedule 기동은 cron보다 3~5시간 늦음(10-27~11-07: 22:10 UTC 예정 → 00:35~03:27 UTC)
+- 렌더링 1440·390 콘솔 오류 0, 가로 넘침 없음
+- 미검증: 장중(정규장 중) 수집이 실제로 '장중 스냅샷'으로 찍히는지(자동 배치는 전부 장 마감 후), EST 기간 06:30 KST 회차는 마감+15분 직후라 CBOE CDN 캐시가 늦으면 장중으로 판정될 수 있음 → 그 경우 예비 회차가 확정
+
 ## 2026-10-18 (일) 위클리 결론 구조 — 데이터 성격 순
 - `brief` 구조 교체: `line·changes·risk` → `blocks`[1 관측 포지션(COT) · 2 관측 시장 상태(옵션) · 3 추정(모델, 항목별 `assume`)] + `overall`("관측: …. 모델상으로는 ….") — 규칙은 docs/positioning.md
 - weekly.html 섹션 재배치: 0 결론 → 1 COT(관측) → 2 옵션 시장(관측: IV30·스큐·P/C·최대 OI 행사가 카드·표·일별 추이) → 3 추정: 3-1 딜러 감마(카드·행사가별 GEX·프로파일·표·GEX/zero-gamma 일별 추이) · 3-2 CTA · 3-3 교차. 옵션 섹션의 GEX 항목은 3-1로 분리, 기초자산 선택도 따로

@@ -11,7 +11,7 @@ cd ~/Documents/dash
 .venv/bin/python -m positioning.run --rebuild-conclusion   # 수집 없이 저장된 전 주차 결론만 재생성(규칙 바꾼 뒤)
 gh workflow run positioning-weekly -R Isangyou/market-dashboard   # Actions 수동 실행
 ```
-Actions: `.github/workflows/positioning.yml` — KST 화~토 07:10 (UTC 월~금 22:10). 푸시 후 pages.yml 호출.
+Actions: `.github/workflows/positioning.yml` — KST 화~금 07:10 (UTC 월~목 22:10) + 금요일분 KST 토 06:30 (UTC 금 21:30, 정규장 마감 후) · 예비 토 09:30. 푸시 후 pages.yml 호출.
 
 ## 파일
 | 경로 | 내용 |
@@ -59,6 +59,7 @@ Actions: `.github/workflows/positioning.yml` — KST 화~토 07:10 (UTC 월~금 
 ## 모델·가정 (요약 — 상세는 각 모듈 docstring)
 - CTA: 룩백 20/60/125/250일 위험조정 모멘텀 tanh 평균 × 변동성 레버리지(3년 중앙 σ/60일 σ, 상한 1.5). ±100% = 정상 변동성 풀 포지션.
   전환가 = 다음 주말 기준 P_{t+5−L}. 시나리오 = 1주 ±1·2σ 로그 선형 경로 재계산
+- 옵션 체인 기준 시각(`asof.options_chain`·`options_label`, 기초자산별 `chain_asof`): 응답 `timestamp`는 **UTC 수집 시각**(HTTP Last-Modified와 같음 — 11-08 확인 01:30:19 = Last-Modified 01:30:22 GMT), 거래일은 `data.last_trade_time`(ET, 기초자산 마지막 체결). 체인 시각 = 수집 − 15분 지연, 그 거래일 16:15 ET 이후면 '종가 체인'(16:15로 표기), 아니면 '장중 스냅샷'. 표기 예) `CBOE 11/6(금) 16:15 ET 종가 체인 (수집 11/8(일) 10:30 KST)`. 11-08 이전 주차는 `last_trade_time`을 저장하지 않아 거래일을 평일로 추정(`--rebuild-conclusion`이 채움). 장중 스냅샷이면 그 주는 '확정'하지 않음
 - 옵션 GEX: 딜러 콜 롱·풋 숏(naive) 가정, BS 감마(r=q=0) 재계산, $/지수 1%. VIX는 GEX 미계산
 - COT: 헤드라인 = Leveraged Funds(금융)/Managed Money(원자재). 백분위·z 3년(156주), 주간 σ = 주간 변화/3년 주간 변화 표준편차
 - 교차: 롱 크라우딩 = CTA 3년 ≥80p & COT ≥80p, 숏 = 둘 다 ≤20p, 괴리 = 부호 불일치 & |COT z|≥1
