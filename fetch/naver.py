@@ -81,13 +81,15 @@ def _investor_row(item: dict) -> dict:
 
 
 @safe
-def investor_daily(market: str, pages: int = 1, page_size: int = 30):
-    """E3. 일자별 순매수 (억원). market: KOSPI|KOSDAQ. 최신일부터."""
+def investor_daily(market: str, pages: int = 1, page_size: int = 30, trade_type: str = "KRX"):
+    """E3. 일자별 순매수 (억원). market: KOSPI|KOSDAQ. 최신일부터.
+    trade_type: KRX(기본) | NXT(넥스트레이드 단독, 2025-03-04~. 프리·애프터마켓 포함, 당일 값은 20:00 마감 전까지 변함)"""
     rows = []
     bizdate = now_kst().strftime("%Y%m%d")
+    src = "naver:trend_daily" if trade_type == "KRX" else f"naver:trend_daily_{trade_type.lower()}"
     for page in range(pages):
         b = _get("/domestic/market/trend/daily",
-                 {"tradeType": "KRX", "marketType": market, "bizdate": bizdate,
+                 {"tradeType": trade_type, "marketType": market, "bizdate": bizdate,
                   "startIdx": page, "pageSize": page_size})
         if b is None:
             if not rows:
@@ -95,8 +97,10 @@ def investor_daily(market: str, pages: int = 1, page_size: int = 30):
             break
         for it in b["content"]:
             d = ymd_to_iso(it["bizdate"])
-            rows.append({"date": d, **_investor_row(it),
-                         "source": "naver:trend_daily", "asof": d})
+            asof = d
+            if trade_type == "NXT" and d == now_kst().date().isoformat():   # 당일 NXT는 20:00 마감 전 잠정 → 시각 표기
+                asof = min(now_kst().strftime("%Y-%m-%dT%H:%M"), f"{d}T20:00") + ":00+09:00"
+            rows.append({"date": d, **_investor_row(it), "source": src, "asof": asof})
         if b.get("last") in (True, "true"):
             break
     return pd.DataFrame(rows)

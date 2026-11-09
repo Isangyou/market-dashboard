@@ -26,6 +26,19 @@
 | 증시자금동향 | `fetch/naver.py deposit_trend`(E32) → `data/series/deposit.json` (고객예탁금·신용잔고·주식형/혼합형/채권형 펀드, 억원) | 2002-05-03~2026-09-22 6,006일 백필(로컬 1회). update.yml 매 실행 최신 1페이지, `asof`=기준일이라 값이 같으면 파일 안 씀(재실행 0건 변경 확인). 2거래일 지연. 파일 1.26MB(gzip 약 170KB) — 화면이 전체를 읽음 |
 | ADR | 1차 `fetch/adrinfo.py`(E37) → `data/series/adr_kospi.json`·`adr_kosdaq.json` (source=adrinfo, 2019-10-07~, 1,718·1,717행). 폴백 `fetch/naver.py breadth`(E29) → `breadth_*.json` → `run.py adr_from_breadth` → `adr_naver_*.json` | **2026-10-06 adrinfo 이력 등록**: 사용자 제공 `adr_history_adrinfo.json`으로 시드(파일은 원본 그대로 보존). update-data가 평일 16:00 KST 이후 첫 실행에서 하루 1회 요청(`meta.adrinfo_fetches`), 새 날짜만 이어 붙임. 403이면 그날은 네이버 계산값을 넣고(화면 점선) 다음 날 adrinfo 값으로 교체. 네이버 계산값은 20거래일째(약 10-27)부터 생김 → 그전엔 폴백할 값이 없음. **일별 차트 활성**(VKOSPI \| ADR 행 — 10-06 배치 변경, 1년 기본·range slider·120·75 연회색 점선·adrinfo 실선/네이버 점선·출처 adrinfo.kr) |
 
+## 2026-11-09 (월) 현물 투자자 KRX+NXT 통합 · 장중 08:00~20:05
+- 확인(Playwright, 16:13): 투자자별 매매동향 화면에 **KRX ↔ NXT 토글**만 있고 통합 선택지 없음. `tradeType=NXT`로 E3(일별, 2025-03-04~ 412일)·E25(시간별, 08:00~)·E5 모두 동작. 통합 tradeType 8종 전부 400 → **KRX + NXT 직접 합산** (endpoints.md E25-NXT)
+- 장중(`fetch/intraday.py`): `investor_nxt`(NXT 단독) + `investor_total`(시각별 직전 값끼리 합산, 09:00 전 KRX=0). KRX `investor`도 15:40 컷 해제 → 20:05까지(15:40 이후 KRX 시간외 포함). 지수·선물·프로그램·환율은 그대로 ~15:40. 수집 창 08:00~20:05
+  - 최신 행이 생성 중이면 일부 코드만 옴(NXT KOSPI 16:24 외국인 0.0 → 재조회 +490.2억) → 코드 수가 모자란 행은 건너뜀
+  - 11-09 16:24 KOSPI 외국인: KRX -6,753.1억 + NXT +490.2억 = **-6,262.9억**, 기관계(통합) +6,798.0억 / KOSDAQ 통합 -919.3억. 프리마켓 NXT 08:30 -236.8억 · 09:00 -691.6억
+  - 1회 수집 약 26초(첫 수집, 증분 아님) — timeout 150초 안
+- 배치(`intraday.yml`): cron 07:45 + 08:00~08:45 15분 예비 → **08:00 시작**, 오전(~12:10, timeout 300분)·오후(~15:40) 3분 + **저녁 잡 `ev`(15:40~20:05, `INTERVAL=600` 10분)**. guard 기준점 08:50 → 08:00. 저녁은 10분 간격이라 IDLE_MAX 600초에 걸릴 수 있으나 예비 cron이 15:35에 끝나 판정 안 받음
+- 장중 화면: 외국인 현물 카드(코스피·코스닥) 큰 글씨 = 통합(태그 'KRX+NXT 통합 · 프리마켓 포함'), 아래 기관계(통합), 작은 글씨 KRX 단독 외국인·기관계. 메인 차트 투자자 선 = 통합, x축 07:55~(애프터마켓 행 있으면 마지막+10분, 최대 20:05), 08:00~09:00·15:30~20:00 연한 음영(그 구간에 NXT 행 있을 때만). 60일 위치 = **KRX 단독 유지**(15:40 이후엔 '시간외 일부 포함' 표기). 자동 갱신 1분 주기 구간 08:00~20:10
+- 일별 화면: `run.py`가 `investor_nxt_{kospi,kosdaq}.json`(412행) 수집, latest.json `investor[m].nxt`. 외국인 카드 큰 글씨 KRX 그대로 + 작은 글씨 'KRX 최종치 (NXT 제외) · NXT 포함 합산 -6,312억 (NXT +488억 · 16:23 잠정)'. 당일 NXT asof는 20:00까지 시각 포함
+- 렌더링 intraday·index 1440·390 콘솔 오류 0, 가로 넘침 없음
+- **별건 발견**: E35 종목 일별(`/domestic/detail/{code}/trend`) **404** (11-09 16:23 run.py) → 삼성전자·SK하이닉스 이격도 갱신 멈춤. 미조치
+- 미검증: Actions 07:45 cron 실제 기동·08:00 첫 커밋, 저녁 잡 10분 루프 끝(20:05)까지, NXT 프리마켓 08:00~08:50 증분 수집 중 부분 행 빈도, 휴장일(KRX만 휴장·NXT도 휴장) 판정
+
 ## 2026-11-08 (일) 위클리 CBOE Put/Call Ratio 독립 차트
 - 소스: `cdn.cboe.com/data/us/options/market_statistics/daily/{YYYY-MM-DD}_daily_options` (CBOE 일별 통계 화면이 읽는 JSON, `ratios` 배열) → `positioning/cboe_pc.py` → `data/positioning/cboe_pc.json`(16KB). positioning.run에서 options 섹션과 함께 갱신(실패해도 리포트 계속)
 - 백필: 265평일 요청 → 255행(2025-11-03~2026-11-06), 403 10일 = 전부 미 증시 휴장일(추수감사절·성탄·신정·MLK·대통령의날·성금요일·메모리얼·준틴스·7/3·노동절). 재실행 요청 0

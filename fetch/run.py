@@ -315,6 +315,17 @@ def main():
         elif m in prev_inv:
             investor[m] = {**prev_inv[m], "stale": True}
             log.warning("investor %s: 실패 → stale", m)
+        # NXT(넥스트레이드) 일별 — KRX 일별에 없는 프리(08:00~)·애프터(~20:00)마켓 포함. 카드에 'NXT 포함 합산'으로만 씀
+        sn = Series(f"investor_nxt_{m.lower()}", f"{m} 투자자별 순매수 (NXT)", "억원")
+        long_n = args.backfill or len(sn) < 200
+        dfn = call("naver", naver.investor_daily, m, 5 if long_n else 1, 100 if long_n else 30, "NXT")
+        n_nxt = sn.merge(dfn)
+        if sn.save():
+            changed.append(f"series/investor_nxt_{m.lower()}.json (+{n_nxt})")
+        if m in investor:
+            nx = sn.by_date.get(investor[m]["date"])
+            investor[m]["nxt"] = ({k: nx[k] for k in ("date", "foreign", "institution", "individual", "source", "asof")}
+                                  | {"stale": dfn is None} if nx else None)
 
     # ── 개별 종목 일별 종가 (이격도 차트용) ── 첫 실행 3페이지(약 300거래일), 이후 1페이지
     for code, name in naver.STOCKS.items():

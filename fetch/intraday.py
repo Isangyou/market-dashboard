@@ -5,7 +5,8 @@
 2026-09-28 오전까지는 5분 간격. 스냅샷은 t(HH:MM) 키로 병합·정렬만 하므로 간격이 섞여도 무방.
 
 실행: python -m fetch.intraday [--force] [--data-dir DIR]
-  - 거래일 + 08:50~15:40 KST 에만 동작. --force는 두 조건을 무시(검증용)
+  - 거래일 + 08:00~20:05 KST 에만 동작. --force는 두 조건을 무시(검증용)
+    (08:00~09:00 NXT 프리마켓, 15:30~20:00 NXT 애프터마켓. 지수·선물·프로그램·환율은 그대로 ~15:40)
   - 섹션마다 데이터의 거래일이 대상일과 다르면 버림 (장 시작 전엔 API가 전 거래일 값을 줌)
   - 실패한 섹션은 이전 값 유지 + stale: true
 종료코드: 0 = 기록(변경 있음/없음 무관), 3 = 장외·휴장이라 건너뜀, 1 = 전 섹션 실패
@@ -23,11 +24,14 @@ from . import market_day, naver, yf  # noqa: E402
 from .common import log, now_kst, ymd_to_iso  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
-WINDOW = ("08:50", "15:40")
+WINDOW = ("08:00", "20:05")
 # 이력 저장 기준 = 수집 종료 시각. 실시간 수집과 --force 백필이 같은 기준이 되도록 통일.
 # 15:40이면 정규장 + 장 마감 동시호가(15:30 종가 단일가) 반영, 시간외(15:40~18:00)·NXT 미포함.
 # 선물 정규장은 15:45 마감이라 마지막 5분은 빠짐.
 KEEP_UNTIL = "15:40"
+# 현물 투자자(E25)는 KRX·NXT 모두 끝까지 저장: KRX는 15:40 이후 시간외(~18:00), NXT는 애프터마켓(~20:00)
+INV_UNTIL = "20:05"
+PRE_OPEN = "09:00"   # KRX 개장. 이전은 NXT 프리마켓(08:00~08:50)만
 MARKETS = ["KOSPI", "KOSDAQ"]
 SKIPPED = 3
 
@@ -63,12 +67,13 @@ def index_chart(market: str):
             "bars": bars}
 
 
-def _time_rows(market: str, date: str, have_until: str = ""):
-    """E25/E26 페이지 순회. 최신순 → 오름차순으로 반환. have_until 이하 시각이 나오면 멈춤(증분)."""
+def _time_rows(market: str, date: str, have_until: str = "", trade: str = "KRX"):
+    """E25/E26 페이지 순회. 최신순 → 오름차순으로 반환. have_until 이하 시각이 나오면 멈춤(증분).
+    trade: KRX | NXT (E25 현물만. NXT는 08:00부터, KRX+NXT 통합 tradeType은 없음 — 400)"""
     rows, page = [], 0
     while True:
         b = naver._get("/domestic/market/trend/time",
-                       {"tradeType": "KRX", "marketType": market, "bizdate": date.replace("-", ""),
+                       {"tradeType": trade, "marketType": market, "bizdate": date.replace("-", ""),
                         "startIdx": page, "pageSize": 100})
         if b is None:
             return None if not rows else rows[::-1]
@@ -81,17 +86,25 @@ def _time_rows(market: str, date: str, have_until: str = ""):
     return rows[::-1]
 
 
-def investor_time(market: str, date: str, prev: dict = None):
-    """E25. 현물 투자자별 장중 누적 (억원)."""
+INV_BASIS = {
+    "KRX": "KRX 단독 장중 누적 잠정치 (NXT 제외, 15:40 이후는 KRX 시간외 포함)",
+    "NXT": "NXT(넥스트레이드) 단독 장중 누적 잠정치 (프리마켓 08:00~ · 애프터마켓 ~20:00 포함)",
+}
+
+
+def investor_time(market: str, date: str, prev: dict = None, trade: str = "KRX"):
+    """E25. 현물 투자자별 장중 누적 (억원). trade: KRX | NXT"""
     prev_rows = (prev or {}).get("rows", [])
-    prev_rows = [r for r in prev_rows if r["t"] <= KEEP_UNTIL]
-    raw = _time_rows(market, date, prev_rows[-1]["t"] if prev_rows else "")
+    prev_rows = [r for r in prev_rows if r["t"] <= INV_UNTIL]
+    raw = _time_rows(market, date, prev_rows[-1]["t"] if prev_rows else "", trade)
     if raw is None:
         return None
-    by_t = {r["t"]: r for r in prev_rows if r["t"] <= KEEP_UNTIL}
+    by_t = {r["t"]: r for r in prev_rows}
+    # 막 생성 중인 최신 행은 일부 투자자 코드만 채워져 옴(11-09 NXT 16:24: 외국인 0 → 다음 조회 +442억) → 코드 수가 모자란 행은 건너뜀(다음 회차에 다시 받음)
+    full = max((len(it["netAmounts"]) for it in raw), default=0)
     for it in raw:
         t = hm(it["time"])
-        if t > KEEP_UNTIL:
+        if t > INV_UNTIL or len(it["netAmounts"]) < full:
             continue
         v = naver._investor_row(it)
         by_t[t] = {"t": t, "foreign": round(v["foreign"], 1), "individual": round(v["individual"], 1),
@@ -99,8 +112,35 @@ def investor_time(market: str, date: str, prev: dict = None):
     rows = [by_t[t] for t in sorted(by_t)]
     if not rows:
         return None
-    return {"source": "naver:trend_time", "unit": "억원", "asof": iso(date, rows[-1]["t"]),
-            "basis": f"KRX 장중 누적 잠정치 (~{KEEP_UNTIL}, 시간외·NXT 제외)", "rows": rows}
+    src = "naver:trend_time" if trade == "KRX" else f"naver:trend_time_{trade.lower()}"
+    return {"source": src, "unit": "억원", "asof": iso(date, rows[-1]["t"]), "basis": INV_BASIS[trade], "rows": rows}
+
+
+def investor_combined(krx: dict, nxt: dict, date: str):
+    """KRX + NXT 시각별 합산 (네이버에 통합 구분 없음 → 직접 계산). 두 시계열을 각자 직전 값으로 채워 더한다.
+    KRX 행이 없는 09:00 이전(프리마켓)은 KRX=0. KRX가 없는데 09:00 이후 시각이 있으면 합산 불가 → None"""
+    if not nxt or not nxt.get("rows"):
+        return None
+    kr, nr = (krx or {}).get("rows", []), nxt["rows"]
+    if not kr and nr[-1]["t"] >= PRE_OPEN:
+        return None
+    keys = ("foreign", "individual", "institution")
+    times = sorted({r["t"] for r in kr} | {r["t"] for r in nr})
+    ki = ni = -1
+    zero = dict.fromkeys(keys, 0.0)
+    rows = []
+    for t in times:
+        while ki + 1 < len(kr) and kr[ki + 1]["t"] <= t:
+            ki += 1
+        while ni + 1 < len(nr) and nr[ni + 1]["t"] <= t:
+            ni += 1
+        a = kr[ki] if ki >= 0 else zero
+        b = nr[ni] if ni >= 0 else zero
+        rows.append({"t": t, **{k: round(a[k] + b[k], 1) for k in keys}})
+    return {"source": f"{(krx or {}).get('source', 'naver:trend_time')} + {nxt['source']}", "unit": "억원",
+            "asof": iso(date, rows[-1]["t"]),
+            "basis": "KRX+NXT 통합 (직접 합산) · 프리마켓 08:00~ 포함 · KRX는 15:40 이후 시간외, NXT는 애프터마켓 ~20:00 포함",
+            "stale": bool((krx or {}).get("stale") or nxt.get("stale")), "rows": rows}
 
 
 def futures_time(date: str, prev: dict = None):
@@ -210,6 +250,8 @@ def snapshot(now, doc) -> dict:
             "kospi": k.get("value"), "kospi_chg_pct": k.get("change_pct"),
             "foreign_kospi": last(doc["investor"].get("KOSPI"), "foreign"),
             "foreign_kosdaq": last(doc["investor"].get("KOSDAQ"), "foreign"),
+            "foreign_kospi_total": last(doc["investor_total"].get("KOSPI"), "foreign"),
+            "foreign_kosdaq_total": last(doc["investor_total"].get("KOSDAQ"), "foreign"),
             "fut_foreign": last(doc["futures"], "foreign"),
             "program_kospi": last(doc["program"].get("KOSPI"), "total"),
             "usdkrw": last(doc["usdkrw"], "v")}
@@ -250,6 +292,7 @@ def main():
     path = out_dir / f"{date}.json"
     old = json.loads(path.read_text()) if path.exists() else {}
     o_idx, o_inv, o_prg = old.get("index", {}), old.get("investor", {}), old.get("program", {})
+    o_nxt = old.get("investor_nxt", {})
 
     same_day = lambda sec: sec if sec and sec.get("date", date) == date else None  # noqa: E731
     kosdaq = index_chart("KOSDAQ")
@@ -259,13 +302,17 @@ def main():
                   "KOSDAQ": keep_or_stale(same_day(kosdaq), o_idx.get("KOSDAQ"), "index KOSDAQ")},
         "investor": {m: keep_or_stale(investor_time(m, date, o_inv.get(m)), o_inv.get(m), f"investor {m}")
                      for m in MARKETS},
+        "investor_nxt": {m: keep_or_stale(investor_time(m, date, o_nxt.get(m), "NXT"), o_nxt.get(m), f"investor_nxt {m}")
+                         for m in MARKETS},
         "futures": keep_or_stale(futures_time(date, old.get("futures")), old.get("futures"), "futures"),
         "futures_price": keep_or_stale(futures_price(date), old.get("futures_price"), "futures_price"),
         "program": {m: keep_or_stale(program_chart(m, date), o_prg.get(m), f"program {m}") for m in MARKETS},
         "usdkrw": keep_or_stale(usdkrw_round(date), old.get("usdkrw"), "usdkrw"),
         "us_futures": us_futures(now, date, old.get("us_futures")),
     }
-    ok = [doc["index"]["KOSPI"], doc["investor"]["KOSPI"], doc["futures"], doc["program"]["KOSPI"], doc["usdkrw"]]
+    doc["investor_total"] = {m: investor_combined(doc["investor"][m], doc["investor_nxt"][m], date) for m in MARKETS}
+    # 08:00~09:00엔 NXT만 있음 → NXT도 '성공 섹션'으로 셈
+    ok = [doc["index"]["KOSPI"], doc["investor"]["KOSPI"], doc["investor_nxt"]["KOSPI"], doc["futures"], doc["program"]["KOSPI"], doc["usdkrw"]]
     if not any(x and not x.get("stale") for x in ok):
         print("모든 섹션 실패 (또는 대상일 데이터 없음) → 기록 안 함")
         return 1 if not args.force else SKIPPED
@@ -301,6 +348,9 @@ def main():
             print(f"  {u['symbol']} {u['rows'][-1]['c'] if u['rows'] else '-'} (기준 {u['prev_close']}) 1분봉 {len(u['rows'])}개 "
                   f"마지막 {u['asof'][11:16]} 지연 {u.get('delay_min')}분 stale={u.get('stale')}")
     print(f"  외국인 현물 KOSPI {inv.get('foreign')}억 @{inv.get('t')}  행 {len((doc['investor']['KOSPI'] or {}).get('rows', []))}")
+    for m in MARKETS:
+        nx, tt = (doc["investor_nxt"][m] or {}).get("rows", [{}])[-1], (doc["investor_total"][m] or {}).get("rows", [{}])[-1]
+        print(f"  {m} 외국인 NXT {nx.get('foreign')}억 @{nx.get('t')} · KRX+NXT {tt.get('foreign')}억 기관계 {tt.get('institution')}억 @{tt.get('t')}")
     print(f"  외국인 선물 {fut.get('foreign')}계약 ({fut.get('foreign_amt')}억) @{fut.get('t')}")
     print(f"  프로그램 KOSPI 전체 {prg.get('total')}억 (차익 {prg.get('arb')} / 비차익 {prg.get('nonarb')}) @{prg.get('t')}")
     print(f"  USD/KRW 하나은행 고시 {fx.get('v')} @{fx.get('t')}  행 {len((doc['usdkrw'] or {}).get('rows', []))}")

@@ -5,10 +5,11 @@
 #   종료 시각이 3분 경계가 아니어도(15:40) 그 시각에 마지막 1회를 돈다
 #   ONCE=1  → 시각과 무관하게 1회만 실행하고 종료 (수동 점검용)
 #   FORCE=1 → intraday.py --force (거래일·시간 조건 무시, 최근 거래일 기록)
-#   WAIT_UNTIL=HH:MM → 루프 시작 전 그 시각(KST)까지 대기 (cron 08:35 → 08:50 시작)
+#   WAIT_UNTIL=HH:MM → 루프 시작 전 그 시각(KST)까지 대기 (cron 07:45 → 08:00 시작, NXT 프리마켓)
+#   INTERVAL=초 → 회차 간격 (기본 180. 저녁 애프터마켓 잡은 600)
 #   GH_TOKEN 이 있으면 푸시 후 pages.yml 배포 호출
 set -uo pipefail
-INTERVAL=180   # 초. 3분 경계(:00,:03,…)마다 실행
+INTERVAL="${INTERVAL:-180}"   # 초. 기본 3분 경계(:00,:03,…)마다 실행
 FETCH_TIMEOUT=150   # 초. 수집 1회 상한 (넘으면 종료코드 124로 끊고 다음 회차)
 END="${1:?종료 시각 HH:MM}"
 INCLUSIVE="${2:-}"

@@ -1,7 +1,8 @@
 name: intraday
 
-# 평일 08:35 KST 시작(러너 준비·cron 지연 여유) → 08:50까지 대기 → 3분 간격 fetch.intraday 루프.
-# 잡 6시간 제한 때문에 오전(~12:10)·오후(12:10~15:40) 두 잡으로 나눔. cron은 UTC (KST-9)
+# 평일 07:45 KST 시작(러너 준비·cron 지연 여유) → 08:00까지 대기 → 3분 간격 fetch.intraday 루프.
+# 08:00 = NXT 프리마켓 시작(현물 투자자 KRX+NXT 통합 집계, 2026-11-09). 15:40 이후는 NXT 애프터마켓(~20:00)용 10분 간격.
+# 잡 6시간 제한 때문에 오전(~12:10)·오후(12:10~15:40)·저녁(15:40~20:05) 세 잡으로 나눔. cron은 UTC (KST-9)
 #
 # GitHub schedule은 부하 시 지연·누락됨(2026-09-28: 08:35 1회짜리 cron이 통째로 누락,
 # update-data 매시 cron도 이틀간 약 48회 중 6회만 실행). 그래서 15분마다 예비 트리거를 둔다.
@@ -9,7 +10,8 @@ name: intraday
 # 이미 돌고 있는 루프가 있으면 calendar 잡의 중복 판정으로 새 실행은 바로 끝난다.
 on:
   schedule:
-    - cron: "35,50 23 * * 0-4"      # KST 월~금 08:35, 08:50
+    - cron: "45 22 * * 0-4"          # KST 월~금 07:45
+    - cron: "0,15,30,45 23 * * 0-4"  # KST 월~금 08:00~08:45 (예비)
     - cron: "5,20,35,50 0-5 * * 1-5" # KST 월~금 09:05~14:50 (예비)
     - cron: "5,20,35 6 * * 1-5"     # KST 월~금 15:05~15:35 (예비)
   workflow_dispatch:
@@ -27,7 +29,8 @@ permissions:
 # workflow concurrency는 쓰지 않음: 쓰면 예비 트리거가 진행 중 루프 뒤에 pending으로 쌓였다가
 # 15:40 이후에 빈 실행이 됨. 대신 calendar 잡이 scripts/intraday_guard.sh로 판정:
 # 먼저 시작된 실행이 살아 있으면 건너뜀, 10분 넘게 장중 커밋이 없으면(09-28 무응답 사례) 취소하고 새로 시작.
-# 시작 트리거: 외부 스케줄러(cron-job.org → workflow_dispatch API, 08:35/08:50/09:05) + 아래 GitHub cron(보조)
+# 시작 트리거: GitHub cron(07:45 + 15분마다 예비). 외부 스케줄러(cron-job.org)는 보류 중
+# 저녁 잡은 10분 간격이라 IDLE_MAX(600초)에 걸릴 수 있으나 예비 cron이 15:35에 끝나 판정 대상이 되지 않음
 
 jobs:
   calendar:
@@ -59,7 +62,7 @@ jobs:
     # 스케줄·loop: 거래일에만 / once·once-force: 달력 무관 1회
     if: always() && ((needs.calendar.outputs.trading == 'true' && needs.calendar.outputs.dup != 'true' && (inputs.mode == '' || inputs.mode == 'loop')) || inputs.mode == 'once' || inputs.mode == 'once-force')
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 300   # 07:45 시작 → 12:10 (약 4.5h)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -67,10 +70,10 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install -r requirements.txt
-      - name: 오전 루프 (08:50~12:10 KST) / 수동 1회
+      - name: 오전 루프 (08:00~12:10 KST) / 수동 1회
         env:
           GH_TOKEN: ${{ github.token }}
-          WAIT_UNTIL: ${{ (inputs.mode == '' || inputs.mode == 'loop') && '08:50' || '' }}
+          WAIT_UNTIL: ${{ (inputs.mode == '' || inputs.mode == 'loop') && '08:00' || '' }}
         run: |
           case "${{ inputs.mode }}" in
             once)       ONCE=1 scripts/intraday_loop.sh 12:10 ;;
@@ -96,3 +99,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: scripts/intraday_loop.sh 15:40 inclusive
+
+  ev:
+    needs: [calendar, pm]
+    # NXT 애프터마켓(15:30~20:00) + KRX 시간외. 오후 잡이 실패해도 돈다
+    if: always() && needs.calendar.outputs.trading == 'true' && needs.calendar.outputs.dup != 'true' && (inputs.mode == '' || inputs.mode == 'loop')
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: 저녁 루프 (15:40~20:05 KST, 10분 간격)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INTERVAL: "600"
+        run: scripts/intraday_loop.sh 20:05 inclusive

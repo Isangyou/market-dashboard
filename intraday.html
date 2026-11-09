@@ -42,6 +42,7 @@
   .card .val .vnote { font-size: 11px; font-weight: 400; color: var(--muted); margin-left: 6px; letter-spacing: 0; white-space: nowrap; }
   .card .chg { font-size: 13px; color: var(--gray1); font-variant-numeric: tabular-nums; }
   .card .src { margin-top: 6px; overflow-wrap: anywhere; }
+  .card .alt { font-size: 11.5px; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
   .stale .val, .stale .chg { opacity: .5; }
   .stale-note { color: var(--muted); font-size: 11px; border: 1px dashed var(--faint); border-radius: 4px; padding: 0 5px; }
 
@@ -119,17 +120,18 @@
       <div id="fx-chart" class="chart" style="height:280px"></div>
     </div>
     <div class="panel">
-      <h2>오늘 외국인 순매수의 60일 내 위치 (코스피, 장중 잠정 vs 일별 최종)</h2>
+      <h2>오늘 외국인 순매수의 60일 내 위치 (코스피 · KRX 단독, 장중 잠정 vs 일별 최종)</h2>
       <div class="sub" id="pct-sub"></div>
       <div id="pct-chart" class="chart" style="height:280px"></div>
     </div>
   </section>
 
   <footer>
-    데이터는 장중(평일 08:50~15:40 KST) 3분 간격으로 갱신(2026-09-28 오전까지는 5분). 모든 장중 값은 누적 잠정치이며 일별 확정치(시장 모니터)와 다를 수 있음.<br>
+    데이터는 평일 08:00~15:40 KST 3분 간격, 15:40~20:00 10분 간격으로 갱신(2026-11-06까지는 08:50~15:40). 모든 장중 값은 누적 잠정치이며 일별 확정치(시장 모니터)와 다를 수 있음.<br>
     USD/KRW는 하나은행 고시 회차값을 1분 단위로 축약. 선물은 계약 수(KOSPI200 선물, 금액은 매수−매도 금액). 선물 현재가는 20분 지연.<br>
-    외국인 현물 = KRX 장중 누적 잠정치: 정규장 + 장 마감 동시호가까지(15:40 수집 종료), 시간외(15:40~18:00)·NXT 제외.
-    시장 모니터의 일별값(KRX 일별 최종치, 시간외 포함)과 다름 — 예: 09-23 장중 15:40 -5,101.5억 / 일별 최종 -4,942.2억.<br>
+    외국인·기관 현물 카드·메인 차트 = KRX+NXT 통합: 네이버에 통합 구분이 없어 KRX 단독(E25 tradeType=KRX)과 NXT 단독(tradeType=NXT)을 시각별로 직접 합산.
+    08:00~09:00은 NXT 프리마켓만(음영), 15:30 이후는 NXT 애프터마켓(~20:00, 음영) + KRX 시간외(15:40~18:00). 카드 작은 글씨 = KRX 단독.<br>
+    60일 위치는 비교 가능하도록 KRX 단독 기준 유지(과거 = KRX 일별 최종치, 시간외 포함·NXT 제외) — 예: 09-23 KRX 장중 15:40 -5,101.5억 / 일별 최종 -4,942.2억.<br>
     선물은 정규장 15:45 마감이라 15:40 이후 변동(최종치)은 미반영. 60일 위치는 과거 일별 최종치 대비 오늘 장중 잠정치 비교. ▲/▼ 는 부호. 기준시각 KST.
   </footer>
 </div>
@@ -152,7 +154,7 @@ function fmtAsof(s) {
   const m = String(s).match(/^\d{4}-(\d\d-\d\d)T(\d\d:\d\d)/);
   return m ? `${m[1]} ${m[2]}` : s;
 }
-const SPOT_BASIS = 'KRX 장중 누적 잠정치 (~15:40, 시간외·NXT 제외)';
+const SPOT_BASIS = 'KRX 단독 장중 누적 잠정치 (NXT 제외)';
 const srcLine = sec => sec ? `${sec.source} · ${fmtAsof(sec.asof)}${sec.stale ? ' · stale' : ''}` : '데이터 없음';
 const todayKST = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
 const mktName = m => m === 'KOSPI' ? '코스피' : '코스닥';
@@ -184,27 +186,34 @@ function line(rows, key, name, color, { width = 2, yaxis = 'y', fmt = ',.1f', un
 const lastRow = sec => sec && sec.rows && sec.rows.length ? sec.rows[sec.rows.length - 1] : null;
 
 // ── 카드 ──
-function card({ label, tag, value, chg, src, stale }) {
+function card({ label, tag, value, alt, chg, src, stale }) {
   return `<div class="card${stale ? ' stale' : ''}"><div class="lbl">${label}${tag ? `<span class="tag">${tag}</span>` : ''}${stale ? '<span class="stale-note">stale · 이전 값</span>' : ''}</div>
-    <div class="val">${value}</div><div class="chg">${chg}</div><div class="src">${esc(src)}</div></div>`;
+    <div class="val">${value}</div>${alt ? `<div class="alt">${alt}</div>` : ''}<div class="chg">${chg}</div><div class="src">${esc(src)}</div></div>`;
 }
-// 외국인 현물 순매수 (E25 장중 누적 잠정, 시장별). 섹션이 아직 없으면 '수집 대기'
-function spotCard(m, sec, r) {
+// 외국인·기관 현물 순매수 (시장별). 큰 글씨 = KRX+NXT 통합(프리마켓 포함), 작은 글씨 = KRX 단독.
+// 통합이 없으면(NXT 실패 등) KRX 단독을 큰 글씨로. 섹션이 아직 없으면 '수집 대기'
+function spotCard(m) {
   const label = `외국인 현물 순매수 · ${mktName(m)}`;
-  if (!r) return card({ label, tag: '장중 잠정', value: '–', chg: '수집 대기', src: '다음 수집 회차부터 표시' });
-  return card({ label, tag: '장중 잠정', value: money(r.foreign), stale: sec.stale,
-                chg: `${r.t} 기준 · 장중 누적 잠정`, src: `${sec.basis || SPOT_BASIS} · ${srcLine(sec)}` });
+  const tot = D && D.investor_total && D.investor_total[m], krx = D && D.investor && D.investor[m];
+  const t = lastRow(tot), k = lastRow(krx);
+  if (!t && !k) return card({ label, tag: 'KRX+NXT 통합 · 프리마켓 포함', value: '–', chg: '수집 대기', src: '다음 수집 회차부터 표시' });
+  const kAlt = k ? `KRX 단독 외국인 ${money(k.foreign)} · 기관계 ${money(k.institution)} (${k.t})` : 'KRX 단독 — 09:00 개장 전';
+  if (!t) return card({ label, tag: 'KRX 단독 (NXT 수집 실패)', value: money(k.foreign), stale: krx.stale,
+                        chg: `기관계 ${money(k.institution)} · ${k.t} 기준 · 장중 누적 잠정`, src: `${krx.basis || SPOT_BASIS} · ${srcLine(krx)}` });
+  return card({ label, tag: 'KRX+NXT 통합 · 프리마켓 포함', value: money(t.foreign), alt: kAlt, stale: tot.stale,
+                chg: `기관계 ${money(t.institution)} · ${t.t} 기준 · 장중 누적 잠정`,
+                src: `${tot.basis} · ${srcLine(tot)}` });
 }
 function renderCards() {
   const k = D && D.index && D.index.KOSPI, inv = D && D.investor || {}, fut = D && D.futures, fx = D && D.usdkrw, fp = D && D.futures_price;
-  const iK = lastRow(inv.KOSPI), iQ = lastRow(inv.KOSDAQ), f = lastRow(fut), x = lastRow(fx);
+  const f = lastRow(fut), x = lastRow(fx);
   const fxChg = x && fx.last_close ? x.v - fx.last_close : null;
   const snap = D && D.snapshots && D.snapshots[D.snapshots.length - 1];
   const pct = percentile();
   document.getElementById('cards').innerHTML = [
     card({ label: '코스피', value: k ? nf(k.value) : '–', stale: k && k.stale,
            chg: k ? `${arrow(k.change)} ${signed(k.change)} (${signed(k.change_pct)}%)` : '', src: srcLine(k) }),
-    spotCard('KOSPI', inv.KOSPI, iK), spotCard('KOSDAQ', inv.KOSDAQ, iQ),
+    spotCard('KOSPI'), spotCard('KOSDAQ'),
     // 큰 글씨 = 순매수 금액(E26 매수대금−매도대금, 계약수×가격 추정 아님), 아래 = 계약수
     card({ label: '외국인 선물 순매수', tag: 'KOSPI200', value: f ? `${money(f.foreign_amt)}<span class="vnote">매수−매도 대금(네이버 집계)</span>` : '–', stale: fut && fut.stale,
            chg: f ? `${arrow(f.foreign)} ${signed(f.foreign, 0)}계약` + (fp ? ` · 선물 ${nf(fp.value)} (${signed(fp.change_pct)}%, ${fp.delay})` : '') : '',
@@ -213,7 +222,7 @@ function renderCards() {
            chg: fxChg != null ? `${arrow(fxChg)} ${signed(fxChg)} (전일 ${nf(fx.last_close)})` : '', src: srcLine(fx) }),
     card({ label: '외국인 순매수 60일 위치', tag: '코스피', value: pct ? `${pct.rank}위 / ${pct.n + 1}` : '–',
            chg: pct ? `백분위 ${nf(pct.pctile, 0)} · ${pct.pctile >= 50 ? '상위' : '하위'} ${nf(pct.pctile >= 50 ? 100 - pct.pctile : pct.pctile, 0)}%` : '',
-           src: pct ? `장중 ${pct.t} 누적 vs 확정 일별 ${pct.from}~${pct.to}` : '데이터 없음' }),
+           src: pct ? `KRX 단독 기준(비교 가능) · 장중 ${pct.t} 누적 vs 확정 일별 ${pct.from}~${pct.to}` : '데이터 없음' }),
     (() => { const v = vkospiPrev(); return card({ label: 'VKOSPI', tag: '전일', value: v ? nf(v.value) : '–',
       chg: v && v.pctile != null ? `60일 분위 ${nf(v.pctile, 0)} · ${v.pctile >= 50 ? '상위' : '하위'} ${nf(v.pctile >= 50 ? 100 - v.pctile : v.pctile, 0)}%` : '',
       src: v ? `${v.source} · ${v.date} 종가 · 직전 ${v.n}거래일 대비 · KRED, CC BY-NC-ND 4.0` : '데이터 없음' }); })(),
@@ -267,12 +276,33 @@ function renderPct() {
   plot('pct-chart', tr, lay);
   document.getElementById('pct-sub').textContent =
     `${p.from} ~ ${p.to} (${p.n}일) 대비 · 오늘 ${money(p.today)}는 ${p.n + 1}개 중 ${p.rank}위, 백분위 ${nf(p.pctile, 0)}` +
-    ` · 기준 다름: 오늘 = 장중 잠정(${p.t}까지, 시간외 제외) / 과거 = KRX 일별 최종치(시간외 포함, ${SER.records.slice(-1)[0].source})`;
+    ` · 둘 다 KRX 단독(NXT 제외) · 기준 다름: 오늘 = 장중 잠정(${p.t}까지, ${p.t > '15:40' ? '시간외 일부 포함' : '시간외 제외'}) / 과거 = KRX 일별 최종치(시간외 포함, ${SER.records.slice(-1)[0].source})`;
 }
 
 // ── 메인: 지수 분봉 + 투자자 누적 (x축 공유 상하 패널) ──
+// 메인 x축: 08:00(NXT 프리마켓)부터, 애프터마켓 데이터가 있으면 그 마지막 시각까지(최대 20:05)
+function mainRange(inv) {
+  const last = lastRow(inv), end = last && last.t > '15:40' ? (last.t > '19:55' ? '20:05' : addMin(last.t, 10)) : '15:45';
+  return [X('07:55'), X(end)];
+}
+const addMin = (t, m) => { const x = +t.slice(0, 2) * 60 + +t.slice(3) + m; return `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`; };
+// NXT 프리(08:00~09:00)·애프터(15:30~20:00) 구간 연한 음영 — 그 구간에 NXT 행이 있을 때만
+function nxtShades(nxt, range) {
+  const rows = (nxt && nxt.rows) || [], sh = [], an = [];
+  const add = (a, b, label) => {
+    sh.push({ type: 'rect', xref: 'x', yref: 'paper', x0: X(a), x1: X(b) > range[1] ? range[1] : X(b), y0: 0, y1: 1,
+              fillcolor: C.grid, opacity: 0.55, line: { width: 0 }, layer: 'below' });
+    an.push({ xref: 'x', yref: 'paper', x: X(a), y: 0.99, xanchor: 'left', yanchor: 'top', xshift: 3, showarrow: false,
+              text: label, font: { size: 10, color: C.faint } });
+  };
+  if (rows.some(r => r.t < '09:00')) add('08:00', '09:00', '프리마켓 (NXT)');
+  if (rows.some(r => r.t > '15:30')) add('15:30', '20:00', '애프터마켓 (NXT)');
+  return { shapes: sh, annotations: an };
+}
 function renderMain() {
-  const idx = D && D.index && D.index[market], inv = D && D.investor && D.investor[market];
+  const idx = D && D.index && D.index[market], krx = D && D.investor && D.investor[market];
+  const tot = D && D.investor_total && D.investor_total[market], nxt = D && D.investor_nxt && D.investor_nxt[market];
+  const inv = tot || krx;   // KRX+NXT 통합 우선, 없으면 KRX 단독
   document.getElementById('main-title').textContent = `${mktName(market)} 분봉 · 투자자별 장중 누적`;
   if (!idx && !inv) return empty('main-chart');
   const tr = [];
@@ -289,8 +319,10 @@ function renderMain() {
             line(rows, 'n', '기관계', C.gray2, { yaxis: 'y2', width: 1.6, fmt: toJo ? '+,.2f' : '+,.0f', unit: u }));
     var unitY2 = u;
   }
-  const lay = layout({ margin: { l: 60, r: 16, t: 34, b: 30 } });
-  lay.xaxis = { ...lay.xaxis, anchor: 'y2', range: sessionRange() };
+  const range = mainRange(inv), nx = nxtShades(nxt, range);
+  if (idx && idx.last_close) tr[1].x = [range[0], range[1]];
+  const lay = layout({ margin: { l: 60, r: 16, t: 34, b: 30 }, shapes: nx.shapes, annotations: nx.annotations });
+  lay.xaxis = { ...lay.xaxis, anchor: 'y2', range };
   lay.yaxis = { ...lay.yaxis, domain: [0.52, 1], tickformat: ',.0f', title: { text: '지수', font: { size: 10.5 } } };
   lay.yaxis2 = { ...AX(), showspikes: false, domain: [0, 0.44], tickformat: ',.1f', ticksuffix: unitY2 || '억',
                  title: { text: '누적 순매수', font: { size: 10.5 } } };
@@ -298,7 +330,8 @@ function renderMain() {
   const iv = lastRow(inv);
   document.getElementById('main-sub').textContent = [
     idx ? `${idx.source} · ${fmtAsof(idx.asof)}${idx.stale ? ' · stale' : ''} · 분봉 ${idx.bars.length}개` : '지수 데이터 없음',
-    inv ? `${inv.source} · ${iv.t} 누적 외국인 ${money(iv.foreign)} · 개인 ${money(iv.individual)} · 기관계 ${money(iv.institution)}${inv.stale ? ' · stale' : ''}` : '투자자 데이터 없음',
+    inv ? `${tot ? 'KRX+NXT 통합(프리마켓 포함)' : 'KRX 단독'} · ${inv.source} · ${iv.t} 누적 외국인 ${money(iv.foreign)} · 개인 ${money(iv.individual)} · 기관계 ${money(iv.institution)}${inv.stale ? ' · stale' : ''}` +
+      (tot && lastRow(krx) ? ` · KRX 단독 외국인 ${money(lastRow(krx).foreign)}` : '') : '투자자 데이터 없음',
   ].join(' | ');
 }
 
@@ -381,12 +414,12 @@ function renderAll() {
   safe('cards', renderCards); safe('main', renderMain); safe('fut', renderFut); safe('prg', renderPrg); safe('nq', () => renderUsFut('NQ', 'nq', 2)); safe('cl', () => renderUsFut('CL', 'cl', 2)); safe('fx', renderFx); safe('pct', renderPct);
 }
 // ── 로드·자동 갱신 ──
-// 장중(08:50~15:50 KST) 60초, 그 외 10분마다 오늘(없으면 최근 거래일) 파일을 다시 받아 내용이 바뀐 경우에만 다시 그림.
+// 수집 시간(08:00~20:10 KST) 60초, 그 외 10분마다 오늘(없으면 최근 거래일) 파일을 다시 받아 내용이 바뀐 경우에만 다시 그림.
 // 탭이 백그라운드면 멈추고, 돌아오면 즉시 1회 갱신
 const REFRESH_SESSION_MS = 60e3, REFRESH_IDLE_MS = 600e3;
 let lastText = null, timer = null, loading = false;
 const kstHM = () => new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' });
-const inSession = () => { const hm = kstHM(); return hm >= '08:50' && hm <= '15:50'; };
+const inSession = () => { const hm = kstHM(); return hm >= '08:00' && hm <= '20:10'; };
 const hms = iso => (String(iso).match(/T(\d\d:\d\d:\d\d)/) || [])[1] || '';
 
 function renderHeader(flash) {
@@ -394,7 +427,7 @@ function renderHeader(flash) {
   const every = inSession() ? '1분' : '10분';
   if (!D) {
     banner.hidden = false;
-    banner.textContent = `장중 데이터가 아직 없습니다. 평일 08:50~15:40 KST에 3분 간격으로 쌓입니다. (오늘 ${today})`;
+    banner.textContent = `장중 데이터가 아직 없습니다. 평일 08:00~15:40 KST 3분 간격(15:40~20:00은 10분)으로 쌓입니다. (오늘 ${today})`;
     meta.textContent = `장중 데이터 없음 · 자동 확인 ${every}마다`;
     return;
   }

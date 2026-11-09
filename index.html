@@ -37,6 +37,8 @@
   .card .val { font-size: 24px; font-weight: 600; margin: 4px 0 2px; letter-spacing: -0.01em; }
   .card .chg { font-size: 12.5px; color: var(--gray1); font-variant-numeric: tabular-nums; }
   .card .src { margin-top: 6px; overflow-wrap: anywhere; }
+  .card .alt { font-size: 11.5px; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .card .alt b { color: var(--text); font-weight: 600; }
   .stale .val, .stale .chg { opacity: .5; }
   .stale-note { color: var(--muted); font-size: 11px; border: 1px dashed var(--faint); border-radius: 4px; padding: 0 5px; }
 
@@ -231,7 +233,7 @@
   <footer>
     점선 = 1차 소스(네이버) 대신 폴백 소스(yfinance 등) 값이 들어간 구간. 소스마다 값이 다를 수 있음.<br>
     USD/KRW는 하나은행 고시 매매기준율(시장 실시간가 아님). 투자자별 순매수는 네이버 단일 소스(pykrx 폴백 비활성).<br>
-    투자자 일별값 = KRX 일별 최종치: 정규장 + 장 마감 동시호가 + 시간외(종가·단일가) 포함, NXT 제외. 장중 페이지의 잠정치(15:40까지, 시간외 제외)와 다를 수 있음.<br>
+    투자자 일별값 = KRX 일별 최종치: 정규장 + 장 마감 동시호가 + 시간외(종가·단일가) 포함, NXT 제외. 외국인 카드 아래 작은 글씨 = NXT(넥스트레이드, 프리 08:00~·애프터 ~20:00 포함) 일별값을 더한 합산(같은 날짜일 때만, 20:00 전은 NXT 잠정). 차트·20일 누적은 KRX 기준.<br>
     ▲/▼ 는 전일 대비 부호. 금리 변화는 bp. 기준시각은 KST.
   </footer>
 </div>
@@ -339,10 +341,10 @@ const shiftDate = (d, days) => { const t = new Date(d); t.setDate(t.getDate() - 
 const empty = id => { document.getElementById(id).innerHTML = '<div class="empty">데이터 없음</div>'; };
 
 // ── 카드 ──
-function card({ label, tag, value, chg, src, stale }) {
+function card({ label, tag, value, alt, chg, src, stale }) {
   return `<div class="card${stale ? ' stale' : ''}">
     <div class="lbl">${label}${tag ? `<span class="tag">${tag}</span>` : ''}${stale ? '<span class="stale-note">stale · 이전 값</span>' : ''}</div>
-    <div class="val">${value}</div><div class="chg">${chg}</div><div class="src">${src}</div></div>`;
+    <div class="val">${value}</div>${alt ? `<div class="alt">${alt}</div>` : ''}<div class="chg">${chg}</div><div class="src">${src}</div></div>`;
 }
 function itemCard(key, { label, tag, digits = 2, bp = false } = {}) {
   const it = L.items[key];
@@ -361,7 +363,12 @@ function investorCard(m) {
   if (!v) return card({ label, tag, value: '–', chg: '', src: '데이터 없음' });
   const r = recs('investor_' + m.toLowerCase()).slice(-20);
   const cum = r.reduce((a, x) => a + x.foreign, 0);
-  return card({ label, tag, value: money(v.foreign),
+  // 큰 글씨 = KRX(NXT 제외). 그 아래 작게 NXT(넥스트레이드, 프리·애프터마켓 포함) 합산 — 같은 날짜일 때만
+  const nx = v.nxt && v.nxt.date === v.date ? v.nxt : null;
+  const krxLbl = v.source === 'naver:trend_daily' ? 'KRX 최종치 (NXT 제외)' : 'KRX (NXT 제외)';
+  const nxAt = nx && nx.asof.length > 10 ? ` · ${nx.asof.slice(11, 16)} 잠정` : '';
+  const alt = nx ? `${krxLbl} · NXT 포함 합산 <b>${money(v.foreign + nx.foreign)}</b> (NXT ${money(nx.foreign)}${nxAt}${nx.stale ? ' · stale' : ''})` : krxLbl;
+  return card({ label, tag, value: money(v.foreign), alt,
     chg: `${arrow(cum)} 20일 누적 ${money(cum)}`,
     src: `${invBasis(v.source)} · ${srcLine(v.source, v.asof)} · pykrx 폴백 ${L.meta && L.meta.pykrx_enabled ? '활성' : '비활성'}`, stale: v.stale });
 }

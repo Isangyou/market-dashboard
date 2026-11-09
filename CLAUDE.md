@@ -18,7 +18,7 @@
     fred.py         # FRED 확정치 (미 국채)
     adrinfo.py      # adrinfo.kr ADR 이력 (HTML 내 배열 정규식, 하루 1회·16:00 이후)
     run.py          # 전체 수집 → data/*.json 갱신 (진입점)
-    intraday.py     # 장중 수집 → data/intraday/YYYY-MM-DD.json (평일 08:50~15:40만)
+    intraday.py     # 장중 수집 → data/intraday/YYYY-MM-DD.json (평일 08:00~20:05, 현물 투자자 KRX·NXT·통합)
     market_day.py   # 거래일(휴장일) 판정 — update.yml·intraday.yml 공용
   positioning/      # 주간 포지셔닝 리포트 (CTA 모델·CBOE 옵션·CFTC COT) — docs/positioning.md
     cta.py · options.py · cboe_pc.py(CBOE 일별 P/C) · cot.py · report.py(근거 수치) · brief.py(결론) · easy.py(쉽게 말하면) · run.py(진입점)
@@ -38,7 +38,7 @@
   weekly.html       # 주간 포지셔닝 리포트 (라이트, 주차 드롭다운, Notion용 결론 복사)
   technical.html    # 기술적 지표 — 4개 지수 과열/과매도 위치 (쿨 라이트)
   .github/workflows/update.yml    # 매시 + 거래일 장중 15분
-  .github/workflows/intraday.yml  # 평일 08:35 시작(+15분마다 예비)→08:50 대기, 오전(~12:10)·오후(~15:40) 두 잡 루프
+  .github/workflows/intraday.yml  # 평일 07:45 시작(+15분마다 예비)→08:00 대기, 오전(~12:10)·오후(~15:40) 3분 + 저녁(~20:05) 10분 루프
   .github/workflows/pages.yml     # Pages Actions 배포 (봇 푸시 후 호출됨)
   .github/workflows/positioning.yml  # 주간 포지셔닝: KST 화~금 07:10 + 금요일분 토 06:30(예비 09:30)
   requirements.txt
@@ -51,7 +51,7 @@
 - 차트는 이중축 금지 → 위아래 분리. 상세 규칙·가정은 docs/positioning.md
 
 ## 수집 항목
-1. 투자자별 순매수 (KOSPI/KOSDAQ): 개인·외국인·기관계·세부기관. 일별 시계열 누적 저장
+1. 투자자별 순매수 (KOSPI/KOSDAQ): 개인·외국인·기관계·세부기관. 일별 시계열 누적 저장. KRX 기준 + NXT 별도(`investor_nxt_*`, 통합 구분 없음 → 화면에서 합산). 장중 카드·차트는 KRX+NXT 통합, 60일 분위는 KRX 단독
 2. 외국인 순매수·순매도 상위 10종목 (KOSPI/KOSDAQ)
 3. 미국 국채수익률 전 만기 (1M~30Y), 한국 국고 3Y/10Y
 4. 환율: USD/KRW, USD/JPY, USD/CNH, EUR/USD, DXY
@@ -87,7 +87,7 @@
 
 ## 배치 (GitHub Actions)
 - 15분 간격, 한국 장중(평일 08:30~16:00 KST)은 매 15분, 그 외 시간은 1시간 간격. 휴장일은 fetch/market_day.py로 판정해 매시 정각만 실행
-- 장중 페이지용 intraday.yml: 평일 08:50 KST 시작, 3분 간격 루프(수집·커밋·푸시), 휴장일이면 잡 생략. cron 누락 대비 15분마다 예비 트리거 + 중복 실행 판정. 로컬(launchd) 실행은 쓰지 않음
+- 장중 페이지용 intraday.yml: 평일 08:00 KST 시작(NXT 프리마켓), 3분 간격 루프(수집·커밋·푸시), 15:40~20:05는 10분 간격(NXT 애프터마켓), 휴장일이면 잡 생략. cron 누락 대비 15분마다 예비 트리거 + 중복 실행 판정. 로컬(launchd) 실행은 쓰지 않음
 - run.py 실행 후 data/ 변경분만 커밋·푸시. 변경 없으면 커밋하지 않음
 - API 키(FRED 등)는 GitHub Secrets. 코드에 하드코딩 금지
 

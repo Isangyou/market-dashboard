@@ -2,8 +2,8 @@
 # intraday.yml calendar 잡의 중복 실행 판정. 출력: dup=true|false (GITHUB_OUTPUT 형식으로 stdout 마지막 줄)
 # - 이 실행보다 먼저 시작해 아직 안 끝난 intraday 실행이 없으면 dup=false
 # - 있으면 '마지막 활동'부터 IDLE_MAX초(기본 600) 지났는지 본다
-#     마지막 활동 = max(data/intraday 마지막 커밋 시각, 그 실행의 시작 시각, 오늘 08:50 KST)
-#     (08:35 시작 실행은 08:50까지 커밋 없이 대기하므로 08:50을 기준점에 넣음)
+#     마지막 활동 = max(data/intraday 마지막 커밋 시각, 그 실행의 시작 시각, 오늘 08:00 KST)
+#     (07:45 시작 실행은 08:00까지 커밋 없이 대기하므로 08:00을 기준점에 넣음)
 #   · 지났으면 죽은 것으로 보고 취소(응답 없으면 force-cancel) → dup=false (이 실행이 새로 시작)
 #   · 아니면 살아 있음 → dup=true (이 실행은 건너뜀)
 # - API 조회 실패 시 dup=false (루프가 안 도는 것보다 둘이 도는 편이 낫다: 스냅샷은 t 키로 병합됨)
@@ -21,7 +21,7 @@ if [[ -z "$open" ]]; then log "먼저 시작된 실행 없음 → 진행"; echo 
 
 last=$(gh api "repos/$REPO/commits?sha=main&path=data/intraday&per_page=1" --jq '.[0].commit.committer.date') \
   || { log "마지막 커밋 조회 실패 → 진행"; echo "dup=false"; exit 0; }
-lc=$(epoch "$last"); open_at=$(TZ=Asia/Seoul date -d "08:50" +%s)
+lc=$(epoch "$last"); open_at=$(TZ=Asia/Seoul date -d "08:00" +%s)
 log "마지막 장중 커밋 $(TZ=Asia/Seoul date -d "@$lc" '+%m-%d %H:%M:%S') KST"
 
 dup=false

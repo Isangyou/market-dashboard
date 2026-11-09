@@ -11,7 +11,7 @@
 
 | 화면 | URL | 누른 탭 |
 |---|---|---|
-| 투자자별 매매동향 | `/market/stock/kr/trend/trader?tradeType=0&marketType=kospi` | 코스피/코스닥 × 1일/1주/1개월/3개월, 시간별/일자별 |
+| 투자자별 매매동향 | `/market/stock/kr/trend/trader?tradeType=0&marketType=kospi` | 코스피/코스닥 × 1일/1주/1개월/3개월, 시간별/일자별, KRX↔NXT 토글(11-09) |
 | 외국인 매매 상위 | `/market/stock/kr/trend/foreigner?tradeType=0&marketType=kospi&periodType=segment-1day` | 코스피/코스닥 × 1일/1주/1개월/3개월 |
 | 국채수익률 | `/market/marketindex/bondAndInterest/bond` | 미국/한국/유로/영국/일본/중국/독일 |
 | 환율 | `/market/marketindex/exchangeRate`, `/exchangeRate/exchange`, `/exchangeRate/exchangeWorld` | 환전고시/국제시장 |
@@ -275,6 +275,18 @@ E10 필드 + `openingPrice`, `highPriceOfDay`, `lowPriceOfDay`, `high/lowPriceOf
 1~2분 간격 누적치, 최신순. 09-23 KOSPI 443행 (09:01~20:04, 15:30 이후는 NXT 시간외 포함). 코드·단위는 E3과 동일(원).
 - **코스닥** = 같은 경로 `marketType=KOSDAQ` (화면: 투자자별 매매동향 `marketType=kosdaq` 탭 → API는 대문자 `KOSDAQ`). `fetch/intraday.py investor_time`이 처음부터 KOSPI·KOSDAQ 둘 다 3분 루프로 수집 중. 외국인 = 9000+9001(E3과 동일)
 - 확인값(저장 기준 15:40 누적): 09-23 KOSDAQ 외국인 -486.2억 · 개인 +320.8억 · 기관계 +61.4억 / 09-28 KOSDAQ 외국인 +467.6억 · 개인 +214.1억 · 기관계 -744.3억
+
+### E25-NXT / E3-NXT. 넥스트레이드(NXT) 투자자별 — 2026-11-09 캡처
+화면 `/market/stock/kr/trend/trader` 좌상단 **KRX ↔ NXT 토글 버튼**(드롭다운 아님, 누를 때마다 전환). **KRX+NXT 통합 선택지는 없음**. 외국인 매매(`/trend/foreigner`) 화면도 같은 토글.
+토글하면 같은 경로에서 `tradeType`만 `NXT`로 바뀜:
+- 당일 합계 `GET /domestic/market/trend/chart/time?tradeType=NXT&marketType=KOSPI&selectedRange=1일&bizdate=…&startDate=…&endDate=…`
+- 일자별 `GET /domestic/market/trend/daily?tradeType=NXT&marketType={KOSPI|KOSDAQ}&bizdate=…&startIdx=0&pageSize=30` → 2025-03-04~ 412거래일(11-09 기준)
+- 시간별 `GET /domestic/market/trend/time?tradeType=NXT&marketType={KOSPI|KOSDAQ}&bizdate=…&startIdx=0&pageSize=30` → **08:00부터**(프리마켓 08:00~08:50, 08:00 행은 전부 0), 1~2분 간격, 애프터마켓 ~20:00
+- 외국인 상위 `GET /domestic/market/trend/trendForeignOrg?investorType=FOREIGNER&tradeType=NXT&…`
+- 코드·단위·응답 형식은 KRX와 동일(원, 외국인 = 9000+9001, 기관계 = 1000~7000)
+- 통합 tradeType 시도(requests, chart/time): `ALL·UNIFIED·INTEGRATED·TOTAL·KRXNXT·KRX_NXT·SOR·J` 전부 **400** (09-23엔 ALL·UNIFIED 500) → 통합값은 KRX + NXT 직접 합산
+- 확인값 11-09 KOSPI 외국인: NXT 08:30 -236.8억 · 09:00 -691.6억(프리마켓 누적) · 15:30 +384.3억 · 16:15 +454.9억(화면 1일 탭 시간별 15:34 384억 ✓) / KRX 16:15 -6,786.4억. 일별(16:18) NXT KOSPI +466.2억 · KOSDAQ -215.1억
+- 수집: `fetch/intraday.py investor_time(..., "NXT")` → `investor_nxt`, 합산 `investor_total` / `fetch/naver.py investor_daily(..., trade_type="NXT")` → `data/series/investor_nxt_{kospi,kosdaq}.json`
 
 ### E26. 선물 투자자별 장중 누적
 E25와 같은 경로, `marketType=FUT`. 09-23 422행 (~16:06 확정치).
