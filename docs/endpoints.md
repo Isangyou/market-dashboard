@@ -383,13 +383,17 @@ E14 `/stockSecurity/exchange-rates/v2/USD/charts/round?bankType=hana` (하나은
 - 09-28 15:22 수집: 5페이지 299행, 2025-07-07 ~ 2026-09-23. 09-23 코스피 7,080.92 / 코스닥 844.48 (E24 `lastClosePrice`와 일치)
 - `securityService/chart/domestic/index/KOSPI?periodType=month` = 일봉 20개, `year` = 주봉 53개, `threeYear` = 400 → 이력용은 E34
 
-### E35. 종목 일별 시세 ★ 수집용 (삼성전자·SK하이닉스 이격도 차트)
-`GET /domestic/detail/{종목코드}/trend?tradeType=KRX&startIdx={페이지번호}&pageSize={≤100}` → 배열, 최신순
-- 캡처: `/domestic/stock/005930/price` (종목 "시세" 탭의 일별 표, 화면은 `pageSize=20·50`으로 호출)
-- 필드: `bizdate`(YYYYMMDD), `closePrice`(원), `prevChangePrice`, `upDownGb`(상승/하락), `tradeVolume`, `foreignerPureBuyQuant`·`organPureBuyQuant`·`individualPureBuyQuant`(순매수 수량), `frgnStock`, `frgnHoldRatio`(외국인 보유율 %). 문자열 숫자
-- `startIdx`는 **페이지 번호**(E3·E32와 같음): `startIdx=1,pageSize=50` → 20260713~20260429, `startIdx=50,pageSize=50` → 20160714~ (10년 이상 있음). `pageSize=100` 됨
-- 09-28 15:3x 수집: 100행×3페이지 = 300행, 2025-07-04 ~ 2026-09-23. 09-23 삼성전자 286,500원 / SK하이닉스 1,863,000원. 장중에도 오늘 행은 없었음(최신 09-23) — 그래도 오늘 행은 15:40 이후만 저장
-- 같은 화면의 다른 호출: `domestic/detail/{code}/siseTick`(체결), `…/hoga`(호가), `…/traderInfo`, `securityFe/api/fchart/domestic/stock/{code}`(차트) — 미사용
+### E35. 종목 일별 시세 — **폐기 (2026-10-21경부터 404)**
+`GET /domestic/detail/{종목코드}/trend?tradeType=KRX&startIdx=…&pageSize=…` → 11-09 확인 `404 Route … not found`. 저장값 마지막 2026-10-20. 필드는 `closePrice`(아래 E35b `closingPrice`와 186/186일 일치)
+
+### E35b. 종목 일별 시세 ★ 수집용 (삼성전자·SK하이닉스 이격도 차트, 2026-11-09 캡처)
+`GET /stockSecurity/items/v2/domestic/{종목코드}/daily-prices/paged?size={≤100}&index={페이지 번호}`
+- 캡처: `/domestic/stock/005930/price` (시세 탭 일별 표, 화면은 `size=20&index=0`). 종합 탭(`/total`)은 `/price`로 이동, 같은 호출
+- 응답: `{"hasNext": true, "totalCount": "7595", "items": [...], "size", "index"}` 최신순. `size=100` 됨, 200·500은 **400**. `index=1,size=100` → 101번째부터(페이지 번호)
+- 항목: `tradingDateKst`(YYYY-MM-DD), `closingPrice`, **`regularMarketClosingPrice`**, `basePrice`, `openingPrice`·`highPrice`·`lowPrice`, `tradingVolume`, `tradingValue`, `changePrice`·`changeRate`, `regularMarketChangePrice`·`regularMarketChangeRate`, `priceMovement`. 문자열 숫자(원)
+- **종가 두 개**: `regularMarketClosingPrice` = KRX 정규장 종가(15:30), `closingPrice` = NXT 애프터마켓까지 반영한 가격(장 마감 후 20:00까지 변함). 두 값은 **2026-09-13까지 같고 09-14부터 다름**(삼성전자 400거래일 중 31일, SK하이닉스 36일). 예 11-09 17:0x 삼성전자 정규장 189,900 / closingPrice 185,300, 11-06 188,700 / 193,500. 다음 날 `basePrice` = 전일 `regularMarketClosingPrice`
+- 수집은 `regularMarketClosingPrice`(KRX 지수 일별 E34와 같은 기준, asof 15:30). 구 E35 저장값은 09-14 이후 통합 가격이 섞여 있어 전부 교체(삼성전자 20일·SK하이닉스 22일 값 변경)
+- 다른 일봉 호출(미사용): `api.stock.naver.com/chart/domestic/item/{code}/day?startDateTime=YYYYMMDDHHmm&endDateTime=…&wrapper=true`(차트), `securityFe/api/fchart/domestic/stock/{code}`
 
 ### E36. 지수 시간별 시세 → 일별 거래대금 ★ 수집용
 `GET /domestic/indexSise/time?koreaIndexType={KOSPI|KOSDAQ}&thistime=YYYYMMDD&startIdx=0&pageSize={n}` → 배열, 최신 시각부터

@@ -327,10 +327,12 @@ def main():
             investor[m]["nxt"] = ({k: nx[k] for k in ("date", "foreign", "institution", "individual", "source", "asof")}
                                   | {"stale": dfn is None} if nx else None)
 
-    # ── 개별 종목 일별 종가 (이격도 차트용) ── 첫 실행 3페이지(약 300거래일), 이후 1페이지
+    # ── 개별 종목 일별 종가 (이격도 차트용, KRX 정규장 종가) ── 첫 실행 4페이지(약 400거래일), 이후 1페이지
+    # 구 소스(naver:stock_trend, 09-14 이후 통합 가격 섞임)가 남아 있으면 4페이지로 전부 교체
     for code, name in naver.STOCKS.items():
         s = Series(f"stock_{code}", name, "원")
-        n_new = s.merge(call("naver", naver.stock_daily, code, 3 if args.backfill or len(s) < 250 else 1))
+        legacy = any(r["source"] == "naver:stock_trend" for r in s.by_date.values())
+        n_new = s.merge(call("naver", naver.stock_daily, code, 4 if args.backfill or legacy or len(s) < 250 else 1))
         if s.save():
             changed.append(f"series/stock_{code}.json (+{n_new})")
 
