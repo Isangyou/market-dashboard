@@ -7,6 +7,7 @@
 - 시장 모니터: https://isangyou.github.io/market-dashboard/
 - 장중 모니터: https://isangyou.github.io/market-dashboard/intraday.html
 - 기술적 지표: https://isangyou.github.io/market-dashboard/technical.html
+- 미국 옵션: https://isangyou.github.io/market-dashboard/options.html
 
 ## 구성 요약
 | 구분 | 파일 | 상태 |
@@ -16,6 +17,7 @@
 | 휴장일 판정 | `fetch/market_day.py` | 네이버 market-status `today.isTradingDay`. 실패 시 평일=거래일 |
 | 일별 배치 | `.github/workflows/update.yml` | 매시 정각 + 거래일 장중 :15/:30/:45. 푸시 후 pages.yml 호출 |
 | 장중 배치 | `.github/workflows/intraday.yml` + `scripts/intraday_loop.sh` + `scripts/intraday_guard.sh` | **장중 루프 시작은 당분간 수동(Actions → intraday → Run workflow, mode=loop), 외부 스케줄러는 추후** (2026-09-28 결정). GitHub cron 보조(08:35~15:35 15분마다)는 유지 — 뜨면 자동 시작 → 08:50까지 대기 → **3분 루프**(수집 timeout 150초, 단계별 로그). 오전(~12:10)·오후(~15:40, 15:40 회차 보장) 두 잡. 중복 판정: 먼저 시작된 실행이 살아 있으면 skip, 10분 넘게 활동 없으면 cancel(→force-cancel) 후 새로 시작. 수동 `mode=loop/once/once-force` |
+| 미국 옵션 | `fetch/options_live.py` + `scripts/options_loop.sh`·`options_guard.sh` + `.github/workflows/options.yml` + `options.html` | **2026-11-15 작성, Actions에서는 아직 실행 전**. 스냅샷은 main이 아니라 `options-data` 브랜치(커밋 1개) → pages.yml이 배포 때 합침. 상세는 아래 11-15 항목 |
 | 배포 | `.github/workflows/pages.yml` | Actions 배포(deploy-pages). 사람 푸시=push 이벤트, 봇 푸시=워크플로가 `gh workflow run pages.yml` 호출 |
 | 화면 | `index.html`(일별·쿨 라이트, 슬레이트 블루), `intraday.html`(장중·웜 라이트, 세이지 그린 — 09-29 다크에서 전환), `weekly.html`(쿨 라이트) | 상호 링크에 테마 표기(라이트(블루)/라이트(그린)). 장중 차트 색은 전부 CSS 변수(`C.*`)로만 지정 — 7개 차트 색 전수 확인 결과 팔레트 밖 색 없음. 일별에 VIX 독립 차트(3개월 기본·20일 이평·range slider, 보이는 구간에 y축 맞춤), 유가는 WTI·Brent만(유가 | VIX 한 줄). **차트 배치(10-06): 유가 | VIX → VKOSPI | ADR** (모바일 1열 같은 순서. `ADR_ENABLED = false`면 VKOSPI 한 줄 전체 폭). 상단 카드 7개 4+3(모바일 2열): 코스피 외인 · 코스닥 외인 · USD/KRW · VKOSPI / 미국채 10Y · WTI · VIX. DXY·국고 10Y 카드는 뺌(09-29) — DXY는 환율 스파크라인, 국고는 국고채 3Y·10Y 차트에 그대로. 메인 차트 아래 **삼성전자 | SK하이닉스**(각각 상하 2패널 x축 공유, 6개월 기본·range slider: 위 종가 + 50일 이평 점선, 아래 50일 이격도 + 100·105·95 연회색 점선(간격 좁으면 100 라벨만), 제목 옆 현재 이격도, 이평·이격도 자체 계산 표기, 범위 바꾸면 두 y축 모두 재조정). 09-23 기준 이격도 삼성전자 112.1 · SK하이닉스 109.9. **코스피·코스닥 이격도 차트는 비활성**(`index.html` `INDEX_GAP_ENABLED = true`로 켜면 그 아래 줄에 추가, 09-23 코스피 105.9 · 코스닥 105.2) — kospi/kosdaq.json 수집은 계속. **VKOSPI**(ADR 옆, 원값만 — ND 조항으로 이평선 없음, 아래 'KRED, CC BY-NC-ND 4.0'). 장중 페이지 카드 8개 4×2: 코스피 · 외국인 현물(코스피) · 외국인 현물(코스닥) · 외국인 선물 / USD/KRW · 60일 위치 · VKOSPI · 기준시각. 현물 카드는 시장별로 분리(09-29, 금액 큰 글씨 + 'HH:MM 기준 · 장중 누적 잠정', 섹션이 없으면 '수집 대기') — 코스닥 장중값(E25 `marketType=KOSDAQ`)은 원래부터 3분 루프에서 수집 중이라 수집 코드 변경 없음. VKOSPI 전일 종가 + 직전 60거래일 분위(장중값 아님). 장중 페이지 **자동 갱신**: 장중(08:50~15:50 KST) 60초·그 외 10분마다 `?t=` 붙여 오늘 파일을 다시 받아 내용이 바뀐 경우만 Plotly.react, '갱신 HH:MM:SS' 잠깐 강조, 탭 숨김 시 정지·복귀 시 즉시 1회, `uirevision`(거래일)으로 사용자 확대 유지. 장중 페이지 그리드 = 선물 투자자 | 프로그램 → **나스닥100 선물 | WTI 선물**(1분봉 선, x 06:00~15:45, 전일 마감 기준선·09:00 세로선 연회색 점선, 제목 옆 현재값·전일 마감 대비 %, '지연 시세 · 마지막 봉 HH:MM', 카드 추가 없음) → USD/KRW | 60일 위치. **거래대금 차트 비활성 — 20거래일 누적 후(약 10-20) 활성화**(`index.html` `TV_ENABLED = true`: 증시자금동향 위에 코스피 | 코스닥, 거래대금(조) 막대 슬레이트 블루 + 20일 평균 회색 점선, 6개월·range slider, 제목 옆 최근값·20일 평균 대비 배율, 20일 전엔 '누적 중 (n/20일)'). **증시자금동향 행**(유가 | VIX 아래, 3열 카드: 고객예탁금·신용잔고·주식형펀드 기본 + 혼합형·채권형 토글, 최신값·전주대비(7일 전 이하 마지막 값)·기준일·지연 거래일 수(투자자 일별 날짜로 셈), 1년(09-29에 3개월→1년), 1만억 이상 조, 신용잔고 90일 고점 대비). 빈 데이터·부분 누락 상태에서 에러 없음(데스크톱 1440/모바일 390) |
 | 엔드포인트 | `docs/endpoints.md` | E1~E23 일별, E24~E28 장중, E29~E30 등락 종목 수, E31~E32 증시자금동향, E33 VKOSPI(KRED), E34 국내 지수 일별, E35 종목 일별, E36 지수 거래대금 |
@@ -25,6 +27,27 @@
 | VKOSPI | `fetch/kred.py`(E33) → `data/series/vkospi.json` (source=kred:KRVKOSPI, 2010-01-04~, 4,118행) | 요청 1회 = 전체 이력. update.yml 안에서 `kred_due`로 하루 ≤2회(16:30 이후 1회 + 당일값 없으면 20:00 이후 1회). 실패 시 카드 stale. 09-28은 로컬 확인 2회로 소진 → Actions 첫 요청은 09-29 16:30 이후 |
 | 증시자금동향 | `fetch/naver.py deposit_trend`(E32) → `data/series/deposit.json` (고객예탁금·신용잔고·주식형/혼합형/채권형 펀드, 억원) | 2002-05-03~2026-09-22 6,006일 백필(로컬 1회). update.yml 매 실행 최신 1페이지, `asof`=기준일이라 값이 같으면 파일 안 씀(재실행 0건 변경 확인). 2거래일 지연. 파일 1.26MB(gzip 약 170KB) — 화면이 전체를 읽음 |
 | ADR | 1차 `fetch/adrinfo.py`(E37) → `data/series/adr_kospi.json`·`adr_kosdaq.json` (source=adrinfo, 2019-10-07~, 1,718·1,717행). 폴백 `fetch/naver.py breadth`(E29) → `breadth_*.json` → `run.py adr_from_breadth` → `adr_naver_*.json` | **2026-10-06 adrinfo 이력 등록**: 사용자 제공 `adr_history_adrinfo.json`으로 시드(파일은 원본 그대로 보존). update-data가 평일 16:00 KST 이후 첫 실행에서 하루 1회 요청(`meta.adrinfo_fetches`), 새 날짜만 이어 붙임. 403이면 그날은 네이버 계산값을 넣고(화면 점선) 다음 날 adrinfo 값으로 교체. 네이버 계산값은 20거래일째(약 10-27)부터 생김 → 그전엔 폴백할 값이 없음. **일별 차트 활성**(VKOSPI \| ADR 행 — 10-06 배치 변경, 1년 기본·range slider·120·75 연회색 점선·adrinfo 실선/네이버 점선·출처 adrinfo.kr) |
+
+## 2026-11-15 (일) 미국 옵션 페이지 (options.html) — 작성, Actions 실행 전
+- 새 화면 `options.html`: 종목별 콜/풋 거래량·OI, 시장 요약, IV·스큐. 종목 14개(`data/options_watchlist.json`). 소스 = CBOE 지연 체인(주간 포지셔닝과 같은 엔드포인트)
+- **CORS 차단 확인**(11-15 14:07 KST, Claude 데스크톱 내장 브라우저, origin `https://isangyou.github.io`): `cdn-api.cboe.com`·`cdn.cboe.com` 둘 다 콘솔에 "No 'Access-Control-Allow-Origin' header is present" → 브라우저 직접 조회 불가 → 스냅샷 방식으로 확정
+- **실제 체인 대조**(11-13 금 종가 체인. 같은 브라우저에서 CBOE JSON을 직접 열어 화면 계산식을 실행, `data/positioning/options_daily.json` 2026-11-13 행과 비교. 합계는 dte≥1 기준으로 맞춤):
+
+  | | 콜 거래량 | 풋 거래량 | P/C 거래량 | P/C OI | 25Δ 스큐 | ATM IV 30일 (저장값) |
+  |---|---|---|---|---|---|---|
+  | SPY | 1,688,356 | 1,927,440 | 1.142 | 1.849 | 5.99 | 14.98 (14.97) |
+  | QQQ | 1,031,794 | 1,192,867 | 1.156 | 1.112 | 7.56 | 25.98 (25.98) |
+  | IWM | 205,618 | 518,576 | 2.522 | 2.399 | 4.92 | 18.60 (18.61) |
+
+  거래량·P/C·스큐는 저장값과 전부 일치, ATM IV 30일은 0.01 이내
+- 14종목 전부 파싱됨. 원본 합계 36.5MB(SPY 5.63MB·12,620계약 ~ PLTR 1.02MB) → 스냅샷 3.43MB(79,920계약). 스냅샷으로 다시 읽어 계산한 지표 = 원본으로 계산한 지표(14/14 동일)
+- 응답 관찰: `Cache-Control: max-age=0, s-maxage=5, stale-while-revalidate=5`. `timestamp`는 요청 시각이 아니라 CBOE가 파일을 만든 시각(Last-Modified와 2초 차) — 05:09 UTC 조회에 SPY 11-14 23:57:55, AAPL 11-14 23:15:32 등 3~7시간 전 값이었다. `iv30`·`iv30_change`·`price_change_percent`는 ETF 포함 14종목 모두 있음. 휴장 중 `iv30_change`는 14종목 전부 0 → 화면은 0이면 '–'
+  - 따라서 주간 화면 chain_label의 "(수집 …KST)"도 실제 요청 시각이 아니라 CBOE 파일 생성 시각이다(표기 문제, 수치 영향 없음. 미수정)
+- 심볼 루트에 숫자가 낀 계약(`B1SPY261120C00710000` 등)이 SPY 224·IWM 140·NVDA 214·TSLA 256건. 같은 만기·행사가의 정규 계약과 별개 상품군이고 거래량은 SPY 10계약(정규 3,615,796)·NVDA 133계약 → SYM_RE로 제외(positioning과 같은 처리)
+- 저장 방식: 스냅샷은 main에 커밋하지 않음(`.gitignore` `data/options/`). `scripts/options_loop.sh`가 `options-data` 브랜치에 부모 없는 커밋 1개로 강제 푸시 → `pages.yml`이 배포 때 `git archive`로 합침
+- 로컬 검증(가상 체인 + 로컬 bare 저장소, gh·네트워크는 스텁): 루프 1회·반복·휴장 종료·실패 종목 stale·이전 스냅샷 이어받기 — options-data 커밋 수 항상 1, main 무변경. guard 8개 시나리오. pages.yml 모으기 단계 → `_site/data/options` 15개 파일 → 화면 14/14 표시, 390px 가로 넘침 없음. actionlint·shellcheck 통과
+- **미검증**: (1) Actions에서 options.yml 실제 실행(once·loop·예비 트리거·guard) (2) 정규장 중 CBOE 파일 갱신 주기 — 5분 회차마다 timestamp가 바뀌는지, 지연이 실제 15분인지 (3) 장중 `iv30_change` 값이 16:35 ET 회차(종가 체인)에도 남는지 (4) 10:15 ET 휴장 판정이 실제 휴장일에 맞게 도는지 (5) 스냅샷 3.4MB를 5분마다 배포할 때 pages 배포 소요 시간
+- 주의: 5분 루프는 14종목 × 약 85회 = 하루 약 1,200회 요청(원본 기준 회차당 36.5MB). 주간 포지셔닝도 같은 엔드포인트를 쓰므로 CBOE가 차단하면 둘 다 멈춘다 → 403·429가 보이면 `options.yml`의 `INTERVAL`을 600~900으로 늘릴 것
 
 ## 2026-11-09 (월) E35 종목 일별 404 → E35b 교체 · 엔드포인트 전수 점검
 - 원인: `/domestic/detail/{code}/trend` 404 (저장값 마지막 10-20 → 이격도 차트 3주 멈춤). Playwright로 `/domestic/stock/005930/price` 캡처 → 새 일봉 `stockSecurity/items/v2/domestic/{code}/daily-prices/paged?size=100&index=n` (endpoints.md E35b)
@@ -214,6 +237,8 @@ cd ~/Documents/dash
 export PATH="$HOME/.local/bin:$PATH"              # gh 위치
 gh workflow run intraday -R Isangyou/market-dashboard -f mode=once        # 조건 적용 1회
 gh workflow run intraday -R Isangyou/market-dashboard -f mode=once-force  # 최근 거래일 백필 1회
+gh workflow run options -R Isangyou/market-dashboard -f mode=once          # 미국 옵션 스냅샷 1회(시각 무관) → options-data 브랜치 → pages
+.venv/bin/python -m fetch.options_live            # 로컬 스냅샷 → data/options/ (.gitignore) → http://localhost:8000/options.html
 gh run list -R Isangyou/market-dashboard -L 10
 
 # 전역 credential.helper 미설정(의도). 로컬 푸시는 명령 단위로 gh 인증 사용:

@@ -20,6 +20,7 @@
     run.py          # 전체 수집 → data/*.json 갱신 (진입점)
     intraday.py     # 장중 수집 → data/intraday/YYYY-MM-DD.json (평일 08:00~20:05, 현물 투자자 KRX·NXT·통합)
     market_day.py   # 거래일(휴장일) 판정 — update.yml·intraday.yml 공용
+    options_live.py # 미국 옵션 스냅샷 (CBOE 지연 체인 → data/options/, main에 커밋하지 않음)
   positioning/      # 주간 포지셔닝 리포트 (CTA 모델·CBOE 옵션·CFTC COT) — docs/positioning.md
     cta.py · options.py · cboe_pc.py(CBOE 일별 P/C) · cot.py · report.py(근거 수치) · brief.py(결론) · easy.py(쉽게 말하면) · run.py(진입점)
   data/
@@ -27,19 +28,24 @@
     series/*.json   # 항목별 시계열 (날짜, 값, 소스)
     intraday/       # 장중 파일(날짜별) + index.json(날짜 목록)
     positioning/    # weeks/YYYY-MM-DD.json(주간, 금요일 키) + options_daily.json + cboe_pc.json(CBOE 일별 P/C) + index.json
+    options_watchlist.json  # 옵션 페이지 종목 목록 (여기만 고치면 다음 회차부터 반영)
+    options/        # 옵션 스냅샷 {SYM}.json + index.json — .gitignore. options-data 브랜치에만 있고 배포 때 합쳐짐
   docs/
     endpoints.md    # 네이버 API 엔드포인트·파라미터·응답 필드 기록 (장중 E24~E28 포함)
     status.md       # 현재 상태·미검증 항목 (세션 인계용)
     positioning.md  # 주간 포지셔닝: 실행법·모델 가정·확정 규칙·미검증 항목
   scripts/
     intraday_loop.sh  # Actions 장중 루프 (3분 경계마다 intraday.py → 변경 시 커밋·푸시)
+    options_loop.sh   # Actions 미국 옵션 루프 (5분 경계마다 options_live.py → options-data 브랜치 덮어쓰기) · options_guard.sh(중복 실행 판정)
   index.html        # 대시보드 화면 (Plotly CDN, 단일 파일)
   intraday.html     # 장중 화면 (index.html과 상호 링크)
   weekly.html       # 주간 포지셔닝 리포트 (라이트, 주차 드롭다운, Notion용 결론 복사)
   technical.html    # 기술적 지표 — 4개 지수 과열/과매도 위치 (쿨 라이트)
+  options.html      # 미국 옵션 — 종목별 콜/풋·IV·스큐 (뉴트럴 라이트, 인라인 SVG)
   .github/workflows/update.yml    # 매시 + 거래일 장중 15분
   .github/workflows/intraday.yml  # 평일 07:45 시작(+15분마다 예비)→08:00 대기, 오전(~12:10)·오후(~15:40) 3분 + 저녁(~20:05) 10분 루프
-  .github/workflows/pages.yml     # Pages Actions 배포 (봇 푸시 후 호출됨)
+  .github/workflows/options.yml   # 미국 정규장 09:30~16:35 ET 5분 루프(평일, 30분마다 예비) → options-data 브랜치 → pages
+  .github/workflows/pages.yml     # Pages Actions 배포 (봇 푸시 후 호출됨, options-data 브랜치의 옵션 스냅샷을 합침)
   .github/workflows/positioning.yml  # 주간 포지셔닝: KST 화~금 07:10 + 금요일분 토 06:30(예비 09:30)
   requirements.txt
 ```
@@ -74,20 +80,29 @@
 - 지수별 3단 패널(x축 공유, 6개월 기본, range slider): 종가 + 50일 이평 점선 / 50일 이격도 + 110·90 / RSI(20, Wilder) + 70·30. 이격도·RSI 패널의 가로선은 이 참고선 두 줄씩만(연한 회색 점선, 격자선·중심선 없음, 네 지수 동일). 지표는 화면에서 자체 계산
 - 배치 2×2(S&P500 | 나스닥 종합 / 코스피 | 코스닥), 제목 옆 현재 이격도·RSI, 상단 요약 카드 4개(지수·등락률·이격도·RSI·기준일 — 미국/한국 장 마감 기준일이 다름)
 
+## 미국 옵션 (options.html)
+- 목적: 미국 개별 종목·ETF 옵션의 콜/풋을 종목별로 보는 화면. 소스 = CBOE 지연 체인(15분 지연, 주간 포지셔닝과 같은 엔드포인트). 종목 = `data/options_watchlist.json`(SPY·QQQ·IWM + 대형 기술주 11개)
+- 데이터 경로: CBOE가 브라우저의 직접 조회를 CORS로 막음(2026-11-15 확인) → `fetch/options_live.py`가 화면용 필드만 남긴 스냅샷(`data/options/{SYM}.json` + `index.json`, 1회 약 3.4MB)을 만들고 화면은 그것만 읽음. 스냅샷은 main에 커밋하지 않고 `options-data` 브랜치에 항상 커밋 1개로 덮어씀(main 이력이 커지지 않게) → `pages.yml`이 배포 때 합침
+- 화면 3단: 시장 요약(합산 콜/풋 거래량·P/C·SPY 0DTE 비중·IV30 + 종목별 표) / 종목 상세(행사가별·만기별 콜/풋 미러 막대, 거래량↔미결제약정, 만기 필터, 행사가 범위 ±10/15/25%, 거래량 상위 계약) / IV·스큐(ATM IV·25Δ 풋/콜 IV·스큐·내재 변동폭, IV 스마일, ATM IV 기간구조)
+- 지표는 전부 화면(JS)에서 스냅샷으로 계산. 정의는 `positioning/options.py`와 같다: 호가 필터(bid>0·ask>0·0.01<iv<3), 25Δ 스큐 = 잔존 10~60일 중 30일에 가장 가까운 만기, ATM IV = 현재가에 가까운 호가 4개 평균, 기준시각 표기 = chain_label. 다른 점: 합계에 당일 만기 포함(주간은 dte≥1). 정의를 바꾸면 화면 footer 문구도 같이 고칠 것
+- 차트는 인라인 SVG(Plotly 미사용), 이중축 없음. 색은 아래 디자인 항목의 옵션 페이지 예외 참고
+
 ## 화면 (index.html)
 - 단일 HTML 파일. Plotly CDN. 빌드 도구 없음. data/*.json을 fetch로 읽음
 - 레이아웃: 상단 카드 8개 → 메인 차트(외국인 일별 순매수 막대 + 20일 누적선, 우축 USD/KRW, 3개월 기본, range slider) → 2열 그리드(미국채 커브 오늘/1주전/1개월전, 10y·2y+2s10s, 국고 3y·10y, 환율 스파크라인 2×2, 유가 WTI·Brent, VIX+20일 이평(3개월 기본, range slider)) → 외국인 상위 종목 테이블 좌우
 - 모든 값 옆에 소스·기준시각을 작은 회색 글씨로 표시
-- 디자인: 모노톤, 페이지별 테마 구분 — **일별(index.html)=쿨 라이트(슬레이트 블루), 장중(intraday.html)=웜 라이트(세이지 그린)**. 주간(weekly.html)·기술적(technical.html)은 일별과 같은 쿨 라이트
+- 디자인: 모노톤, 페이지별 테마 구분 — **일별(index.html)=쿨 라이트(슬레이트 블루), 장중(intraday.html)=웜 라이트(세이지 그린)**. 주간(weekly.html)·기술적(technical.html)은 일별과 같은 쿨 라이트, 옵션(options.html)=뉴트럴 라이트(그레이)
   - 쿨 라이트(일별·주간): 배경 흰색~아주 밝은 회색, 글자 짙은 회색, 카드는 흰 배경+얇은 회색 테두리, 격자선 연한 회색, 소스·기준시각은 중간 회색. 포인트 색 슬레이트 블루(#7b93c4) 한 가지
   - 웜 라이트(장중): 배경 #f7f5f0, 카드 흰색+베이지 테두리 #e6e0d4, 격자선 #ebe6dc, 글자 #2f2b26, 소스·기준시각 #8a8378, 링크 글자 #3f6b4e. 포인트 색 세이지 그린(#5f8f6e) 한 가지(차트 선·막대·현재값 강조)
-  - 페이지마다 포인트 색은 위의 한 가지만, 보조선은 회색 계열. 그 외 보라·빨강 등 포인트 사용 금지. 상승/하락 구분은 색이 아니라 부호와 화살표로
-  - 상단 상호 링크는 "일별 · 라이트(블루) / 장중 · 라이트(그린) / 주간 포지셔닝 · 라이트(블루) / 기술적 · 라이트(블루)"로 테마를 함께 표기
+  - 뉴트럴 라이트(옵션): 배경 #f4f4f2, 카드 #fcfcfb+테두리 #e3e2de, 격자선 #ecebe7, 글자 #0b0b0b, 소스·기준시각 #8a8984. **예외로 포인트 색 두 가지**(콜 #3b6ea5 · 풋 #b07a3c) — 콜/풋 식별용이고 그 외 색은 쓰지 않음
+  - 페이지마다 포인트 색은 위의 한 가지만(옵션 페이지의 콜/풋 2색만 예외), 보조선은 회색 계열. 그 외 보라·빨강 등 포인트 사용 금지. 상승/하락 구분은 색이 아니라 부호와 화살표로
+  - 상단 상호 링크는 "일별 · 라이트(블루) / 장중 · 라이트(그린) / 주간 포지셔닝 · 라이트(블루) / 기술적 · 라이트(블루) / 옵션 · 라이트(그레이)"로 테마를 함께 표기
 - 모바일 폭에서도 깨지지 않게 (카드 2열, 차트 1열)
 
 ## 배치 (GitHub Actions)
 - 15분 간격, 한국 장중(평일 08:30~16:00 KST)은 매 15분, 그 외 시간은 1시간 간격. 휴장일은 fetch/market_day.py로 판정해 매시 정각만 실행
 - 장중 페이지용 intraday.yml: 평일 08:00 KST 시작(NXT 프리마켓), 3분 간격 루프(수집·커밋·푸시), 15:40~20:05는 10분 간격(NXT 애프터마켓), 휴장일이면 잡 생략. cron 누락 대비 15분마다 예비 트리거 + 중복 실행 판정. 로컬(launchd) 실행은 쓰지 않음
+- 미국 옵션용 options.yml: 평일 09:30~16:35 ET(15분 지연이라 종가 체인까지) 5분 간격 루프, 오전(~13:00)·오후 두 잡. cron은 UTC 고정이라 서머타임·표준시를 둘 다 덮고 스크립트가 ET로 대기·종료. 30분마다 예비 트리거 + scripts/options_guard.sh 중복 판정. 10:15 ET 이후에도 오늘 체결이 없으면 휴장으로 보고 종료. 스냅샷은 options-data 브랜치에만 푸시한 뒤 pages.yml 호출
 - run.py 실행 후 data/ 변경분만 커밋·푸시. 변경 없으면 커밋하지 않음
 - API 키(FRED 등)는 GitHub Secrets. 코드에 하드코딩 금지
 

@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>미국 옵션시장</title>
+<style>
+  :root {
+    color-scheme: light;   /* 옵션 = 뉴트럴 라이트(그레이). 포인트 색은 콜·풋 식별용 2색(차분한 블루·오커)만 */
+    --bg: #f4f4f2; --panel: #fcfcfb; --line: #e3e2de; --grid: #ecebe7;
+    --text: #0b0b0b; --muted: #52514e; --faint: #8a8984;
+    --call: #3b6ea5; --put: #b07a3c;   /* dataviz 검증: CVD ΔE 18.7 · 대비 ≥ 3:1 */
+    --hover: #f0efec; --sel: #e9e8e4;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 20px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  a { color: var(--muted); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  nav { display: flex; gap: 14px; font-size: 13px; flex-wrap: wrap; }
+  nav .here { color: var(--text); font-weight: 600; }
+  nav .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
+  .sw-blue { background: #ffffff; border: 1px solid #7b93c4; }
+  .sw-green { background: #f7f5f0; border: 1px solid #5f8f6e; }
+  .sw-gray { background: #fcfcfb; border: 1px solid #52514e; }    /* 뉴트럴 라이트 · 그레이 */
+  .meta, .src { color: var(--faint); font-size: 11px; }
+  .src { margin-top: 8px; overflow-wrap: anywhere; }
+
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 10px; }
+  .bar .grow { flex: 1; }
+  .tag { border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; font-size: 11px; color: var(--muted); white-space: nowrap; background: var(--panel); }
+  .tag.on { border-color: var(--text); color: var(--text); font-weight: 600; }
+  .btn, select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 4px 9px; }
+  .btn { cursor: pointer; }
+  .btn:hover { background: var(--hover); }
+  .btn:disabled { color: var(--faint); cursor: default; }
+  .banner { border: 1px solid var(--text); border-radius: 6px; background: var(--panel); padding: 10px 14px; margin-bottom: 12px; font-size: 12.5px; line-height: 1.7; }
+  .banner b { font-weight: 600; }
+  .banner code { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--hover); padding: 1px 4px; border-radius: 3px; }
+
+  h2 { font-size: 14px; margin: 22px 0 10px; font-weight: 600; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  h2 small { font-weight: 400; color: var(--muted); font-size: 12px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; min-width: 0; }
+  .panel h3 { margin: 0 0 2px; font-size: 13.5px; font-weight: 600; }
+  .panel .sub { color: var(--faint); font-size: 11px; margin-bottom: 8px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+  .kpi .l { color: var(--muted); font-size: 11.5px; }
+  .kpi .v { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; margin-top: 2px; }
+  .kpi .d { color: var(--faint); font-size: 11px; margin-top: 1px; }
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { padding: 6px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--grid); }
+  th { font-weight: 600; color: var(--muted); font-size: 11.5px; border-bottom: 1px solid var(--line); user-select: none; }
+  th.sortable { cursor: pointer; }
+  th.sortable:hover { color: var(--text); }
+  th:first-child, td:first-child, td.l, th.l { text-align: left; }
+  tbody tr.click { cursor: pointer; }
+  tbody tr.click:hover { background: var(--hover); }
+  tbody tr.on { background: var(--sel); }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.dim { color: var(--faint); }
+  .tk { font-weight: 600; }
+  .split { display: inline-flex; width: 110px; height: 8px; gap: 2px; vertical-align: middle; margin-right: 6px; }
+  .split i { display: block; height: 100%; border-radius: 2px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 10px; }
+  .controls label { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .seg button { font: inherit; color: var(--muted); background: var(--panel); border: 0; padding: 4px 10px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--text); color: var(--panel); }
+  .legend { display: flex; gap: 14px; color: var(--muted); font-size: 11.5px; margin-bottom: 4px; min-height: 17px; }
+  .chart { width: 100%; position: relative; min-height: 120px; }
+  .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .chart text { fill: var(--muted); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+  .chart .ax { stroke: var(--line); } .chart .gr { stroke: var(--grid); }
+  .chart text.vl { fill: var(--text); font-weight: 600; paint-order: stroke; stroke: var(--panel); stroke-width: 3px; }
+  .empty { color: var(--faint); font-size: 12px; padding: 40px 0; text-align: center; }
+  #tip { position: fixed; pointer-events: none; z-index: 10; background: var(--text); color: var(--panel); padding: 7px 9px; border-radius: 5px; font-size: 11.5px; line-height: 1.5; display: none; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  #tip b { font-weight: 600; }
+  #tip .dot { border: 1px solid var(--panel); }
+  footer { color: var(--faint); font-size: 11px; margin-top: 18px; line-height: 1.7; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>미국 옵션시장 · 종목별 콜/풋</h1>
+    <nav><a href="index.html"><i class="sw sw-blue"></i>일별 · 라이트(블루)</a><a href="intraday.html"><i class="sw sw-green"></i>장중 · 라이트(그린)</a><a href="weekly.html"><i class="sw sw-blue"></i>주간 포지셔닝 · 라이트(블루)</a><a href="technical.html"><i class="sw sw-blue"></i>기술적 · 라이트(블루)</a><span class="here"><i class="sw sw-gray"></i>옵션 · 라이트(그레이)</span></nav>
+  </header>
+  <div class="bar">
+    <span class="tag" id="mode">스냅샷 확인 중</span>
+    <span class="meta" id="meta">불러오는 중…</span>
+    <span class="grow"></span>
+    <button class="btn" id="refresh" disabled>새로고침</button>
+  </div>
+  <div class="banner" id="banner" hidden></div>
+
+  <div id="body" hidden>
+    <h2>시장 요약 <small id="mktSub"></small></h2>
+    <div class="kpis" id="mktKpis"></div>
+    <section class="panel">
+      <h3>종목별 콜/풋</h3>
+      <div class="sub">행을 누르면 아래 종목 상세가 바뀝니다. 열 제목을 누르면 정렬됩니다.</div>
+      <div class="tablewrap"><table id="mktTable"><thead></thead><tbody></tbody></table></div>
+      <div class="src" id="mktSrc"></div>
+    </section>
+
+    <h2 id="detailTitle">종목 상세</h2>
+    <div class="controls">
+      <label>종목 <select id="selTicker"></select></label>
+      <label>만기 <select id="selExpiry"></select></label>
+      <span class="seg" id="segMetric" role="group" aria-label="지표"><button data-m="vol" aria-pressed="true">거래량</button><button data-m="oi" aria-pressed="false">미결제약정</button></span>
+      <span class="seg" id="segBand" role="group" aria-label="행사가 범위"><button data-b="0.1" aria-pressed="false">±10%</button><button data-b="0.15" aria-pressed="true">±15%</button><button data-b="0.25" aria-pressed="false">±25%</button></span>
+    </div>
+    <div class="kpis" id="tkKpis"></div>
+    <div class="grid2">
+      <section class="panel">
+        <h3 id="strikeTitle">행사가별 콜/풋</h3>
+        <div class="sub" id="strikeSub"></div>
+        <div class="legend"><span><i class="dot" style="background:var(--call)"></i>콜</span><span><i class="dot" style="background:var(--put)"></i>풋</span></div>
+        <div class="chart" id="chStrike"></div>
+      </section>
+      <section class="panel">
+        <h3 id="expTitle">만기별 콜/풋</h3>
+        <div class="sub">전체 만기 · 위쪽 콜, 아래쪽 풋 · 막대를 누르면 그 만기로 필터</div>
+        <div class="legend"><span><i class="dot" style="background:var(--call)"></i>콜</span><span><i class="dot" style="background:var(--put)"></i>풋</span></div>
+        <div class="chart" id="chExpiry"></div>
+      </section>
+    </div>
+    <section class="panel" style="margin-top:10px">
+      <h3>거래량 상위 계약</h3>
+      <div class="sub" id="topSub"></div>
+      <div class="tablewrap"><table id="topTable"><thead></thead><tbody></tbody></table></div>
+      <div class="src" id="tkSrc"></div>
+    </section>
+
+    <h2 id="volTitle">IV · 스큐</h2>
+    <div class="kpis" id="volKpis"></div>
+    <div class="grid2">
+      <section class="panel">
+        <h3 id="smileTitle">IV 스마일</h3>
+        <div class="sub">OTM 기준(현재가 아래는 풋, 위는 콜) · 현재가 ±20% · 양쪽 호가가 있는 계약만 · 단위 %</div>
+        <div class="legend"><span><i class="dot" style="background:var(--put)"></i>OTM 풋</span><span><i class="dot" style="background:var(--call)"></i>OTM 콜</span></div>
+        <div class="chart" id="chSmile"></div>
+      </section>
+      <section class="panel">
+        <h3>ATM IV 기간구조</h3>
+        <div class="sub">만기별 등가격 내재변동성(잔존 1~400일) · 가로축 잔존일수 · 단위 %</div>
+        <div class="legend"></div>
+        <div class="chart" id="chTerm"></div>
+      </section>
+    </div>
+  </div>
+
+  <footer>
+    소스: CBOE delayed quotes(cdn.cboe.com/api/global/delayed_quotes/options), 15분 지연. 기준 시각 = 수집 시각 − 15분, 거래일 = 기초자산 마지막 체결일(ET). 16:15 ET 이후면 '종가 체인'.<br>
+    P/C = 풋 ÷ 콜. 거래량·미결제약정 합계는 당일 만기(0DTE = 기준 거래일에 만기인 계약) 포함 — 주간 포지셔닝은 당일 만기를 뺀 값이라 장중에는 P/C가 다를 수 있음.<br>
+    IV30·전일비 = CBOE 제공값(IV30이 없으면 자체 계산: 만기별 ATM IV를 분산 보간, ＊표시). 전일비는 CBOE 값이 0이면 표시하지 않음(휴장 중에는 0으로 내려옴).<br>
+    ATM IV = 현재가에 가장 가까운 호가 4개(양쪽 호가 있는 계약)의 IV 평균. 25Δ 스큐 = 델타 −0.25 풋 IV − 델타 +0.25 콜 IV(vp, 양수면 풋이 비쌈). 요약표의 스큐는 잔존 10~60일 중 30일에 가장 가까운 만기 — 주간 포지셔닝과 같은 정의.<br>
+    내재 변동폭 = ATM 스트래들 중간가 ÷ 현재가. 지표는 모두 이 화면에서 체인 스냅샷으로 직접 계산. 스냅샷은 미국 정규장 중 5분마다 갱신(Actions options 워크플로), 종목 목록은 data/options_watchlist.json.
+  </footer>
+</div>
+<div id="tip"></div>
+
+<script id="engine">
+/* ---------- 엔진 (DOM 비의존): 체인 스냅샷 → 정규화 → 지표. 정의는 positioning/options.py와 맞춤 ---------- */
+const DAY = 864e5;
+const dnum = s => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
+const num = x => (x === null || x === undefined || x === '' || !isFinite(+x)) ? null : +x;
+const _fmt = {};
+function tzParts(ms, tz) {
+  const f = _fmt[tz] || (_fmt[tz] = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }));
+  const p = {}; for (const x of f.formatToParts(new Date(ms))) p[x.type] = x.value;
+  return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` };
+}
+/* positioning/options.py chain_asof + chain_label 과 같은 규칙 */
+function chainAsof(ts, ltt) {
+  const m = /^(\d{4})-(\d\d)-(\d\d)[ T](\d\d):(\d\d):(\d\d)/.exec(ts || ''); if (!m) return null;
+  const fetched = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]), eff = tzParts(fetched - 15 * 6e4, 'America/New_York');
+  let d;
+  if (ltt && /^\d{4}-\d\d-\d\d/.test(ltt)) d = ltt.slice(0, 10);
+  else { let t = dnum(eff.date); if (eff.time < '09:30') t -= DAY; while ([0, 6].includes(new Date(t).getUTCDay())) t -= DAY; d = new Date(t).toISOString().slice(0, 10); }
+  const effS = eff.date + ' ' + eff.time; let time, kind;
+  if (effS >= d + ' 16:15') { time = '16:15'; kind = '종가 체인'; } else { time = effS > d + ' 09:30' ? eff.time : '09:30'; kind = '장중 스냅샷'; }
+  const f = tzParts(fetched, 'Asia/Seoul'), wd = s => '일월화수목금토'[new Date(dnum(s)).getUTCDay()], md = s => `${+s.slice(5, 7)}/${+s.slice(8, 10)}`;
+  return { date: d, time, kind, fetchedMs: fetched,
+    label: `CBOE ${md(d)}(${wd(d)}) ${time} ET ${kind} (수집 ${md(f.date)}(${wd(f.date)}) ${f.time} KST)`,
+    short: `${md(d)} ${time} ${kind === '종가 체인' ? '종가' : '장중'}` };
+}
+function mkRow(sym, exp, call, K, vol, oi, iv, delta, bid, ask, base) {
+  return { sym, exp, dte: Math.round((dnum(exp) - base) / DAY), call, K, vol, oi, iv, delta, bid, ask, mid: (bid + ask) / 2,
+    q: bid > 0 && ask > 0 && iv > 0.01 && iv < 3 };   // q = 양쪽 호가 + IV 1~300% (IV 지표는 q인 계약만)
+}
+function finish(meta, rows) {
+  const byExp = {}; for (const r of rows) (byExp[r.exp] || (byExp[r.exp] = [])).push(r);
+  const exps = Object.keys(byExp).sort(), dteOf = {}; for (const e of exps) dteOf[e] = byExp[e][0].dte;
+  const ch = { ...meta, rows, exps, byExp, dteOf }; ch.sum = summarize(ch); return ch;
+}
+const baseDate = asof => dnum(asof ? asof.date : new Date().toISOString().slice(0, 10));
+/* fetch/options_live.py 압축 파일 → 체인 */
+function fromSnapshot(o) {
+  const asof = chainAsof(o.timestamp, o.last_trade_time), base = baseDate(asof), rows = [];
+  for (const [ri, ei, cp, K, vol, oi, iv, delta, bid, ask] of o.rows) {
+    const exp = o.exps[ei], sym = o.roots[ri] + exp.slice(2, 4) + exp.slice(5, 7) + exp.slice(8, 10) + (cp ? 'C' : 'P') + String(Math.round(K * 1000)).padStart(8, '0');
+    rows.push(mkRow(sym, exp, !!cp, K, vol, oi, iv, delta, bid, ask, base));
+  }
+  if (!o.spot || !rows.length) throw new Error('빈 스냅샷');
+  return finish({ sym: o.sym, S: +o.spot, chgPct: num(o.chg_pct), iv30: num(o.iv30), iv30Chg: num(o.iv30_chg) || null, asof }, rows);   // 전일비 0 = 휴장 중 초기화값 → 표시 안 함
+}
+function totals(rows) {
+  let cv = 0, pv = 0, co = 0, po = 0;
+  for (const r of rows) { if (r.call) { cv += r.vol; co += r.oi; } else { pv += r.vol; po += r.oi; } }
+  return { cv, pv, co, po, pcv: cv ? pv / cv : null, pco: co ? po / co : null };
+}
+function atmIv(ch, exp) {   // 현재가에 가장 가까운 호가 4개의 IV 평균 (%)
+  const g = (ch.byExp[exp] || []).filter(r => r.q); if (!g.length) return null;
+  const k = g.sort((a, b) => Math.abs(a.K - ch.S) - Math.abs(b.K - ch.S) || a.K - b.K).slice(0, 4);
+  return { iv: k.reduce((s, r) => s + r.iv, 0) / k.length * 100, K: k[0].K };
+}
+function term(ch) {
+  const out = [];
+  for (const e of ch.exps) { const d = ch.dteOf[e]; if (d < 1 || d > 400) continue; const a = atmIv(ch, e); if (a && a.iv > 0 && a.iv < 300) out.push({ x: d, y: a.iv, exp: e }); }
+  return out;
+}
+function interpVar(t, days) {   // 분산(σ²T) 선형 보간
+  if (!t.length) return null;
+  if (days <= t[0].x) return t[0].y; if (days >= t[t.length - 1].x) return t[t.length - 1].y;
+  for (let i = 0; i < t.length - 1; i++) { const a = t[i], b = t[i + 1];
+    if (a.x <= days && days <= b.x) { const w0 = (a.y / 100) ** 2 * a.x, w1 = (b.y / 100) ** 2 * b.x; return Math.sqrt((w0 + (w1 - w0) * (days - a.x) / (b.x - a.x)) / days) * 100; } }
+  return null;
+}
+function exp30(ch) {   // 잔존 10~60일 중 30일에 가장 가까운 만기 (호가·OI 있는 것). 없으면 1일 이상 중 가장 가까운 것
+  let best = null;
+  const pick = (lo, hi, needOi) => { for (const e of ch.exps) { const d = ch.dteOf[e]; if (d < lo || d > hi) continue;
+    if (!ch.byExp[e].some(r => r.q && (!needOi || r.oi > 0))) continue;
+    if (best === null || Math.abs(d - 30) < Math.abs(ch.dteOf[best] - 30)) best = e; } };
+  pick(10, 60, true); if (best === null) pick(1, 400, false); return best;
+}
+function skew25(ch, exp) {
+  const all = (ch.byExp[exp] || []).filter(r => r.q); let e = all.filter(r => r.oi > 0);
+  if (!e.some(r => r.call) || !e.some(r => !r.call)) e = all;
+  const near = (call, t) => { let b = null; for (const r of e) if (r.call === call && (b === null || Math.abs(r.delta - t) < Math.abs(b.delta - t))) b = r; return b; };
+  const p = near(false, -0.25), c = near(true, 0.25); if (!p || !c) return null;
+  return { p25: p.iv * 100, c25: c.iv * 100, skew: (p.iv - c.iv) * 100, pK: p.K, cK: c.K };
+}
+function straddle(ch, exp) {
+  const m = new Map(); for (const r of ch.byExp[exp] || []) { if (!r.q) continue; const x = m.get(r.K) || {}; x[r.call ? 'c' : 'p'] = r; m.set(r.K, x); }
+  let best = null; for (const [K, x] of m) if (x.c && x.p && (best === null || Math.abs(K - ch.S) < Math.abs(best.K - ch.S))) best = { K, v: x.c.mid + x.p.mid };
+  return best;
+}
+function volStats(ch, exp) {
+  const a = atmIv(ch, exp), s = skew25(ch, exp) || { p25: null, c25: null, skew: null, pK: null, cK: null }, st = straddle(ch, exp);
+  return { exp, dte: ch.dteOf[exp], atm: a ? a.iv : null, Ka: a ? a.K : null, ...s, move: st ? st.v / ch.S : null, moveAbs: st ? st.v : null, Ks: st ? st.K : null };
+}
+function summarize(ch) {
+  const t = totals(ch.rows), z = totals(ch.rows.filter(r => r.dte === 0)), e = exp30(ch), sk = e ? skew25(ch, e) : null;
+  let iv30 = ch.iv30, calc = false; if (iv30 === null) { iv30 = interpVar(term(ch), 30); calc = iv30 !== null; }
+  return { sym: ch.sym, S: ch.S, chgPct: ch.chgPct, ...t, vol: t.cv + t.pv, zeroDte: t.cv + t.pv ? (z.cv + z.pv) / (t.cv + t.pv) : null,
+    iv30, iv30Calc: calc, iv30Chg: ch.iv30Chg, skew: sk ? sk.skew : null, skewExp: e, asof: ch.asof };
+}
+function niceStep(x) { if (!(x > 0)) return 1; const p = 10 ** Math.floor(Math.log10(x)); for (const m of [1, 2, 2.5, 5, 10]) if (x <= m * p * (1 + 1e-9)) return m * p; return 10 * p; }
+function byStrike(ch, exp, key, band, maxBars) {   // 행사가가 너무 많으면 간격을 묶음
+  const src = exp === 'ALL' ? ch.rows : (ch.byExp[exp] || []), lo = ch.S * (1 - band), hi = ch.S * (1 + band), m = new Map();
+  for (const r of src) { if (r.K < lo || r.K > hi) continue; const x = m.get(r.K) || { k: r.K, call: 0, put: 0 }; x[r.call ? 'call' : 'put'] += r[key]; m.set(r.K, x); }
+  let rows = [...m.values()].sort((a, b) => a.k - b.k), step = null;
+  if (maxBars && rows.length > maxBars) {
+    step = niceStep((hi - lo) / maxBars); const g = new Map();
+    for (const r of rows) { const k = +(Math.round(r.k / step) * step).toFixed(4), x = g.get(k) || { k, call: 0, put: 0 }; x.call += r.call; x.put += r.put; g.set(k, x); }
+    rows = [...g.values()].sort((a, b) => a.k - b.k);
+  }
+  return { rows, step };
+}
+function byExpiry(ch, key) {
+  return ch.exps.map(e => { let call = 0, put = 0; for (const r of ch.byExp[e]) { if (r.call) call += r[key]; else put += r[key]; } return { k: e, dte: ch.dteOf[e], call, put }; });
+}
+function smile(ch, exp, band) {
+  return (ch.byExp[exp] || []).filter(r => r.q && Math.abs(r.K / ch.S - 1) <= band && (r.call ? r.K >= ch.S : r.K < ch.S))
+    .sort((a, b) => a.K - b.K).map(r => ({ x: r.K, y: r.iv * 100, call: r.call }));
+}
+function topContracts(ch, exp, n) {
+  return (exp === 'ALL' ? ch.rows : (ch.byExp[exp] || [])).filter(r => r.vol > 0).sort((a, b) => b.vol - a.vol).slice(0, n);
+}
+if (typeof module !== 'undefined') module.exports = { fromSnapshot, chainAsof, totals, atmIv, term, interpVar, exp30, skew25, straddle, volStats, summarize, byStrike, byExpiry, smile, topContracts, niceStep, tzParts, dnum };
+</script>
+
+<script>
+/* ---------- 데이터 로딩: 저장소 스냅샷 data/options/ (fetch/options_live.py가 만들고 options.yml 루프가 갱신) ----------
+   CBOE는 브라우저의 직접 조회를 CORS로 막는다(2026-11-15 확인) → 화면은 스냅샷만 읽는다 */
+const $ = s => document.querySelector(s);
+const SNAP = 'data/options/';
+const TICKER_RE = /^[A-Z]{1,6}$/;
+const state = { tickers: [], stale: new Set(), missing: new Set(), chains: {}, errors: {}, tk: null, exp: 'ALL', metric: 'vol', band: 0.15,
+  sort: 'vol', dir: -1, loading: false, done: 0, total: 0, last: 0, snapGen: null };
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+async function getJSON(url, ms = 30000) {
+  const c = new AbortController(), t = setTimeout(() => c.abort(), ms);
+  try { const r = await fetch(url, { cache: 'no-store', signal: c.signal }); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }
+  finally { clearTimeout(t); }
+}
+const errText = e => e && e.name === 'AbortError' ? '시간 초과' : e instanceof TypeError ? '연결 실패' : (e && e.message) || '오류';
+async function snapChain(sym) { return fromSnapshot(await getJSON(`${SNAP}${sym}.json?t=${Date.now()}`)); }
+function applyIndex(idx) {
+  const ok = s => TICKER_RE.test(s), list = (idx.tickers || []).filter(t => ok(t.sym));
+  state.snapGen = idx.generated_kst; state.tickers = list.map(t => t.sym);
+  state.stale = new Set(list.filter(t => t.stale).map(t => t.sym)); state.missing = new Set();
+  for (const s of (idx.failed || []).filter(ok)) if (!state.tickers.includes(s)) { state.tickers.push(s); state.missing.add(s); delete state.chains[s]; state.errors[s] = '수집 실패 · 이전 스냅샷 없음'; }
+  if (!state.tickers.includes(state.tk)) { state.tk = state.tickers[0] || null; state.exp = 'ALL'; }
+}
+async function init() {
+  try { applyIndex(await getJSON(SNAP + 'index.json?t=' + Date.now(), 10000)); }
+  catch (e) {
+    $('#mode').textContent = '스냅샷 없음'; $('#meta').textContent = '';
+    const b = $('#banner'); b.hidden = false;
+    b.innerHTML = `<b>옵션 스냅샷을 불러오지 못했습니다.</b> <code>${SNAP}index.json</code> — ${esc(errText(e))}<br>` +
+      `스냅샷은 Actions의 <code>options</code> 워크플로가 미국 정규장 중 5분마다 만듭니다. 처음이면 Actions → options → Run workflow(mode=once)로 한 번 실행하세요. 로컬에서는 <code>python -m fetch.options_live</code> 실행 후 새로고침.`;
+    return;
+  }
+  $('#mode').textContent = 'CBOE 15분 지연 · 저장소 스냅샷'; $('#mode').classList.add('on'); $('#body').hidden = false;
+  renderAll();
+  await loadAll();
+  setInterval(tick, 60000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
+}
+async function loadAll() {
+  if (state.loading) return; state.loading = true;
+  const list = state.tickers.filter(s => !state.missing.has(s));
+  state.done = 0; state.total = list.length; setMeta(); let i = 0;
+  const worker = async () => { while (i < list.length) { const sym = list[i++];
+    try { state.chains[sym] = await snapChain(sym); delete state.errors[sym]; } catch (e) { state.errors[sym] = errText(e); }
+    state.done++; setMeta(); renderMarket(); if (sym === state.tk) { fillExpiries(); renderDetail(); renderVol(); } } };
+  await Promise.all(Array.from({ length: 6 }, worker));
+  state.loading = false; state.last = Date.now(); setMeta(); renderAll();
+}
+async function refresh(force) {   // 새 스냅샷이 있으면(또는 force) 전 종목 다시 읽음
+  if (state.loading || (!force && document.hidden)) return;
+  try { const idx = await getJSON(SNAP + 'index.json?t=' + Date.now(), 8000); if (force || idx.generated_kst !== state.snapGen) { applyIndex(idx); await loadAll(); } }
+  catch (e) { if (force) { state.last = Date.now(); setMeta('스냅샷 목록 조회 실패 — ' + errText(e)); } }
+}
+const tick = () => refresh(false);
+function setMeta(note) {
+  const ok = state.tickers.filter(s => state.chains[s]).length, t = state.last ? tzParts(state.last, 'Asia/Seoul').time : null;
+  $('#meta').textContent = (state.loading ? `불러오는 중 ${state.done}/${state.total} · ` : '') + `종목 ${ok}/${state.tickers.length}` +
+    (state.snapGen ? ` · 스냅샷 생성 ${state.snapGen.slice(5, 16).replace('T', ' ')} KST` : '') + (t ? ` · 화면 갱신 ${t} KST · 1분마다 새 스냅샷 확인` : '') + (note ? ` · ${note}` : '');
+  $('#refresh').disabled = state.loading;
+}
+
+/* ---------- 표시 형식 ---------- */
+const fN = n => n === null || !isFinite(n) ? '–' : Math.abs(n) >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : Math.abs(n) >= 1e4 ? (n / 1e3).toFixed(0) + 'K' : Math.abs(n) >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(Math.round(n));
+const fI = n => n === null || !isFinite(n) ? '–' : Math.round(n).toLocaleString('en-US');
+const f2 = n => n === null || !isFinite(n) ? '–' : n.toFixed(2);
+const fPct = (n, d = 1) => n === null || !isFinite(n) ? '–' : n.toFixed(d) + '%';
+const fSgn = (n, d, u) => n === null || !isFinite(n) ? '–' : (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n).toFixed(d) + u;
+const fChg = n => n === null || !isFinite(n) ? '–' : (n > 0 ? '▲ +' : n < 0 ? '▼ −' : '') + Math.abs(n).toFixed(2) + '%';   // 색 대신 부호·화살표
+const fExp = e => e.slice(5).replace('-', '/');
+const fK = k => String(+k.toFixed(2));
+const mLabel = () => state.metric === 'vol' ? '거래량' : '미결제약정';
+const dot = c => `<i class="dot" style="background:var(--${c})"></i>`;
+const kpi = (l, v, d) => `<div class="kpi"><div class="l">${l}</div><div class="v">${v}</div>${d ? `<div class="d">${d}</div>` : ''}</div>`;
+
+/* ---------- 툴팁·차트 (인라인 SVG, 축 1개) ---------- */
+const tip = $('#tip');
+function showTip(ev, html) { tip.innerHTML = html; tip.style.display = 'block';
+  const w = tip.offsetWidth, h = tip.offsetHeight; let x = ev.clientX + 14, y = ev.clientY + 14;
+  if (x + w > innerWidth - 8) x = ev.clientX - w - 14; if (y + h > innerHeight - 8) y = ev.clientY - h - 14;
+  tip.style.left = Math.max(4, x) + 'px'; tip.style.top = Math.max(4, y) + 'px'; }
+const hideTip = () => { tip.style.display = 'none'; };
+function niceTicks(lo, hi, n) { const st = niceStep((hi - lo || 1) / n), out = []; for (let v = Math.ceil(lo / st - 1e-9) * st; v <= hi + st * 1e-6; v += st) out.push(+v.toFixed(10)); return out; }
+const empty = (el, msg) => { el.innerHTML = `<div class="empty">${msg || '표시할 데이터 없음'}</div>`; };
+
+/* 콜(위)·풋(아래) 미러 막대 */
+function mirrorBars(el, rows, o) {
+  if (!rows.length || !rows.some(r => r.call || r.put)) return empty(el);
+  const W = Math.max(300, el.clientWidth), H = 270, L = 46, Rm = 10, T = 14, B = 26, pw = W - L - Rm, ph = H - T - B, mid = T + ph / 2;
+  const mx = Math.max(1, ...rows.map(r => Math.max(r.call, r.put)));
+  let tk = niceTicks(0, mx, 3).filter(Number.isInteger); if (tk.length < 2) tk = [0, mx];
+  const top = Math.max(mx, tk[tk.length - 1]);
+  const bw = pw / rows.length, w = Math.max(1.5, Math.min(22, bw - 2)), sc = v => v / top * (ph / 2 - 4);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${o.aria}">`;
+  for (const t of tk) { if (!t) continue; for (const sg of [-1, 1]) { const y = mid - sg * sc(t);
+    s += `<line class="gr" x1="${L}" x2="${W - Rm}" y1="${y}" y2="${y}"/><text x="${L - 6}" y="${y + 3.5}" text-anchor="end">${fN(t)}</text>`; } }
+  const every = Math.max(1, Math.ceil(rows.length / Math.max(1, Math.floor(pw / 46))));
+  rows.forEach((r, i) => { const x = L + i * bw + (bw - w) / 2, hc = sc(r.call), hp = sc(r.put), rx = Math.min(3, w / 2), dim = o.sel && o.sel !== r.k ? ' opacity=".35"' : '';
+    s += `<rect x="${x}" y="${mid - 1 - hc}" width="${w}" height="${Math.max(hc, 0.5)}" rx="${rx}" fill="var(--call)"${dim}/>` +
+         `<rect x="${x}" y="${mid + 1}" width="${w}" height="${Math.max(hp, 0.5)}" rx="${rx}" fill="var(--put)"${dim}/>`;
+    if (i % every === 0) s += `<text x="${L + i * bw + bw / 2}" y="${H - 8}" text-anchor="middle">${o.xfmt(r)}</text>`; });
+  s += `<line class="ax" x1="${L}" x2="${W - Rm}" y1="${mid}" y2="${mid}"/>`;
+  if (o.spot != null && rows.length > 1) {   // 현재가 위치(행사가 사이 보간)
+    let xi = rows.findIndex(r => r.k >= o.spot); if (xi < 0) xi = rows.length - 1;
+    const a = rows[Math.max(0, xi - 1)], b = rows[xi], f = b.k === a.k ? 0 : Math.min(1, Math.max(0, (o.spot - a.k) / (b.k - a.k))), x = L + (Math.max(0, xi - 1) + f + 0.5) * bw;
+    const right = x > L + pw * 0.75;
+    s += `<line x1="${x}" x2="${x}" y1="${T - 4}" y2="${H - B}" stroke="var(--text)" stroke-dasharray="3 3" stroke-width="1"/>` +
+         `<text x="${x + (right ? -5 : 5)}" y="${T + 4}" text-anchor="${right ? 'end' : 'start'}" class="vl">현재가 ${o.spot.toFixed(2)}</text>`;
+  }
+  rows.forEach((r, i) => { s += `<rect data-i="${i}" x="${L + i * bw}" y="${T}" width="${bw}" height="${ph}" fill="transparent"${o.onClick ? ' style="cursor:pointer"' : ''}/>`; });
+  el.innerHTML = s + '</svg>';
+  el.querySelectorAll('rect[data-i]').forEach(n => { const r = rows[+n.dataset.i];
+    n.addEventListener('mousemove', ev => showTip(ev, `<b>${o.tfmt(r)}</b><br>${dot('call')}콜 ${fI(r.call)}<br>${dot('put')}풋 ${fI(r.put)}<br>P/C ${r.call ? f2(r.put / r.call) : '–'}`));
+    n.addEventListener('mouseleave', hideTip); if (o.onClick) n.addEventListener('click', () => o.onClick(r)); });
+}
+/* 선 차트 (x 수치축) */
+function lineChart(el, series, o) {
+  const all = series.flatMap(s => s.pts); if (all.length < 2) return empty(el, '호가가 있는 계약이 부족함');
+  const W = Math.max(300, el.clientWidth), H = 270, L = 40, Rm = 14, T = 14, B = 26, pw = W - L - Rm, ph = H - T - B;
+  const x0 = Math.min(...all.map(p => p.x)), x1 = Math.max(...all.map(p => p.x));
+  let y0 = Math.min(...all.map(p => p.y)), y1 = Math.max(...all.map(p => p.y)); const pad = (y1 - y0) * 0.12 || 1; y0 = Math.max(0, y0 - pad); y1 += pad;
+  const X = v => L + (x1 === x0 ? 0.5 : (v - x0) / (x1 - x0)) * pw, Y = v => T + ph - (v - y0) / (y1 - y0) * ph;
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${o.aria}">`;
+  for (const t of niceTicks(y0, y1, 4)) s += `<line class="gr" x1="${L}" x2="${W - Rm}" y1="${Y(t)}" y2="${Y(t)}"/><text x="${L - 6}" y="${Y(t) + 3.5}" text-anchor="end">${t}</text>`;
+  for (const t of niceTicks(x0, x1, Math.max(2, Math.floor(pw / 80)))) if (t >= x0 && t <= x1) s += `<text x="${X(t)}" y="${H - 8}" text-anchor="middle">${o.xfmt(t)}</text>`;
+  s += `<line class="ax" x1="${L}" x2="${W - Rm}" y1="${T + ph}" y2="${T + ph}"/>`;
+  if (o.vline != null && o.vline >= x0 && o.vline <= x1) { const right = X(o.vline) > L + pw * 0.75;
+    s += `<line x1="${X(o.vline)}" x2="${X(o.vline)}" y1="${T - 4}" y2="${T + ph}" stroke="var(--text)" stroke-dasharray="3 3"/><text x="${X(o.vline) + (right ? -5 : 5)}" y="${T + 4}" text-anchor="${right ? 'end' : 'start'}" class="vl">${o.vlabel}</text>`; }
+  for (const se of series) { if (!se.pts.length) continue;
+    s += `<path d="${se.pts.map((p, i) => (i ? 'L' : 'M') + X(p.x).toFixed(1) + ' ' + Y(p.y).toFixed(1)).join('')}" fill="none" stroke="var(--${se.color})" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    if (o.markers) for (const p of se.pts) s += `<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="4" fill="var(--${se.color})" stroke="var(--panel)" stroke-width="2"/>`; }
+  s += `<line class="xh" y1="${T}" y2="${T + ph}" stroke="var(--faint)" visibility="hidden"/><circle class="xd" r="4.5" fill="var(--panel)" stroke="var(--text)" stroke-width="2" visibility="hidden"/>` +
+       `<rect class="hit" x="${L}" y="${T}" width="${pw}" height="${ph}" fill="transparent"/></svg>`;
+  el.innerHTML = s;
+  const svg = el.querySelector('svg'), xh = svg.querySelector('.xh'), xd = svg.querySelector('.xd'), hit = svg.querySelector('.hit');
+  const flat = series.flatMap(se => se.pts.map(p => ({ ...p, name: se.name, color: se.color })));
+  hit.addEventListener('mousemove', ev => { const b = svg.getBoundingClientRect(), px = (ev.clientX - b.left) / b.width * W;
+    const p = flat.reduce((a, c) => Math.abs(X(c.x) - px) < Math.abs(X(a.x) - px) ? c : a);
+    xh.setAttribute('x1', X(p.x)); xh.setAttribute('x2', X(p.x)); xh.setAttribute('visibility', 'visible');
+    xd.setAttribute('cx', X(p.x)); xd.setAttribute('cy', Y(p.y)); xd.setAttribute('visibility', 'visible'); showTip(ev, o.tfmt(p)); });
+  hit.addEventListener('mouseleave', () => { hideTip(); xh.setAttribute('visibility', 'hidden'); xd.setAttribute('visibility', 'hidden'); });
+}
+
+/* ---------- 렌더 ---------- */
+function renderMarket() {
+  const sums = state.tickers.map(s => state.chains[s] && state.chains[s].sum).filter(Boolean);
+  const T = sums.reduce((a, r) => ({ cv: a.cv + r.cv, pv: a.pv + r.pv, co: a.co + r.co, po: a.po + r.po }), { cv: 0, pv: 0, co: 0, po: 0 });
+  const lead = (state.chains.SPY && state.chains.SPY.sum) || sums[0];
+  $('#mktSub').textContent = `표의 종목 ${sums.length}개 합산`;
+  $('#mktKpis').innerHTML = kpi('콜 거래량', fN(sums.length ? T.cv : null), '계약') + kpi('풋 거래량', fN(sums.length ? T.pv : null), '계약') +
+    kpi('P/C (거래량)', f2(T.cv ? T.pv / T.cv : null)) + kpi('P/C (미결제약정)', f2(T.co ? T.po / T.co : null)) +
+    (lead ? kpi(`${lead.sym} 0DTE 비중`, fPct(lead.zeroDte === null ? null : lead.zeroDte * 100), `${lead.sym} 거래량 대비`) +
+      kpi(`${lead.sym} IV30${lead.iv30Calc ? '＊' : ''}`, fPct(lead.iv30), lead.iv30Chg === null ? (lead.iv30Calc ? '자체 계산' : 'CBOE') : `전일비 ${fSgn(lead.iv30Chg, 2, '%p')} · CBOE`) : '');
+  const cols = [['sym', '종목'], ['S', '현재가'], ['chgPct', '등락률'], ['cv', '콜 거래량'], ['pv', '풋 거래량'], [null, '콜 : 풋'], ['pcv', 'P/C 거래량'], ['pco', 'P/C OI'],
+    ['iv30', 'IV30'], ['iv30Chg', '전일비'], ['skew', '25Δ 스큐'], [null, '기준(ET)']];
+  $('#mktTable thead').innerHTML = '<tr>' + cols.map(([k, l]) => `<th ${k ? `class="sortable" data-k="${k}"` : ''}>${l}${k && state.sort === k ? (state.dir < 0 ? ' ↓' : ' ↑') : ''}</th>`).join('') + '</tr>';
+  const val = (s, k) => { const r = state.chains[s] && state.chains[s].sum; return r ? r[k] : null; };
+  const order = [...state.tickers].sort((a, b) => { if (state.sort === 'sym') return state.dir * a.localeCompare(b);
+    const x = val(a, state.sort), y = val(b, state.sort); if (x === null || x === undefined) return (y === null || y === undefined) ? 0 : 1; if (y === null || y === undefined) return -1; return state.dir * (x - y); });
+  $('#mktTable tbody').innerHTML = order.map(s => {
+    const r = state.chains[s] && state.chains[s].sum, err = state.errors[s];
+    if (!r) return `<tr data-tk="${s}"><td class="tk">${s}</td><td class="l dim" colspan="11">${err ? '조회 실패 — ' + esc(err) : '불러오는 중…'}</td></tr>`;
+    const cp = r.vol ? r.cv / r.vol * 100 : null, note = err ? ` <span class="tag" title="${esc(err)}">갱신 실패 · 이전 값</span>` : state.stale.has(s) ? ' <span class="tag">이전 값</span>' : '';
+    return `<tr class="click${s === state.tk ? ' on' : ''}" data-tk="${s}"><td class="tk">${s}${note}</td><td>${r.S.toFixed(2)}</td><td>${fChg(r.chgPct)}</td><td>${fI(r.cv)}</td><td>${fI(r.pv)}</td>` +
+      `<td>${cp === null ? '–' : `<span class="split" title="콜 ${cp.toFixed(0)}% · 풋 ${(100 - cp).toFixed(0)}%"><i style="width:${cp}%;background:var(--call)"></i><i style="width:${100 - cp}%;background:var(--put)"></i></span>${cp.toFixed(0)} : ${(100 - cp).toFixed(0)}`}</td>` +
+      `<td>${f2(r.pcv)}</td><td>${f2(r.pco)}</td><td>${fPct(r.iv30)}${r.iv30Calc ? '＊' : ''}</td><td>${fSgn(r.iv30Chg, 2, '%p')}</td><td>${fSgn(r.skew, 1, 'vp')}</td><td class="dim">${r.asof ? r.asof.short : '–'}</td></tr>`;
+  }).join('');
+  $('#mktSrc').textContent = '소스: CBOE delayed quotes · 15분 지연 · 기준 시각은 종목마다 다를 수 있음(기준 열)';
+  const sel = $('#selTicker'), opts = state.tickers.filter(s => state.chains[s]);
+  if (sel.dataset.sig !== opts.join()) { sel.innerHTML = opts.map(s => `<option>${s}</option>`).join(''); sel.dataset.sig = opts.join(); }
+  if (opts.includes(state.tk)) sel.value = state.tk;
+}
+function fillExpiries() {
+  const ch = state.chains[state.tk], sel = $('#selExpiry'); if (!ch) { sel.innerHTML = ''; return; }
+  if (state.exp !== 'ALL' && !ch.byExp[state.exp]) state.exp = 'ALL';
+  sel.innerHTML = '<option value="ALL">전체 만기</option>' + ch.exps.map(e => `<option value="${e}">${e} (${ch.dteOf[e]}일)</option>`).join(''); sel.value = state.exp;
+}
+function renderDetail() {
+  const ch = state.chains[state.tk];
+  if (!ch) { $('#detailTitle').innerHTML = `종목 상세 <small>${state.tk ? esc(state.tk) + ' · ' + (state.errors[state.tk] ? '조회 실패' : '불러오는 중…') : ''}</small>`;
+    for (const id of ['#tkKpis', '#topSub', '#tkSrc']) $(id).innerHTML = ''; for (const id of ['#chStrike', '#chExpiry']) empty($(id)); $('#topTable tbody').innerHTML = ''; return; }
+  const key = state.metric, scope = state.exp === 'ALL' ? ch.rows : ch.byExp[state.exp], t = totals(scope);
+  const scopeTxt = state.exp === 'ALL' ? '전체 만기' : `${fExp(state.exp)} 만기(잔존 ${ch.dteOf[state.exp]}일)`;
+  $('#detailTitle').innerHTML = `종목 상세 <small>${ch.sym} · 현재가 ${ch.S.toFixed(2)} (${fChg(ch.chgPct)}) · ${scopeTxt}</small>`;
+  $('#tkKpis').innerHTML = kpi('콜 거래량', fN(t.cv)) + kpi('풋 거래량', fN(t.pv)) + kpi('P/C (거래량)', f2(t.pcv)) + kpi('콜 미결제약정', fN(t.co)) + kpi('풋 미결제약정', fN(t.po)) + kpi('P/C (미결제약정)', f2(t.pco));
+  const elS = $('#chStrike'), bs = byStrike(ch, state.exp, key, state.band, Math.max(24, Math.floor((elS.clientWidth - 56) / 8)));
+  $('#strikeTitle').textContent = `행사가별 콜/풋 ${mLabel()} — ${scopeTxt}`;
+  $('#strikeSub').textContent = `현재가 ±${state.band * 100}% · 위쪽 콜, 아래쪽 풋` + (bs.step ? ` · 행사가 ${fK(bs.step)} 간격으로 묶음` : '');
+  mirrorBars(elS, bs.rows, { aria: '행사가별 콜 풋 ' + mLabel(), spot: ch.S, xfmt: r => fK(r.k), tfmt: r => `행사가 ${fK(r.k)}${bs.step ? ` (±${fK(bs.step / 2)})` : ''} · ${mLabel()}` });
+  $('#expTitle').textContent = `만기별 콜/풋 ${mLabel()}`;
+  mirrorBars($('#chExpiry'), byExpiry(ch, key), { aria: '만기별 콜 풋 ' + mLabel(), sel: state.exp === 'ALL' ? null : state.exp, xfmt: r => fExp(r.k),
+    tfmt: r => `${r.k} · 잔존 ${r.dte}일 · ${mLabel()}`, onClick: r => { state.exp = state.exp === r.k ? 'ALL' : r.k; $('#selExpiry').value = state.exp; renderDetail(); renderVol(); } });
+  $('#topSub').textContent = `${ch.sym} · ${scopeTxt} · 거래량 기준 상위 12개`;
+  $('#topTable thead').innerHTML = '<tr><th>계약</th><th class="l">유형</th><th>행사가</th><th>만기</th><th>잔존일</th><th>거래량</th><th>미결제약정</th><th>거래량/OI</th><th>IV</th><th>델타</th><th>중간가</th></tr>';
+  const top = topContracts(ch, state.exp, 12);
+  $('#topTable tbody').innerHTML = top.length ? top.map(r =>
+    `<tr><td>${r.sym}</td><td class="l">${dot(r.call ? 'call' : 'put')}${r.call ? '콜' : '풋'}</td><td>${fK(r.K)}</td><td>${r.exp}</td><td>${r.dte}</td><td>${fI(r.vol)}</td><td>${fI(r.oi)}</td><td>${r.oi ? f2(r.vol / r.oi) : '–'}</td><td>${r.iv > 0 ? fPct(r.iv * 100) : '–'}</td><td>${r.delta.toFixed(2)}</td><td>${r.mid.toFixed(2)}</td></tr>`).join('')
+    : '<tr><td class="l dim" colspan="11">거래된 계약 없음</td></tr>';
+  $('#tkSrc').textContent = (ch.asof ? ch.asof.label : 'CBOE –') + (state.errors[ch.sym] ? ' · 최근 갱신 실패로 이전 값 표시' : '');
+}
+function renderVol() {
+  const ch = state.chains[state.tk];
+  if (!ch) { $('#volTitle').innerHTML = 'IV · 스큐'; $('#volKpis').innerHTML = ''; for (const id of ['#chSmile', '#chTerm']) empty($(id)); return; }
+  const exp = state.exp === 'ALL' ? exp30(ch) : state.exp;
+  if (!exp) { $('#volTitle').innerHTML = `IV · 스큐 <small>${ch.sym} · 호가가 있는 만기 없음</small>`; $('#volKpis').innerHTML = ''; for (const id of ['#chSmile', '#chTerm']) empty($(id)); return; }
+  const v = volStats(ch, exp);
+  $('#volTitle').innerHTML = `IV · 스큐 <small>${ch.sym} · ${fExp(exp)} 만기(잔존 ${v.dte}일)${state.exp === 'ALL' ? ' · 잔존 30일에 가장 가까운 만기' : ''}</small>`;
+  $('#volKpis').innerHTML = kpi('ATM IV', fPct(v.atm), v.Ka === null ? '' : `행사가 ${fK(v.Ka)} 근처 호가 평균`) + kpi('25Δ 풋 IV', fPct(v.p25), v.pK === null ? '' : `행사가 ${fK(v.pK)}`) +
+    kpi('25Δ 콜 IV', fPct(v.c25), v.cK === null ? '' : `행사가 ${fK(v.cK)}`) + kpi('25Δ 스큐 (풋−콜)', fSgn(v.skew, 1, 'vp')) +
+    kpi('내재 변동폭', v.move === null ? '–' : `±${(v.move * 100).toFixed(1)}%`, v.move === null ? '' : `±${v.moveAbs.toFixed(2)} · ${fK(v.Ks)} 스트래들 · 만기까지`);
+  const sm = smile(ch, exp, 0.2);
+  $('#smileTitle').textContent = `IV 스마일 — ${fExp(exp)} 만기`;
+  lineChart($('#chSmile'), [{ name: 'OTM 풋', color: 'put', pts: sm.filter(p => !p.call) }, { name: 'OTM 콜', color: 'call', pts: sm.filter(p => p.call) }],
+    { aria: '행사가별 내재변동성', xfmt: t => fK(t), vline: ch.S, vlabel: '현재가 ' + ch.S.toFixed(2), tfmt: p => `<b>행사가 ${fK(p.x)}</b> (${fSgn((p.x / ch.S - 1) * 100, 1, '%')})<br>${dot(p.color)}${p.name} IV ${p.y.toFixed(1)}%` });
+  lineChart($('#chTerm'), [{ name: 'ATM IV', color: 'muted', pts: term(ch) }], { aria: 'ATM 내재변동성 기간구조', markers: true, xfmt: t => t + '일',
+    tfmt: p => `<b>${p.exp}</b> · 잔존 ${p.x}일<br>ATM IV ${p.y.toFixed(1)}%` });
+}
+function renderAll() { renderMarket(); fillExpiries(); renderDetail(); renderVol(); }
+function setTicker(tk) { state.tk = tk; state.exp = 'ALL'; renderAll(); }
+
+/* ---------- 이벤트 ---------- */
+$('#refresh').addEventListener('click', () => refresh(true));
+$('#selTicker').addEventListener('change', e => setTicker(e.target.value));
+$('#selExpiry').addEventListener('change', e => { state.exp = e.target.value; renderDetail(); renderVol(); });
+function seg(id, attr, apply) { $(id).addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+  $(id).querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); apply(b.dataset[attr]); renderDetail(); }); }
+seg('#segMetric', 'm', v => { state.metric = v; });
+seg('#segBand', 'b', v => { state.band = +v; });
+$('#mktTable').addEventListener('click', e => {
+  const th = e.target.closest('th[data-k]'), tr = e.target.closest('tr.click');
+  if (th) { const k = th.dataset.k; if (state.sort === k) state.dir *= -1; else { state.sort = k; state.dir = k === 'sym' ? 1 : -1; } renderMarket(); }
+  else if (tr) { setTicker(tr.dataset.tk); $('#detailTitle').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+});
+let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (state.snapGen) { renderDetail(); renderVol(); } }, 120); });
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+name: options
+
+# 미국 옵션 스냅샷 루프 (options.html용). CBOE 지연 체인을 5분마다 받아 options-data 브랜치에 덮어쓰고 pages 배포를 부른다.
+# CBOE가 브라우저의 직접 조회를 CORS로 막아서(2026-11-15 확인) 화면은 이 스냅샷만 읽는다.
+# 시각은 전부 ET 기준: 09:30 대기 → 오전(~13:00) · 오후(~16:35, 15분 지연이라 종가 체인까지) 두 잡 (잡 6시간 제한)
+# cron은 UTC 고정이라 서머타임(EDT=UTC-4)·표준시(EST=UTC-5) 둘 다 덮게 넣고, 스크립트가 ET로 대기·종료를 판단한다.
+#   13:20 UTC = EDT 09:20 / EST 08:20(09:30까지 대기),  14:20 UTC = EDT 10:20(예비) / EST 09:20
+# GitHub schedule은 지연·누락이 있어(intraday.yml 주석 참고) 30분마다 예비 트리거를 두고 scripts/options_guard.sh로 중복을 거른다.
+# 미국 휴장일: 10:15 ET 이후에도 오늘 체결이 없으면 루프가 스스로 끝난다(예비 트리거마다 1회 확인 후 종료).
+on:
+  schedule:
+    - cron: "20,50 13-19 * * 1-5"   # EDT 09:20~15:50 / EST 08:20~14:50 (첫 회 = 시작, 나머지 예비)
+    - cron: "20 20 * * 1-5"         # EDT 16:20 / EST 15:20 (예비)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "loop=정규장 루프 / once=지금 1회(시각 무관)"
+        type: choice
+        options: [loop, once]
+        default: loop
+
+permissions:
+  contents: write   # options-data 브랜치 푸시
+  actions: write    # 푸시 후 pages.yml 호출, guard의 실행 취소
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      dup: ${{ steps.dup.outputs.dup }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: dup
+        name: 중복 실행 판정 (스케줄·loop만)
+        if: inputs.mode == '' || inputs.mode == 'loop'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: scripts/options_guard.sh | tail -1 >> "$GITHUB_OUTPUT"
+
+  am:
+    needs: guard
+    if: always() && needs.guard.outputs.dup != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 300   # EST 08:20 시작 → 13:00 ET (약 4시간 40분)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: 오전 루프 (09:30~13:00 ET) / 수동 1회
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INTERVAL: "300"   # 초. 14종목 × 하루 약 85회 요청 — CBOE에 부담이 되면 600~900으로
+          WAIT_UNTIL: ${{ (inputs.mode == '' || inputs.mode == 'loop') && '09:30' || '' }}
+        run: |
+          case "${{ inputs.mode }}" in
+            once) ONCE=1 scripts/options_loop.sh 13:00 ;;
+            *)    scripts/options_loop.sh 13:00 ;;
+          esac
+
+  pm:
+    needs: [guard, am]
+    # 오전 잡이 실패해도 오후는 돈다
+    if: always() && needs.guard.outputs.dup != 'true' && (inputs.mode == '' || inputs.mode == 'loop')
+    runs-on: ubuntu-latest
+    # 보통 13:00 시작 → 3시간 35분. 오전 잡이 일찍 실패하면 바로 시작해 오전분까지 이어받음 (6시간 한도 내)
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: 오후 루프 (13:00~16:35 ET)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INTERVAL: "300"
+        run: scripts/options_loop.sh 16:35 inclusive
