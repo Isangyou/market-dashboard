@@ -49,6 +49,14 @@
 - **미검증**: (1) Actions에서 options.yml 실제 실행(once·loop·예비 트리거·guard) (2) 정규장 중 CBOE 파일 갱신 주기 — 5분 회차마다 timestamp가 바뀌는지, 지연이 실제 15분인지 (3) 장중 `iv30_change` 값이 16:35 ET 회차(종가 체인)에도 남는지 (4) 10:15 ET 휴장 판정이 실제 휴장일에 맞게 도는지 (5) 스냅샷 3.4MB를 5분마다 배포할 때 pages 배포 소요 시간
 - 주의: 5분 루프는 14종목 × 약 85회 = 하루 약 1,200회 요청(원본 기준 회차당 36.5MB). 주간 포지셔닝도 같은 엔드포인트를 쓰므로 CBOE가 차단하면 둘 다 멈춘다 → 403·429가 보이면 `options.yml`의 `INTERVAL`을 600~900으로 늘릴 것
 
+## 2026-11-16 (월) 위클리 결론 P/C — 거래량 기준(CBOE Index·Total·Equity) 추가
+- 문제: 11-13 주 결론이 P/C를 OI 기준(1.41→1.40)만 보고 '지난주와 비슷'. CBOE 거래량 Index P/C는 11/6 1.26(직전 252거래일 최고) → 11/13 0.96(-0.30, 1년 금→금 주간 하락폭 2위 — 1위는 05-29 -0.34)
+- `cboe_pc.week_stats(db, fri)` → 주차 파일 `cboe_pc_week`(금 종가·전주 금·주평균·전주 평균·Δ·changed·1년 백분위·하락 순위·unwind). run.py 정규 실행과 `--rebuild-conclusion` 둘 다 채움
+- 판정: 세 비율 각각 금 vs 전주 금, 주평균 vs 전주 평균 중 하나라도 |Δ| ≥ 0.10(2자리 반올림)이면 옵션 블록 '변화 없음' 해제. 결론 표기 `P/C(OI) 1.40 (지난주 1.41) · 거래량 Index P/C 0.96 (전주 금 1.26, -0.30, 1년 고점에서 하락)` + 세 비율 상세 줄. 쉽게 말하면에 '⚑ 헤지 피크 후 되감기'(전주 금 1년 상위 10% & 금→금 −0.20 이상), 종합에도 한 구절
+- 11-13 주: Index 변화(-0.30, 되감기 플래그) · Total 변화(-0.10) · Equity 비슷(+0.04, 주평균 +0.02)
+- `--rebuild-conclusion` 8개 주차: brief·markdown·cboe_pc_week 외 변경 0건. 옵션 블록 '변화 없음'이 바뀐 주 = 10-09(True→False, Index +0.27). 09-25는 전주 스냅샷 없어 None 유지
+- 미검증: weekly.html 브라우저 렌더(이번 세션 권한 거부로 미실행 — 화면 코드는 변경 없음, brief 텍스트를 그대로 출력)
+
 ## 2026-11-09 (월) E35 종목 일별 404 → E35b 교체 · 엔드포인트 전수 점검
 - 원인: `/domestic/detail/{code}/trend` 404 (저장값 마지막 10-20 → 이격도 차트 3주 멈춤). Playwright로 `/domestic/stock/005930/price` 캡처 → 새 일봉 `stockSecurity/items/v2/domestic/{code}/daily-prices/paged?size=100&index=n` (endpoints.md E35b)
 - **종가 필드 주의**: 새 응답은 `regularMarketClosingPrice`(KRX 15:30)와 `closingPrice`(NXT 애프터마켓 포함, 20:00까지 변함) 둘. 09-14부터 값이 갈림. 구 E35 저장값 = closingPrice(186/186일 일치)였음 → 09-14 이후 통합 가격이 섞여 있었음. KRX 정규장 종가로 통일하고 시리즈 전체 교체(source `naver:stock_daily_prices`, 400행 2025-03-20~2026-11-09, 값 바뀐 날 삼성전자 20·SK하이닉스 22)

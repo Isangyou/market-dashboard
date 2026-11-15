@@ -324,7 +324,37 @@ def _cmp(cur, old, unit, up, down, same="지난주와 비슷하다"):
     return up if cur - old >= unit else down if old - cur >= unit else same
 
 
-def options(u, pu, wk=None, unit=None):
+PC_KO = {"index": "지수옵션(Index)", "total": "전체(Total)", "equity": "개별주식(Equity)"}
+TOPIC = {"index": "은", "total": "는", "equity": "은"}
+
+
+def _pc_word(x):
+    if not x["changed"]:
+        return "비슷하다"
+    d = x["d_fri"] if abs(x["d_fri"]) >= 0.10 - 1e-9 else x["d_avg"]
+    return "올랐다(새로 사는 풋 비중 증가)" if d > 0 else "내렸다(새로 사는 풋 비중 감소)"
+
+
+def pc_volume(pcw):
+    """CBOE 거래량 P/C 세 개: 금 종가·주평균 vs 전주 + '헤지 피크 후 되감기' 플래그"""
+    S = (pcw or {}).get("series") or {}
+    if not S:
+        return None
+    parts = [f"{PC_KO[k]}{TOPIC[k]} {x['prev_fri']:.2f}→{x['fri']:.2f}배(주평균 {x['prev_avg']:.2f}→{x['avg']:.2f})로 {_pc_word(x)}."
+             for k, x in S.items()]
+    s = (("반면 " if any(x["changed"] for x in S.values()) else "")
+         + "그 주에 새로 거래된 계약 기준(CBOE 거래량 P/C, 전주 금요일→이번 주 금요일)으로 보면 " + " ".join(parts))
+    for k, x in S.items():
+        if not x.get("unwind"):
+            continue
+        where = "최근 1년 중 가장 높은 값이었는데" if x["prev_is_1y_high"] else f"최근 1년 상위 {max(1, round((1 - x['prev_pctile_1y']) * 100))}% 구간이었는데"
+        rank = f"(1년 주간 하락폭 중 {x['drop_rank_1y']}번째)" if x.get("drop_rank_1y") and x["drop_rank_1y"] <= 5 else ""
+        s += (f" ⚑ 헤지 피크 후 되감기 — {PC_KO[k]} 거래량 P/C는 전주 금요일 {x['prev_fri']:.2f}배로 {where} "
+              f"한 주 만에 {abs(x['d_fri']):.2f} 빠졌다{rank}. 하락에 대비해 풋을 몰아 사던 흐름이 정점을 찍고 빠르게 식었다는 뜻이다.")
+    return s
+
+
+def options(u, pu, wk=None, unit=None, pcw=None):
     """관측값만: 옵션 가격(IV)·풋/콜 가격 차(스큐)·미결제 비율(P/C)·미결제 집중 행사가"""
     if not u:
         return None
@@ -348,7 +378,12 @@ def options(u, pu, wk=None, unit=None):
         t = f"남아 있는 풋 계약은 콜의 {pc:.2f}배(P/C, 미결제 기준)"
         c = _cmp(pc, ppc, unit["pc"], f"로 지난주 {ppc:.2f}배보다 풋 쪽 비중이 늘었다", f"로 지난주 {ppc:.2f}배보다 풋 쪽 비중이 줄었다",
                  f"로 지난주 {ppc:.2f}배와 비슷하다") if ppc is not None else None
-        out.append(t + (c or "다") + "." + (f" 이번 주 거래량 기준으로는 {wk:.2f}배." if wk is not None else ""))
+        out.append(t + (c or "다") + ".")
+    pv = pc_volume(pcw)
+    if pv:
+        out.append(pv)
+    if wk is not None:
+        out.append(f"(SPX 옵션 체인 스냅샷 기준 거래량 P/C 주평균은 {wk:.2f}배.)")
     cw, pw = u.get("call_oi_wall"), u.get("put_oi_wall")
     if cw and pw:
         dd = lambda k: sg((k / u["spot"] - 1) * 100, 1)
@@ -386,7 +421,7 @@ def _cot_obs(c, pc, unit):
         f" 외 {len(rows) - 2}건 ≥1σ" if len(rows) > 2 else "")
 
 
-def _opt_obs(u, pu, unit):
+def _opt_obs(u, pu, unit, pcw=None):
     if not u or u.get("atm_iv_30d") is None:
         return None
     pu = pu or {}
@@ -396,7 +431,11 @@ def _opt_obs(u, pu, unit):
     if sk is not None:
         bits.append(f"스큐 {sg(sk, 1)}vp" + (f"({sg(sk - psk, 1)})" if psk is not None else ""))
     if pc is not None:
-        bits.append(f"P/C {pc:.2f}" + (f"({sg(pc - ppc, 2)})" if ppc is not None else ""))
+        bits.append(f"P/C(OI) {pc:.2f}" + (f"({sg(pc - ppc, 2)})" if ppc is not None else ""))
+    S = (pcw or {}).get("series") or {}
+    if S.get("index"):
+        bits.append(f"거래량 Index P/C {S['index']['fri']:.2f}({sg(S['index']['d_fri'], 2)})")
+    vol_same = not any(x["changed"] for x in S.values())
     tag = ""
     if piv is not None and psk is not None and sk is not None:
         div, dsk = iv - piv, sk - psk
@@ -404,8 +443,11 @@ def _opt_obs(u, pu, unit):
             tag = "로 옵션이 비싸지고 하락 대비 수요 증가"
         elif div <= -unit["iv"] and dsk <= -unit["skew"]:
             tag = "로 옵션이 싸지고 하락 대비 수요 감소"
-        elif abs(div) < unit["iv"] and abs(dsk) < unit["skew"] and (ppc is None or abs(pc - ppc) < unit["pc"]):
+        elif abs(div) < unit["iv"] and abs(dsk) < unit["skew"] and (ppc is None or abs(pc - ppc) < unit["pc"]) and vol_same:
             tag = "로 지난주와 비슷"
+    uw = [x for x in S.values() if x.get("unwind")]
+    if uw:
+        tag += " · 거래량 P/C는 헤지 피크 후 되감기(" + ", ".join(f"{x['label']} {x['prev_fri']:.2f}→{x['fri']:.2f}" for x in uw) + ")"
     return "SPX 옵션은 " + "·".join(bits) + tag
 
 
@@ -433,7 +475,7 @@ def _model_shape(es, u, pu):
 def overall(snap, prev, unit):
     es, pes = _get(snap, "cta", "assets", "ES"), _get(prev, "cta", "assets", "ES")
     u, pu = _get(snap, "options", "underlyings", "SPX"), _get(prev, "options", "underlyings", "SPX")
-    obs = [x for x in (_cot_obs(snap.get("cot"), (prev or {}).get("cot"), unit["cot_z"]), _opt_obs(u, pu, unit)) if x]
+    obs = [x for x in (_cot_obs(snap.get("cot"), (prev or {}).get("cot"), unit["cot_z"]), _opt_obs(u, pu, unit, snap.get("cboe_pc_week"))) if x]
     rd, prd = _get(snap, "cot", "report_date"), _get(prev, "cot", "report_date")
     if rd and rd != prd:
         obs.append(bonds(snap["cot"], unit["cot_z"]))
@@ -451,5 +493,5 @@ def build(snap, prev, unit):
     u, pu = _get(snap, "options", "underlyings", "SPX"), _get(prev, "options", "underlyings", "SPX")
     c, pc = snap.get("cot"), (prev or {}).get("cot")
     asof, pasof = _get(snap, "asof", "us_market_date") or snap.get("week"), _get(prev, "asof", "us_market_date") or (prev or {}).get("week")
-    return {"cot": cot(c, pc, unit["cot_z"]), "options": options(u, pu, _get(snap, "options_week", "pc_vol_avg", "SPX"), unit),
+    return {"cot": cot(c, pc, unit["cot_z"]), "options": options(u, pu, _get(snap, "options_week", "pc_vol_avg", "SPX"), unit, snap.get("cboe_pc_week")),
             "gamma": gamma(u, pu, asof, pasof), "flip": flip(es, pes, u, unit["flip"]), "overall": overall(snap, prev, unit)}

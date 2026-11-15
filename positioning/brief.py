@@ -151,6 +151,34 @@ def block_cot(snap, prev):
     return blk
 
 
+WD = "월화수목금토일"
+
+
+def _day_label(d):
+    from datetime import date
+    x = date.fromisoformat(d)
+    return f"{d[5:].replace('-', '/')}({WD[x.weekday()]})"
+
+
+def pc_tag(x):
+    """전주 금요일 값의 1년 위치 — 하락한 주에만: '1년 고점에서 하락' / '1년 상위 N%에서 하락'"""
+    if x["d_fri"] >= 0:
+        return None
+    if x["prev_is_1y_high"]:
+        return "1년 고점에서 하락"
+    top = 1 - x["prev_pctile_1y"]
+    return f"1년 상위 {max(1, round(top * 100))}%에서 하락" if top <= 0.10 + 1e-9 else None
+
+
+def pc_fri_text(x):
+    """'0.96 (전주 금 1.26, -0.30, 1년 고점에서 하락)' — 주 마지막 거래일이 금요일이 아니면 날짜 표기"""
+    from datetime import date
+    head = f"{x['fri']:.2f}" + ("" if date.fromisoformat(x["fri_date"]).weekday() == 4 else f"({_day_label(x['fri_date'])})")
+    pl = "전주 금" if date.fromisoformat(x["prev_fri_date"]).weekday() == 4 else f"전주 {_day_label(x['prev_fri_date'])}"
+    tag = pc_tag(x)
+    return f"{head} ({pl} {x['prev_fri']:.2f}, {sg(x['d_fri'], 2)}" + (f", {tag}" if tag else "") + ")"
+
+
 def _dv(cur, old, d):
     return f"지난주 {old:.{d}f}, {sg(cur - old, d)}" if cur is not None and old is not None else "지난주 없음"
 
@@ -171,11 +199,24 @@ def block_options(snap, prev):
     if u.get("skew_25d_30d") is not None:
         old = pu.get("skew_25d_30d")
         it.append(f"25Δ 스큐 {sg(u['skew_25d_30d'], 1)}vp (" + (f"지난주 {sg(old, 1)}vp, {sg(u['skew_25d_30d'] - old, 1)}vp" if old is not None else "지난주 없음") + ")")
-    if u.get("pc_oi") is not None:
-        t = f"P/C(OI) {u['pc_oi']:.2f} ({_dv(u['pc_oi'], pu.get('pc_oi'), 2)})"
+    pcw = (snap.get("cboe_pc_week") or {}).get("series") or {}
+    if u.get("pc_oi") is not None or pcw:
+        bits = []
+        if u.get("pc_oi") is not None:
+            old = pu.get("pc_oi")
+            bits.append(f"P/C(OI) {u['pc_oi']:.2f} (" + (f"지난주 {old:.2f}" if old is not None else "지난주 없음") + ")")
+        if pcw.get("index"):
+            bits.append(f"거래량 Index P/C {pc_fri_text(pcw['index'])}")
+        it.append(" · ".join(bits))
+    if pcw:
+        fr = " · ".join(f"{x['label']} {x['fri']:.2f}({sg(x['d_fri'], 2)})" for x in pcw.values())
+        av = " · ".join(f"{x['label']} {x['avg']:.2f} (전주 {x['prev_avg']:.2f}, {sg(x['d_avg'], 2)})" for x in pcw.values())
+        t = f"CBOE 거래량 P/C — {_day_label(next(iter(pcw.values()))['fri_date'])} 종가: {fr} / 주평균: {av}"
         if wk is not None:
-            t += f" · P/C(거래량, 주평균) {wk:.2f}" + (f" (지난주 {pwk:.2f})" if pwk is not None else "")
+            t += f" · SPX 체인 거래량 P/C 주평균 {wk:.2f}" + (f" (지난주 {pwk:.2f})" if pwk is not None else "")
         it.append(t)
+    elif wk is not None:
+        it.append(f"SPX 체인 거래량 P/C 주평균 {wk:.2f}" + (f" (지난주 {pwk:.2f})" if pwk is not None else ""))
     cw, pw = u.get("call_oi_wall"), u.get("put_oi_wall")
     if cw or pw:
         dd = lambda k: f"{sg((k / u['spot'] - 1) * 100, 1)}%" if k else "–"
@@ -199,9 +240,12 @@ def block_options(snap, prev):
         small = all(a is None or b is None or abs(a - b) < unit for a, b, unit in (
             (u.get("atm_iv_30d"), pu.get("atm_iv_30d"), UNIT["iv"]), (u.get("skew_25d_30d"), pu.get("skew_25d_30d"), UNIT["skew"]),
             (u.get("pc_oi"), pu.get("pc_oi"), UNIT["pc"])))
+        small = small and not any(x["changed"] for x in pcw.values())
         blk["unchanged"] = small and cw == pu.get("call_oi_wall") and pw == pu.get("put_oi_wall")
         if blk["unchanged"]:
-            blk["note"] = f"IV·스큐 {UNIT['iv']:.0f}vp, P/C {UNIT['pc']:.2f} 미만 변화 · OI 집중 행사가 동일"
+            blk["note"] = (f"IV·스큐 {UNIT['iv']:.0f}vp, P/C(OI) {UNIT['pc']:.2f} 미만 변화"
+                           + (f" · CBOE 거래량 P/C(Index·Total·Equity) 금 종가·주평균 모두 {UNIT['pc']:.2f} 미만" if pcw else "")
+                           + " · OI 집중 행사가 동일")
     else:
         blk["unchanged"] = None
     return blk

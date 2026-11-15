@@ -123,6 +123,8 @@ def main(argv=None):
             if v.get("pc_vol") is not None:
                 wavg.setdefault(k, []).append(v["pc_vol"])
     snap["options_week"] = {"days": sorted(wk_rows), "pc_vol_avg": {k: round(sum(v) / len(v), 3) for k, v in wavg.items()}}
+    # CBOE 일별 P/C(거래량) 금요일 종가·주평균 vs 전주 — 결론 P/C 판정에 사용
+    snap["cboe_pc_week"] = cboe_pc.week_stats(_load(ddir / "cboe_pc.json"), fri)
     # 일별 히스토리(차트용): SPX·VIX 주요 스칼라 최근 1년
     hist_days = sorted(od["rows"])[-260:]
     snap["options_hist"] = {
@@ -196,6 +198,7 @@ def rebuild_conclusion(ddir: Path):
     """규칙 변경 후 기존 주차 결론 재생성. 전주 brief를 쓰므로 오래된 주부터 순서대로"""
     idx = _load(ddir / "index.json", {"weeks": []})
     prev = None
+    pc_db = _load(ddir / "cboe_pc.json")
     for w in sorted(x["week"] for x in idx["weeks"]):
         p = ddir / "weeks" / f"{w}.json"
         snap = _load(p)
@@ -203,6 +206,7 @@ def rebuild_conclusion(ddir: Path):
             continue
         snap.pop("summary", None)
         _backfill_chain_asof(snap)
+        snap["cboe_pc_week"] = cboe_pc.week_stats(pc_db, w)
         snap["conclusion"] = report.build_conclusion(snap, prev)
         snap["brief"] = brief.build(snap, prev)
         snap["markdown"] = report.to_markdown(snap)
