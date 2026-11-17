@@ -3964,7 +3964,7 @@
   "KOSPI": {
    "source": "naver:trend_time",
    "unit": "억원",
-   "asof": "2026-11-17T16:48:00+09:00",
+   "asof": "2026-11-17T16:49:00+09:00",
    "basis": "KRX 단독 장중 누적 잠정치 (NXT 제외, 15:40 이후는 KRX 시간외 포함)",
    "rows": [
     {
@@ -5838,6 +5838,12 @@
      "foreign": -14386.7,
      "individual": 4271.4,
      "institution": 5308.8
+    },
+    {
+     "t": "16:49",
+     "foreign": -14375.2,
+     "individual": 4260.1,
+     "institution": 5308.6
     }
    ],
    "stale": false
@@ -5845,7 +5851,7 @@
   "KOSDAQ": {
    "source": "naver:trend_time",
    "unit": "억원",
-   "asof": "2026-11-17T16:48:00+09:00",
+   "asof": "2026-11-17T16:49:00+09:00",
    "basis": "KRX 단독 장중 누적 잠정치 (NXT 제외, 15:40 이후는 KRX 시간외 포함)",
    "rows": [
     {
@@ -7719,6 +7725,12 @@
      "foreign": -888.6,
      "individual": 1166.2,
      "institution": -260.6
+    },
+    {
+     "t": "16:49",
+     "foreign": -888.7,
+     "individual": 1166.2,
+     "institution": -260.6
     }
    ],
    "stale": false
@@ -7728,7 +7740,7 @@
   "KOSPI": {
    "source": "naver:trend_time_nxt",
    "unit": "억원",
-   "asof": "2026-11-17T16:48:00+09:00",
+   "asof": "2026-11-17T16:49:00+09:00",
    "basis": "NXT(넥스트레이드) 단독 장중 누적 잠정치 (프리마켓 08:00~ · 애프터마켓 ~20:00 포함)",
    "rows": [
     {
@@ -9847,6 +9859,12 @@
      "t": "16:48",
      "foreign": -1036.5,
      "individual": -103.5,
+     "institution": 1139.8
+    },
+    {
+     "t": "16:49",
+     "foreign": -1033.0,
+     "individual": -107.0,
      "institution": 1139.8
     }
    ],
@@ -16261,7 +16279,7 @@
    "symbol": "NQ=F",
    "name": "나스닥100 선물",
    "source": "yfinance:NQ=F 1m",
-   "asof": "2026-11-17T16:39:00+09:00",
+   "asof": "2026-11-17T16:40:00+09:00",
    "since": "2026-11-17T06:00:00+09:00",
    "prev_close": 27307.25,
    "prev_close_at": "2026-11-17T06:00:00+09:00",
@@ -18525,7 +18543,11 @@
     },
     {
      "t": "16:39",
-     "c": 27301.75
+     "c": 27300.25
+    },
+    {
+     "t": "16:40",
+     "c": 27297.5
     }
    ],
    "stale": false
@@ -18534,7 +18556,7 @@
    "symbol": "CL=F",
    "name": "WTI 선물",
    "source": "yfinance:CL=F 1m",
-   "asof": "2026-11-17T16:39:00+09:00",
+   "asof": "2026-11-17T16:40:00+09:00",
    "since": "2026-11-17T06:00:00+09:00",
    "prev_close": 85.51,
    "prev_close_at": "2026-11-17T06:00:00+09:00",
@@ -20822,7 +20844,11 @@
     },
     {
      "t": "16:39",
-     "c": 85.37
+     "c": 85.41
+    },
+    {
+     "t": "16:40",
+     "c": 85.35
     }
    ],
    "stale": false
@@ -20832,7 +20858,7 @@
   "KOSPI": {
    "source": "naver:trend_time + naver:trend_time_nxt",
    "unit": "억원",
-   "asof": "2026-11-17T16:48:00+09:00",
+   "asof": "2026-11-17T16:49:00+09:00",
    "basis": "KRX+NXT 통합 (직접 합산) · 프리마켓 08:00~ 포함 · KRX는 15:40 이후 시간외, NXT는 애프터마켓 ~20:00 포함",
    "stale": false,
    "rows": [
@@ -22953,13 +22979,19 @@
      "foreign": -15423.2,
      "individual": 4167.9,
      "institution": 6448.6
+    },
+    {
+     "t": "16:49",
+     "foreign": -15408.2,
+     "individual": 4153.1,
+     "institution": 6448.4
     }
    ]
   },
   "KOSDAQ": {
    "source": "naver:trend_time + naver:trend_time_nxt",
    "unit": "억원",
-   "asof": "2026-11-17T16:48:00+09:00",
+   "asof": "2026-11-17T16:49:00+09:00",
    "basis": "KRX+NXT 통합 (직접 합산) · 프리마켓 08:00~ 포함 · KRX는 15:40 이후 시간외, NXT는 애프터마켓 ~20:00 포함",
    "stale": false,
    "rows": [
@@ -26016,6 +26048,12 @@
      "foreign": -738.6,
      "individual": 1027.5,
      "institution": -252.9
+    },
+    {
+     "t": "16:49",
+     "foreign": -738.7,
+     "individual": 1027.5,
+     "institution": -252.9
     }
    ]
   }
@@ -27437,9 +27475,22 @@
    "fut_foreign": 172,
    "program_kospi": -6668.5,
    "usdkrw": 1337.4
+  },
+  {
+   "t": "16:50",
+   "sampled_at": "2026-11-17T16:50:06+09:00",
+   "kospi": 4968.48,
+   "kospi_chg_pct": -2.59,
+   "foreign_kospi": -14375.2,
+   "foreign_kosdaq": -888.7,
+   "foreign_kospi_total": -15408.2,
+   "foreign_kosdaq_total": -738.7,
+   "fut_foreign": 172,
+   "program_kospi": -6668.5,
+   "usdkrw": 1337.4
   }
  ],
- "updated_at": "2026-11-17T16:49:05+09:00",
+ "updated_at": "2026-11-17T16:50:06+09:00",
  "market_day": {
   "date": "2026-11-17",
   "trading": true,
