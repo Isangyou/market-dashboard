@@ -35,7 +35,7 @@
 - 원인 3 (stale 폴백): run.py가 옵션 섹션이 비면 '이번 주 기존 값'(= 11/19 실행분, 11/18 체인)을 그대로 유지. 라벨은 그 체인의 chain_label만 찍어서 실패 사실이 안 보였고, 다음 만기도 이미 지난 11/20(SPX 17.1% 소멸)이 남아 있었음
 - 수정: `options.collect` 종목별 실패 사유(`errors`, 'HTTP 403 · Cloudflare 차단' 등), 403·429면 나머지 종목 요청 생략. run.py `options_fail`{chain_date·실패 거래일 목록·사유} 누적 → 라벨 `stale · 11/18(수) 16:15 ET 종가 체인 기준 · 11/19(목)·11/20(금) 수집 실패(HTTP 403 · Cloudflare 차단)` (결론 블록 제목·weekly 상단·옵션/감마 부제). stale 체인의 다음 만기가 이미 지났으면 비움(`expired_opex`, 카드 'stale 체인 — 만기 이미 지남'). `--chain-dir`: 브라우저로 저장한 CBOE JSON으로 계산
 - 11-20 주 파일: options_fail을 위 로그로 보충 후 `--rebuild-conclusion`(다른 주차 변경 0건). **11/20 종가 체인 재수집은 못 함** — 자동 요청이 차단됨(이 세션에서 우회 시도는 하지 않음). 브라우저로 받으면: 10개 URL(`https://cdn.cboe.com/api/global/delayed_quotes/options/{_SPX,SPY,_NDX,QQQ,_RUT,IWM,_VIX,TLT,GLD,USO}.json`)을 한 폴더에 `{심볼}.json`으로 저장 → `.venv/bin/python -m positioning.run --only options --chain-dir <폴더>` (월요일 장 시작 전, KST 23:30 이전에 실행해야 11/20 주로 들어감)
-- 미해결: CBOE 차단이 계속되면 options.yml 5분 루프(options_live.py)도 전부 403 — 루프 쪽엔 403 중단이 아직 없음
+- options.yml 루프도 403·429 중단(같은 날 추가): `fetch/options_live.py`가 403·429를 받으면 나머지 종목 요청 생략 → 이전 값 stale + index `blocked`·`errors` 기록 → 종료코드 4 → `options_loop.sh`가 그 index만 푸시하고 루프 종료. options.html 상단에 `stale · 스냅샷 생성 시각에 CBOE 수집 실패(HTTP 403 · Cloudflare 차단), 이전 값 표시`. 30분 예비 트리거가 다시 띄우면 회차당 1회만 요청. 검증: 모의 403(요청 1회·rc 4·3종목 stale), 500은 계속 요청(3회·rc 0), 임시 클론+로컬 bare 저장소에서 루프 1회 푸시 후 종료
 
 ## 2026-11-15 (일) 미국 옵션 페이지 (options.html) — 작성, Actions 실행 전
 - 새 화면 `options.html`: 종목별 콜/풋 거래량·OI, 시장 요약, IV·스큐. 종목 14개(`data/options_watchlist.json`). 소스 = CBOE 지연 체인(주간 포지셔닝과 같은 엔드포인트)

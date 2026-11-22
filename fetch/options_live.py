@@ -27,6 +27,7 @@ Access-Control-Allow-Origin 없음) 화면은 이 스냅샷만 읽는다. 갱신
 실행: python -m fetch.options_live [--out DIR] [--tickers SPY,QQQ] [--sleep 1.0] [--exit-if-closed]
 종료코드: 0 = 기록(변경 있음/없음 무관), 1 = 전 종목 실패,
           3 = 기록했지만 오늘(ET) 체결된 종목이 없음(휴장·개장 전) — --exit-if-closed 일 때만. 루프의 휴장 판정용
+          4 = HTTP 403·429(차단·제한) → 그 자리에서 나머지 종목 요청 생략, 이전 값 stale로 index 기록. 루프는 종료
 """
 from __future__ import annotations
 
@@ -42,7 +43,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     __package__ = "fetch"
 
-from positioning.options import SYM_RE, _fetch, chain_asof, chain_label  # noqa: E402
+from positioning.options import SYM_RE, _fetch, chain_asof, chain_label, fail_reason  # noqa: E402
 
 from .common import log, now_kst  # noqa: E402
 
@@ -131,28 +132,39 @@ def _write(path: Path, doc: dict) -> None:
 def collect(tickers: list[str], out: Path, sleep: float = 1.0) -> dict:
     """종목별 수집·저장 → index 내용 반환. 수집 시각(timestamp)이 이전 파일과 같으면 다시 쓰지 않음"""
     out.mkdir(parents=True, exist_ok=True)
-    entries, failed, changed = [], [], 0
+    entries, failed, changed, errors, blocked = [], [], 0, {}, None
     for i, sym in enumerate(tickers):
-        if i:
-            time.sleep(sleep)
         path = out / f"{sym}.json"
         old = _read(path)
+        if blocked:   # 403·429 뒤로는 요청하지 않음(CLAUDE.md: 즉시 중단) — 이전 값만 stale로
+            failed.append(sym)
+            errors[sym] = f"요청 생략({blocked})"
+            if old:
+                entries.append(_entry(old, stale=True))
+            continue
+        if i:
+            time.sleep(sleep)
         try:
             doc = compact(sym, _fetch(cboe_symbol(sym)))
         except Exception as e:  # noqa: BLE001 — 한 종목 실패가 전체를 막지 않게
-            log.warning("옵션 %s 실패: %s: %s", sym, type(e).__name__, e)
+            errors[sym] = fail_reason(e)
+            log.warning("옵션 %s 실패: %s (%s: %s)", sym, errors[sym], type(e).__name__, str(e)[:200])
             failed.append(sym)
             if old:
                 entries.append(_entry(old, stale=True))
+            if errors[sym].startswith(("HTTP 403", "HTTP 429")):
+                blocked = errors[sym]
+                log.warning("CBOE %s → 나머지 %d종목 요청 생략", blocked, len(tickers) - i - 1)
             continue
         if not old or old.get("timestamp") != doc["timestamp"]:
             _write(path, doc)
             changed += 1
         entries.append(_entry(doc, stale=False))
         log.info("옵션 %-5s spot=%.2f 계약 %d · %s", sym, doc["spot"], len(doc["rows"]), entries[-1]["label"])
-    index = {"generated_kst": now_kst().isoformat(), "source": SOURCE, "tickers": entries, "failed": failed}
+    index = {"generated_kst": now_kst().isoformat(), "source": SOURCE, "tickers": entries, "failed": failed,
+             "errors": errors, "blocked": blocked}
     old_index = _read(out / "index.json") or {}
-    same = all(old_index.get(k) == index[k] for k in ("tickers", "failed"))
+    same = all(old_index.get(k) == index[k] for k in ("tickers", "failed", "blocked"))
     if changed or not same:
         _write(out / "index.json", index)
     log.info("옵션 스냅샷: 종목 %d · 갱신 %d · 실패 %d%s", len(tickers), changed, len(failed),
@@ -184,6 +196,8 @@ def main(argv=None) -> int:
 
     tickers = [t.strip().upper() for t in args.tickers.split(",") if t.strip()] or watchlist()
     index = collect(tickers, Path(args.out), args.sleep)
+    if index.get("blocked"):
+        return 4
     if not index["tickers"]:
         return 1
     if args.exit_if_closed and not traded_today(index):

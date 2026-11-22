@@ -312,7 +312,7 @@ const errText = e => e && e.name === 'AbortError' ? '시간 초과' : e instance
 async function snapChain(sym) { return fromSnapshot(await getJSON(`${SNAP}${sym}.json?t=${Date.now()}`)); }
 function applyIndex(idx) {
   const ok = s => TICKER_RE.test(s), list = (idx.tickers || []).filter(t => ok(t.sym));
-  state.snapGen = idx.generated_kst; state.tickers = list.map(t => t.sym);
+  state.snapGen = idx.generated_kst; state.blocked = idx.blocked || null; state.tickers = list.map(t => t.sym);
   state.stale = new Set(list.filter(t => t.stale).map(t => t.sym)); state.missing = new Set();
   for (const s of (idx.failed || []).filter(ok)) if (!state.tickers.includes(s)) { state.tickers.push(s); state.missing.add(s); delete state.chains[s]; state.errors[s] = '수집 실패 · 이전 스냅샷 없음'; }
   if (!state.tickers.includes(state.tk)) { state.tk = state.tickers[0] || null; state.exp = 'ALL'; }
@@ -351,7 +351,8 @@ const tick = () => refresh(false);
 function setMeta(note) {
   const ok = state.tickers.filter(s => state.chains[s]).length, t = state.last ? tzParts(state.last, 'Asia/Seoul').time : null;
   $('#meta').textContent = (state.loading ? `불러오는 중 ${state.done}/${state.total} · ` : '') + `종목 ${ok}/${state.tickers.length}` +
-    (state.snapGen ? ` · 스냅샷 생성 ${state.snapGen.slice(5, 16).replace('T', ' ')} KST` : '') + (t ? ` · 화면 갱신 ${t} KST · 1분마다 새 스냅샷 확인` : '') + (note ? ` · ${note}` : '');
+    (state.snapGen ? ` · 스냅샷 생성 ${state.snapGen.slice(5, 16).replace('T', ' ')} KST` : '') + (t ? ` · 화면 갱신 ${t} KST · 1분마다 새 스냅샷 확인` : '') +
+    (state.blocked ? ` · stale · 스냅샷 생성 시각에 CBOE 수집 실패(${state.blocked}), 이전 값 표시` : '') + (note ? ` · ${note}` : '');
   $('#refresh').disabled = state.loading;
 }
 

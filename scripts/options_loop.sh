@@ -10,6 +10,7 @@
 # main에는 커밋하지 않는다. 스냅샷은 회차마다 약 3.4MB가 통째로 바뀌어 main 이력에 쌓으면 저장소가 빠르게 커진다
 #   → options-data 브랜치를 항상 '부모 없는 커밋 1개'로 강제 푸시(이력 없음). pages.yml이 배포 때 그 브랜치의 data/options를 합친다
 # 휴장: HOLIDAY_AFTER(기본 10:15 ET) 이후 회차에서 fetch.options_live 가 3(오늘 ET 체결 종목 없음)을 내면 루프 종료
+# 차단: fetch.options_live 가 4(HTTP 403·429)를 내면 stale 표시된 index만 푸시하고 루프 종료 (예비 트리거가 다시 띄우면 회차당 1회만 요청)
 set -uo pipefail
 INTERVAL="${INTERVAL:-300}"
 FETCH_TIMEOUT=240   # 초. 14종목 × (요청 + 1초 간격) ≈ 30~60초. 넘으면 종료코드 124로 끊고 다음 회차
@@ -63,7 +64,7 @@ while [[ -n "$ONCE" && $n -eq 0 ]] || { [[ -z "$ONCE" ]] && running; }; do
   rc=$?
   step "fetch 끝 rc=$rc $(( $(date +%s) - t0 ))s"
   echo "::endgroup::"
-  if [[ $rc -eq 0 || $rc -eq 3 ]]; then
+  if [[ $rc -eq 0 || $rc -eq 3 || $rc -eq 4 ]]; then
     if tree="$(snap_tree)" && [[ -n "$tree" ]]; then
       if [[ "$tree" != "$last_tree" ]]; then
         c="$(git commit-tree "$tree" -m "options: $(et '%Y-%m-%d %H:%M') ET")"
@@ -83,6 +84,10 @@ while [[ -n "$ONCE" && $n -eq 0 ]] || { [[ -z "$ONCE" ]] && running; }; do
       fi
     else
       echo "::warning::스냅샷 tree 생성 실패"
+    fi
+    if [[ $rc -eq 4 ]]; then
+      echo "::warning::CBOE 403·429(차단·제한) → 루프 종료 (나머지 종목 요청 생략, 이전 값 stale)"
+      break
     fi
     if [[ $rc -eq 3 && -z "$ONCE" && ! "$(et %H:%M)" < "$HOLIDAY_AFTER" ]]; then
       step "${HOLIDAY_AFTER} ET 이후인데 오늘(ET) 체결 없음 → 휴장으로 보고 루프 종료"
