@@ -14,10 +14,12 @@
 """
 from __future__ import annotations
 
+import json
 import math
 import re
 import time
 from datetime import date, datetime, time as dtime, timedelta, timezone
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -47,10 +49,27 @@ SYM_RE = re.compile(r"^([A-Z]+)(\d{6})([CP])(\d{8})$")
 SQRT2PI = math.sqrt(2 * math.pi)
 
 
-def _fetch(sym: str) -> dict:
+def _fetch(sym: str, chain_dir: Path | None = None) -> dict:
+    """chain_dir가 있으면 요청 대신 그 폴더의 {sym}.json(브라우저로 저장한 CBOE 응답 원문)을 읽는다"""
+    if chain_dir:
+        return json.loads((Path(chain_dir) / f"{sym}.json").read_text(encoding="utf-8"))
     r = requests.get(URL.format(sym=sym), headers={"User-Agent": UA}, timeout=60)
     r.raise_for_status()
     return r.json()
+
+
+def fail_reason(e: Exception) -> str:
+    """수집 실패 사유 한 줄. 예) 'HTTP 403 · Cloudflare 차단', 'timeout', 'ValueError: 빈 체인 …'"""
+    resp = getattr(e, "response", None)
+    if isinstance(e, requests.HTTPError) and resp is not None:
+        body = (resp.text or "")[:20000].lower()
+        cf = "cloudflare" in (resp.headers.get("server") or "").lower() and "blocked" in body
+        return f"HTTP {resp.status_code}" + (" · Cloudflare 차단" if cf else "")
+    if isinstance(e, requests.Timeout):
+        return "timeout"
+    if isinstance(e, requests.ConnectionError):
+        return "연결 실패"
+    return f"{type(e).__name__}: {str(e)[:80]}"
 
 
 ET, KST = ZoneInfo("America/New_York"), ZoneInfo("Asia/Seoul")
@@ -85,6 +104,40 @@ def chain_asof(ts_utc: str, last_trade_et: str | None = None) -> dict | None:
             "fetched_kst": f.strftime("%Y-%m-%d %H:%M"), "fetched_utc": ts_utc[:19]}
 
 
+def drop_expired_opex(opts: dict, asof: date) -> list[str]:
+    """stale 폴백용: 이전 체인의 '다음 만기'가 asof(이번 실행 거래일) 이전·당일이면 이미 소멸한 만기 →
+    다음 만기·소멸 비중을 비움(이전 체인으로는 다음 만기 비중을 다시 계산할 수 없음). 비운 종목 목록 반환"""
+    out = []
+    for k, u in (opts.get("underlyings") or {}).items():
+        e = u.get("next_opex")
+        if e and e <= asof.isoformat():
+            u["expired_opex"] = e
+            u["next_opex"] = u["next_opex_kind"] = u["gamma_expiring_by_opex_pct"] = None
+            out.append(k)
+    return out
+
+
+def _md(d: date) -> str:
+    return f"{d.month}/{d.day}({WD[d.weekday()]})"
+
+
+def summarize_errors(errors: dict) -> str:
+    """종목별 사유 → 대표 사유. '요청 생략'은 제외하고 가장 많은 사유(+나머지 개수)"""
+    rs = [v for v in (errors or {}).values() if not v.startswith("요청 생략")]
+    if not rs:
+        return "사유 없음"
+    top = max(set(rs), key=rs.count)
+    n_other = len({*rs} - {top})
+    return top + (f" 외 {n_other}종" if n_other else "")
+
+
+def stale_label(ca: dict | None, fail: dict) -> str:
+    """예) 'stale · 11/18(수) 16:15 ET 종가 체인 기준 · 11/19(목)·11/20(금) 수집 실패(HTTP 403 · Cloudflare 차단)'"""
+    base = (f"{_md(date.fromisoformat(ca['date']))} {ca['time_et']} ET {ca['kind']} 기준" if ca else "이전 체인 기준")
+    ds = "·".join(_md(date.fromisoformat(d)) for d in fail.get("dates", []))
+    return f"stale · {base} · {(ds + ' ') if ds else ''}수집 실패({fail.get('reason') or '사유 없음'})"
+
+
 def chain_label(ca: dict | None) -> str:
     """예) 'CBOE 11/6(금) 16:15 ET 종가 체인 (수집 11/8(일) 10:30 KST)'"""
     if not ca:
@@ -94,7 +147,19 @@ def chain_label(ca: dict | None) -> str:
             f"(수집 {f.month}/{f.day}({WD[f.weekday()]}) {f:%H:%M} KST)")
 
 
+def chain_trade_date(js: dict, today: date) -> date:
+    """체인의 거래일 = data.last_trade_time(ET) 날짜. 없거나 실행 기준일보다 늦으면 실행 기준일.
+    잔존일(dte)·다음 만기를 이 날짜 기준으로 계산 → 만기일 종가 체인이면 그날 만기는 빠지고 다음 만기가 기준이 된다"""
+    lt = (js.get("data") or {}).get("last_trade_time")
+    try:
+        d = datetime.fromisoformat(str(lt)[:19]).date()
+    except (TypeError, ValueError):
+        return today
+    return min(d, today)
+
+
 def parse_chain(js: dict, today: date) -> tuple[pd.DataFrame, float | None, str]:
+    """today = 체인 거래일(chain_trade_date). 그날 만기(dte=0)는 제외 — 만기일 장 마감 후엔 이미 소멸"""
     data = js.get("data", {})
     rows = []
     for o in data.get("options", []):
@@ -341,25 +406,36 @@ def _nice_step(x):
     return 10 * p
 
 
-def collect(today: date, keys: list[str] | None = None) -> dict:
-    res, fails, stamps = {}, [], {}
+def collect(today: date, keys: list[str] | None = None, chain_dir: Path | None = None) -> dict:
+    res, fails, errors = {}, [], {}
+    blocked = None
     for k in keys or UNDERLYINGS:
         sym = UNDERLYINGS[k][0]
+        if blocked:   # 403·429면 나머지 종목은 요청하지 않음(차단 연장 방지)
+            fails.append(k)
+            errors[k] = f"요청 생략({blocked})"
+            continue
         try:
-            js = _fetch(sym)
-            df, spot, ts = parse_chain(js, today)
+            js = _fetch(sym, chain_dir)
+            td = chain_trade_date(js, today)
+            df, spot, ts = parse_chain(js, td)
             if df.empty or not spot:
                 raise ValueError("빈 체인 또는 기초자산 가격 없음")
-            res[k] = analyze(k, df, spot, today)
+            res[k] = analyze(k, df, spot, td)
             res[k]["cboe_timestamp"] = ts
             res[k]["chain_asof"] = chain_asof(ts, (js.get("data") or {}).get("last_trade_time"))
-            log.info("옵션 %-4s spot=%.2f P/C(OI)=%s GEX(BS)=%s$bn GEX(CBOE감마)=%s$bn zeroΓ=%s",
-                     k, spot, res[k]["pc_oi"], res[k].get("gex_usd_bn"), res[k].get("gex_cboe_usd_bn"), res[k].get("zero_gamma"))
+            log.info("옵션 %-4s %s spot=%.2f P/C(OI)=%s GEX(BS)=%s$bn GEX(CBOE감마)=%s$bn zeroΓ=%s 다음만기=%s",
+                     k, td, spot, res[k]["pc_oi"], res[k].get("gex_usd_bn"), res[k].get("gex_cboe_usd_bn"),
+                     res[k].get("zero_gamma"), res[k].get("next_opex"))
         except Exception as e:  # noqa: BLE001
-            log.warning("옵션 %s 실패: %s: %s", k, type(e).__name__, e)
+            errors[k] = fail_reason(e)
+            log.warning("옵션 %s 실패: %s (%s: %s)", k, errors[k], type(e).__name__, str(e)[:200])
             fails.append(k)
-        time.sleep(1)
-    return {"underlyings": res, "failed": fails,
+            if errors[k].startswith(("HTTP 403", "HTTP 429")):   # 차단·제한 → 즉시 중단(CLAUDE.md 규칙)
+                blocked = errors[k]
+        if not chain_dir:
+            time.sleep(1)
+    return {"underlyings": res, "failed": fails, "errors": errors,
             "source": "CBOE delayed quotes (cdn.cboe.com/api/global/delayed_quotes/options), 15분 지연. 체인 시각 = 수집 시각(UTC timestamp) − 15분, 거래일 = 기초자산 last_trade_time(ET)"}
 
 

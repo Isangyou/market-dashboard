@@ -627,7 +627,8 @@ function renderGamma() {
     optCard('규모 ($bn/1%)', `${sg(g, 0)}`, `35일 이내 · 전 만기 ${sg(u.gex_usd_bn, 0)} · 지난주 ${sg(pg, 0)}`),
     optCard('콜 벽 / 풋 벽 (순GEX)', `${px(u.call_gamma_wall)} / ${px(u.put_gamma_wall)}`, '행사가별 순GEX 최대·최소'),
     optCard('다음 주요 만기 |감마| 소멸', (u.gamma_expiring_by_opex_pct >= 0.5 && u.next_opex) ? `${nf(u.gamma_expiring_by_opex_pct, 0)}%` : '–',
-      (u.gamma_expiring_by_opex_pct >= 0.5 && u.next_opex) ? `${u.next_opex} ${u.next_opex_kind || '월물'}` : '해당 없음'),
+      (u.gamma_expiring_by_opex_pct >= 0.5 && u.next_opex) ? `${u.next_opex} ${u.next_opex_kind || '월물'}`
+        : u.expired_opex ? `stale 체인 — ${u.expired_opex} 만기 이미 지남, 다음 만기 재계산 불가` : '해당 없음'),
   ].join('');
 
   const gk = u.gex_by_strike;

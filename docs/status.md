@@ -28,6 +28,15 @@
 | 증시자금동향 | `fetch/naver.py deposit_trend`(E32) → `data/series/deposit.json` (고객예탁금·신용잔고·주식형/혼합형/채권형 펀드, 억원) | 2002-05-03~2026-09-22 6,006일 백필(로컬 1회). update.yml 매 실행 최신 1페이지, `asof`=기준일이라 값이 같으면 파일 안 씀(재실행 0건 변경 확인). 2거래일 지연. 파일 1.26MB(gzip 약 170KB) — 화면이 전체를 읽음 |
 | ADR | 1차 `fetch/adrinfo.py`(E37) → `data/series/adr_kospi.json`·`adr_kosdaq.json` (source=adrinfo, 2019-10-07~, 1,718·1,717행). 폴백 `fetch/naver.py breadth`(E29) → `breadth_*.json` → `run.py adr_from_breadth` → `adr_naver_*.json` | **2026-10-06 adrinfo 이력 등록**: 사용자 제공 `adr_history_adrinfo.json`으로 시드(파일은 원본 그대로 보존). update-data가 평일 16:00 KST 이후 첫 실행에서 하루 1회 요청(`meta.adrinfo_fetches`), 새 날짜만 이어 붙임. 403이면 그날은 네이버 계산값을 넣고(화면 점선) 다음 날 adrinfo 값으로 교체. 네이버 계산값은 20거래일째(약 10-27)부터 생김 → 그전엔 폴백할 값이 없음. **일별 차트 활성**(VKOSPI \| ADR 행 — 10-06 배치 변경, 1년 기본·range slider·120·75 연회색 점선·adrinfo 실선/네이버 점선·출처 adrinfo.kr) |
 
+## 2026-11-22 (일) 위클리 옵션 11/18 stale 원인·수정 — CBOE 403(Cloudflare 차단)
+- 증상: 11-20 주 옵션 시장 섹션이 11/20(금) 종가가 아니라 `CBOE 11/18(수) 16:15 ET 종가 체인`
+- 원인 1 (수집): **11/19분·11/20분 CBOE 체인 요청 전부 HTTP 403**. 응답은 Cloudflare 차단 페이지("Sorry, you have been blocked"), 429 아님. positioning 실행 5회(11/20 03:02 · 11/21 02:40·07:32 · 11/22 13:04·13:18 UTC) × 10종목 모두 403. 마지막 성공 = 11/19 03:15 UTC 실행(11/18 종가 체인). 11/22 로컬(KR IP)에서도 403 → GitHub IP만의 문제 아님. options.yml 루프는 이번 주 cron 지연으로 실행 0회(11/20 회차만 14종목 403) → 요청량이 원인은 아님. 같은 CBOE의 일별 P/C(`cdn.cboe.com/data/...daily_options`)는 계속 성공
+- 원인 2 (종가 체인 판정): 해당 없음 — 체인을 아예 못 받아서 판정까지 가지 않음. 다만 점검 중 확인: dte 기준일이 체인 거래일이 아니라 실행 시각으로 추정한 거래일(`us_market_date`)이었음 → 체인 `last_trade_time` 날짜로 바꿈(만기일 종가 체인이면 그날 만기 제외, 다음 만기 기준). 가상 체인 테스트: 11/20 종가 체인 → 만기 11/23~ · 다음 만기 11/30 월말 / 11/19 종가 체인 → 다음 만기 11/20
+- 원인 3 (stale 폴백): run.py가 옵션 섹션이 비면 '이번 주 기존 값'(= 11/19 실행분, 11/18 체인)을 그대로 유지. 라벨은 그 체인의 chain_label만 찍어서 실패 사실이 안 보였고, 다음 만기도 이미 지난 11/20(SPX 17.1% 소멸)이 남아 있었음
+- 수정: `options.collect` 종목별 실패 사유(`errors`, 'HTTP 403 · Cloudflare 차단' 등), 403·429면 나머지 종목 요청 생략. run.py `options_fail`{chain_date·실패 거래일 목록·사유} 누적 → 라벨 `stale · 11/18(수) 16:15 ET 종가 체인 기준 · 11/19(목)·11/20(금) 수집 실패(HTTP 403 · Cloudflare 차단)` (결론 블록 제목·weekly 상단·옵션/감마 부제). stale 체인의 다음 만기가 이미 지났으면 비움(`expired_opex`, 카드 'stale 체인 — 만기 이미 지남'). `--chain-dir`: 브라우저로 저장한 CBOE JSON으로 계산
+- 11-20 주 파일: options_fail을 위 로그로 보충 후 `--rebuild-conclusion`(다른 주차 변경 0건). **11/20 종가 체인 재수집은 못 함** — 자동 요청이 차단됨(이 세션에서 우회 시도는 하지 않음). 브라우저로 받으면: 10개 URL(`https://cdn.cboe.com/api/global/delayed_quotes/options/{_SPX,SPY,_NDX,QQQ,_RUT,IWM,_VIX,TLT,GLD,USO}.json`)을 한 폴더에 `{심볼}.json`으로 저장 → `.venv/bin/python -m positioning.run --only options --chain-dir <폴더>` (월요일 장 시작 전, KST 23:30 이전에 실행해야 11/20 주로 들어감)
+- 미해결: CBOE 차단이 계속되면 options.yml 5분 루프(options_live.py)도 전부 403 — 루프 쪽엔 403 중단이 아직 없음
+
 ## 2026-11-15 (일) 미국 옵션 페이지 (options.html) — 작성, Actions 실행 전
 - 새 화면 `options.html`: 종목별 콜/풋 거래량·OI, 시장 요약, IV·스큐. 종목 14개(`data/options_watchlist.json`). 소스 = CBOE 지연 체인(주간 포지셔닝과 같은 엔드포인트)
 - **CORS 차단 확인**(11-15 14:07 KST, Claude 데스크톱 내장 브라우저, origin `https://isangyou.github.io`): `cdn-api.cboe.com`·`cdn.cboe.com` 둘 다 콘솔에 "No 'Access-Control-Allow-Origin' header is present" → 브라우저 직접 조회 불가 → 스냅샷 방식으로 확정

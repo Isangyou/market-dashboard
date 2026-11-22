@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import logging
 from datetime import date, timedelta
@@ -66,6 +67,7 @@ def main(argv=None):
     ap.add_argument("--only", default=",".join(SECTIONS))
     ap.add_argument("--data-dir", default=str(ROOT / "data" / "positioning"))
     ap.add_argument("--rebuild-conclusion", action="store_true")
+    ap.add_argument("--chain-dir", help="CBOE 요청 대신 이 폴더의 {_SPX,SPY,…}.json(브라우저로 저장한 응답 원문)으로 옵션 계산")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     if a.rebuild_conclusion:
@@ -86,7 +88,8 @@ def main(argv=None):
     if "cta" in only:
         snap["cta"] = cta_mod.collect()
     if "options" in only:
-        snap["options"] = opt_mod.collect(mdate)
+        snap["options"] = opt_mod.collect(mdate, chain_dir=a.chain_dir)
+    opt_errors = (snap.get("options") or {}).get("errors") or {}
     if "cot" in only:
         snap["cot"] = cot_mod.collect()
     if "options" in only:   # CBOE 일별 P/C(Index·Total·Equity) — 주차 파일과 별도 누적, weekly.html 독립 차트
@@ -101,12 +104,30 @@ def main(argv=None):
         if empty:
             fb = existing.get(s) or (prev or {}).get(s)
             if fb:
-                snap[s] = fb
+                snap[s] = copy.deepcopy(fb)
                 if s in only:
                     snap["stale"].append(s)
                     log.warning("%s 수집 실패 → %s 값 유지", s, "이번 주 기존" if existing.get(s) else "전주")
             else:
                 snap[s] = {}
+
+    # 옵션 수집 실패 기록: 어느 거래일 체인을 못 받았는지 + 사유 → 화면에 'stale · 11/18 기준 · 11/20 수집 실패(사유)'
+    src_fail = existing if existing.get("options") else (prev or {})
+    if "options" in only and "options" in snap["stale"]:
+        u0 = snap["options"].get("underlyings", {})
+        ca = (u0.get("SPX") or next(iter(u0.values()), {})).get("chain_asof") or {}
+        old = src_fail.get("options_fail") or {}
+        dates = old.get("dates", []) if old.get("chain_date") == ca.get("date") else []
+        dates = sorted({*dates, mdate.isoformat()} - {ca.get("date")})
+        snap["options_fail"] = {"chain_date": ca.get("date"), "dates": dates,
+                                "reason": opt_mod.summarize_errors(opt_errors), "errors": opt_errors,
+                                "last_try_kst": now.strftime("%Y-%m-%d %H:%M")}
+        dropped = opt_mod.drop_expired_opex(snap["options"], mdate)
+        if dropped:
+            log.warning("stale 체인의 다음 만기가 이미 지남(%s) → 만기 소멸 비중 비움: %s", mdate, ",".join(dropped))
+    elif "options" not in only and existing.get("options_fail") and "options" in existing.get("stale", []):
+        snap["options_fail"] = existing["options_fail"]   # 옵션 미실행(--only cot 등) → 이전 stale 상태 유지
+        snap["stale"].append("options")
 
     # 옵션 일별 누적 + 주간 평균 P/C(거래량)
     od_path = ddir / "options_daily.json"
@@ -140,7 +161,7 @@ def main(argv=None):
     u0 = snap["options"].get("underlyings", {})
     opt_chain = (u0.get("SPX") or next(iter(u0.values()), {})).get("chain_asof")
     snap["asof"] = {"cta": cta_asof, "options": opt_ts, "options_chain": opt_chain,
-                    "options_label": opt_mod.chain_label(opt_chain), "cot": cot_date, "us_market_date": mdate.isoformat()}
+                    "options_label": _opt_label(snap), "cot": cot_date, "us_market_date": mdate.isoformat()}
     tue = (fri - timedelta(days=3)).isoformat()
     # 금요일 정규장 중 수동 실행 등으로 장중 체인이면 확정하지 않음(다음 실행에서 종가 체인으로 확정)
     final = (cta_asof == fri.isoformat() and cot_date == tue and not snap["stale"]
@@ -181,6 +202,14 @@ def main(argv=None):
     print(snap["markdown"])
 
 
+def _opt_label(snap) -> str:
+    u0 = (snap.get("options") or {}).get("underlyings", {})
+    ca = (u0.get("SPX") or next(iter(u0.values()), {})).get("chain_asof") if u0 else (snap.get("asof") or {}).get("options_chain")
+    if "options" in snap.get("stale", []) and snap.get("options_fail"):
+        return opt_mod.stale_label(ca, snap["options_fail"])
+    return opt_mod.chain_label(ca)
+
+
 def _backfill_chain_asof(snap):
     """chain_asof 도입(2026-11-08) 전 주차: 저장된 CBOE timestamp(UTC)로 체인 기준 시각 계산(거래일은 평일 추정)"""
     us = snap.get("options", {}).get("underlyings", {})
@@ -191,7 +220,7 @@ def _backfill_chain_asof(snap):
     if us and "options_chain" not in a:
         a["options_chain"] = (us.get("SPX") or next(iter(us.values()))).get("chain_asof")
     if "options_chain" in a:
-        a["options_label"] = opt_mod.chain_label(a["options_chain"])
+        a["options_label"] = _opt_label(snap)
 
 
 def rebuild_conclusion(ddir: Path):
